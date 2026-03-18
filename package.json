@@ -1,0 +1,17 @@
+{
+  "name": "ai-cold-caller-saas",
+  "private": true,
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "test": "turbo test",
+    "test:e2e": "pnpm --filter tests test"
+  },
+  "devDependencies": {
+    "turbo": "latest",
+    "prettier": "latest"
+  },
+  "packageManager": "pnpm@10.26.1"
+}

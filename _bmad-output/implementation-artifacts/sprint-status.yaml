@@ -1,0 +1,101 @@
+# generated: 2026-03-17T17:46:51+08:00
+# last_updated: 2026-03-17T18:12:00+08:00
+# project: call
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - SM typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-03-17T17:46:51+08:00
+last_updated: 2026-03-18T10:00:00+08:00
+project: call
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+
+development_status:
+  epic-1: in-progress
+  1-1-hybrid-monorepo-core-infrastructure-scaffolding: done
+  1-2-multi-layer-hierarchy-clerk-auth-integration: ready-for-dev
+  1-3-tenant-isolated-data-persistence-with-postgresql-rls: backlog
+  1-4-obsidian-design-system-foundation-reusable-components: backlog
+  1-5-white-labeled-admin-portal-custom-branding: backlog
+  1-6-10-minute-launch-onboarding-wizard: backlog
+  1-7-resource-guardrails-usage-monitoring-hard-caps: backlog
+  epic-1-retrospective: optional
+  epic-2: backlog
+  2-1-vapi-telephony-bridge-webhook-integration: backlog
+  2-2-real-time-audio-stream-transcription-pipeline: backlog
+  2-3-low-latency-tts-provider-fallback-logic: backlog
+  2-4-asynchronous-telemetry-sidecars-for-voice-events: backlog
+  2-5-pulse-maker-visual-visualizer-component: backlog
+  2-6-pre-flight-calibration-dashboard: backlog
+  epic-2-retrospective: optional
+  epic-3: backlog
+  3-1-multi-format-knowledge-ingestion-validation: backlog
+  3-2-per-tenant-rag-namespacing-with-namespace-guard: backlog
+  3-3-script-generation-logic-with-grounding-constraints: backlog
+  3-4-dynamic-variable-injection-for-hyper-personalization: backlog
+  3-5-the-script-lab-with-source-attribution: backlog
+  3-6-real-time-self-correction-factual-hook: backlog
+  epic-3-retrospective: optional
+  epic-4: backlog
+  4-1-automated-double-hop-dnc-registry-check: backlog
+  4-2-state-aware-regulatory-filter-graceful-goodnight: backlog
+  4-3-rejection-shield-adaptive-de-escalation-polite-retreat: backlog
+  4-4-hashed-consent-capture-immutable-audit-logging: backlog
+  4-5-compliance-dashboard-enterprise-risk-scoring: backlog
+  4-6-human-at-the-helm-real-time-escalation-bridge: backlog
+  epic-4-retrospective: optional
+  epic-5: backlog
+  5-1-zero-latency-master-join-with-shadow-bridging: backlog
+  5-2-the-human-cockpit-with-live-mood-wave-monitoring: backlog
+  5-3-real-time-context-synchronization-key-moments-feed: backlog
+  5-4-whisper-mode-coach-to-ai-private-bridge: backlog
+  5-5-multi-modal-sentiment-analysis-visualization: backlog
+  5-6-session-scaling-redis-sharding: backlog
+  epic-5-retrospective: optional
+  epic-6: backlog
+  6-1-pluggable-crm-integration-sdk-adapter-pattern: backlog
+  6-2-custom-disposition-outcome-mapping: backlog
+  6-3-proactive-appointment-booking-bridge-cal-com-calendly: backlog
+  6-4-multi-channel-post-call-sms-automation: backlog
+  6-5-dynamic-personalization-from-deep-record-sync: backlog
+  6-6-rate-limit-aware-sync-retry-queue: backlog
+  epic-6-retrospective: optional
+  epic-7: backlog
+  7-1-real-time-rainmaker-performance-dashboard: backlog
+  7-2-session-level-sentiment-tone-mapping-heatmaps: backlog
+  7-3-premium-gamified-achievement-system-badges: backlog
+  7-4-momentum-starter-daily-goal-pursuit-widget: backlog
+  7-5-a-b-script-performance-comparative-analytics: backlog
+  7-6-automated-pdf-sales-performance-report-generator: backlog
+  epic-7-retrospective: optional

@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Cold Caller SaaS - Design Directions</title>
+    <style>
+        :root {
+            --obsidian: #09090B;
+            --emerald: #10B981;
+            --crimson: #F43F5E;
+            --blue: #3B82F6;
+            --zinc: #3F3F46;
+            --white: #FAFAFA;
+        }
+
+        body {
+            background-color: var(--obsidian);
+            color: var(--white);
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px;
+        }
+
+        h1 {
+            font-weight: 200;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            margin-bottom: 40px;
+            color: var(--blue);
+            text-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 40px;
+            width: 100%;
+            max-width: 1200px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 24px;
+            transition: transform 0.3s ease, border-color 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            border-color: var(--blue);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .card h2 {
+            font-size: 1.2rem;
+            margin-top: 0;
+            color: var(--white);
+        }
+
+        .card p {
+            font-size: 0.9rem;
+            color: var(--zinc);
+            line-height: 1.5;
+        }
+
+        .tag {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--blue);
+            padding: 4px 8px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-bottom: 12px;
+        }
+
+        .preview {
+            height: 200px;
+            background: #000;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            color: var(--zinc);
+            background-size: cover;
+            background-position: center;
+        }
+
+        .mockup-1 { background-image: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url('https://images.unsplash.com/photo-1551288049-bbbda536639a?auto=format&fit=crop&w=800&q=80'); }
+        .mockup-2 { background-image: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url('https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=800&q=80'); }
+        .mockup-3 { background-image: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url('https://images.unsplash.com/photo-1551434678-e076c223a692?auto=format&fit=crop&w=800&q=80'); }
+
+        .vibe-tag {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            box-shadow: 0 0 10px currentColor;
+        }
+
+        .vibe-cold { color: var(--zinc); background: var(--zinc); }
+        .vibe-hot { color: var(--emerald); background: var(--emerald); }
+        .vibe-aggro { color: var(--crimson); background: var(--crimson); }
+
+        .selection-framework {
+            margin-top: 60px;
+            padding: 40px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            width: 100%;
+            max-width: 800px;
+            text-align: center;
+        }
+
+        .selection-framework h3 {
+            font-weight: 300;
+            margin-bottom: 20px;
+        }
+
+        .selection-framework ul {
+            list-style: none;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .selection-framework li {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <h1>Design Directions Showcase</h1>
+    <div class="grid">
+        <!-- Direction 1 -->
+        <div class="card">
+            <div class="tag">Direction 1</div>
+            <div class="preview mockup-1">
+                <span>[NASA / TRADING TERMINAL]</span>
+            </div>
+            <h2>The Tactical Cockpit</h2>
+            <p>Extreme high-density layout. Full monospaced telemetry for numbers and transcripts. Focus on data scannability and "Mission Control" authority.</p>
+            <div class="vibe-tag vibe-hot"></div>
+        </div>
+
+        <!-- Direction 2 -->
+        <div class="card">
+            <div class="tag">Direction 2</div>
+            <div class="preview mockup-2">
+                <span>[FUTURE ETHEREAL]</span>
+            </div>
+            <h2>The Ethereal Operator</h2>
+            <p>Heavy usage of glassmorphism and depth. Semantic neon glows pulse with call sentiment. Hybrid typography (Sans for UI, Mono for data).</p>
+            <div class="vibe-tag vibe-cold"></div>
+        </div>
+
+        <!-- Direction 3 -->
+        <div class="card">
+            <div class="tag">Direction 3</div>
+            <div class="preview mockup-3">
+                <span>[PREMIUM FINTECH]</span>
+            </div>
+            <h2>The Stealth Closer</h2>
+            <p>Sleek, geometric aesthetic. Obsidian base with hairline borders. Focus on elite sophistication and "Stealth" tech presence.</p>
+            <div class="vibe-tag vibe-aggro"></div>
+        </div>
+
+        <!-- Direction 4 -->
+        <div class="card">
+            <div class="tag">Direction 4</div>
+            <div class="preview">
+                <span>[FLEET COMMAND]</span>
+            </div>
+            <h2>The Fleet Pulse</h2>
+            <p>Optimized for Multi-Agent management. Bird's eye heat-maps of all active calls. Minimizes detail until "Master Join" is triggered.</p>
+        </div>
+
+        <!-- Direction 5 -->
+        <div class="card">
+            <div class="tag">Direction 5</div>
+            <div class="preview">
+                <span>[NEON CYBER]</span>
+            </div>
+            <h2>Neon Cyber-Agent</h2>
+            <p>High-contrast vaporwave accents. Bold glows and liquid-metal transitions. Dramatic visual feedback for every "Moment of Truth".</p>
+        </div>
+
+        <!-- Direction 6 -->
+        <div class="card">
+            <div class="tag">Direction 6</div>
+            <div class="preview">
+                <span>[MINIMALIST FLOW]</span>
+            </div>
+            <h2>Minimalist Zen</h2>
+            <p>Focuses purely on the transcript and conversational flow. Removes all non-essential telemetry. High-quality whitespace for long-form focus.</p>
+        </div>
+    </div>
+
+    <div class="selection-framework">
+        <h3>Evaluation Criteria</h3>
+        <ul>
+            <li>Layout Intuitiveness</li>
+            <li>Interaction Style</li>
+            <li>Visual Weight</li>
+            <li>Brand Alignment</li>
+            <li>Data Scannability</li>
+        </ul>
+        <p style="margin-top: 20px; color: var(--zinc); font-size: 0.8rem;">Pick a direction as-is, or combine elements from multiple visions.</p>
+    </div>
+</body>
+</html>

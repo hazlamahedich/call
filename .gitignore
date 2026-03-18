@@ -1,0 +1,69 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+.pnpm-debug.log
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Turborepo cache
+.turbo/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+*.egg-info/
+.eggs/
+.pytest_cache/
+
+# Testing
+coverage/
+.coverage
+playwright-report/
+test-results/
+
+# Misc
+*.bak
+*.tmp
+*.pem
+
+# BMAD / AI tooling
+_bmad/
+.agent/
+.opencode/
+.beads/
+.claude/
+.cline/
+.codebuddy/
+.gemini/
+.kiro/
+.roo/
+.serena/
+_bmad-output/
