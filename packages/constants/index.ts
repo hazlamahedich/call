@@ -1,2 +1,12 @@
 export const APP_NAME = "AI Cold Caller";
 export const API_VERSION = "v1";
+
+export const AUTH_ERROR_CODES = {
+  AUTH_INVALID_TOKEN: "AUTH_INVALID_TOKEN",
+  AUTH_TOKEN_EXPIRED: "AUTH_TOKEN_EXPIRED",
+  AUTH_UNAUTHORIZED: "AUTH_UNAUTHORIZED",
+  AUTH_FORBIDDEN: "AUTH_FORBIDDEN",
+} as const;
+
+export type AuthErrorCode =
+  (typeof AUTH_ERROR_CODES)[keyof typeof AUTH_ERROR_CODES];

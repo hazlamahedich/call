@@ -5,6 +5,8 @@ pydantic-settings
 python-multipart
 python-jose[cryptography]
 passlib[bcrypt]
+pyjwt
+svix
 pytest
 pytest-asyncio
 httpx
