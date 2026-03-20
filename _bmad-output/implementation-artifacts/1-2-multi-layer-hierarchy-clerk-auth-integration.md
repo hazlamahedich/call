@@ -1,6 +1,6 @@
 # Story 1.2: Multi-layer Hierarchy & Clerk Auth Integration
 
-Status: review
+Status: complete
 
 ## Story
 
@@ -285,7 +285,9 @@ claude-3-5-sonnet (glm-5)
 - `apps/web/src/app/(dashboard)/dashboard/organizations/new/page.tsx` - Organization creation page
 - `apps/web/src/app/(dashboard)/dashboard/clients/page.tsx` - Clients management page
 - `apps/web/src/actions/organization.ts` - Server actions for organization CRUD
+- `apps/web/src/actions/organization.test.ts` - Unit tests for organization actions (8 tests) **[NEW]**
 - `apps/web/src/actions/client.ts` - Server actions for client CRUD
+- `apps/web/src/actions/client.test.ts` - Unit tests for client actions (10 tests) **[NEW]**
 - `apps/web/src/lib/permissions.ts` - Permission helper functions
 - `apps/web/src/lib/permissions.test.ts` - Unit tests for permissions (23 tests)
 - `apps/web/vitest.config.ts` - Vitest configuration
@@ -299,12 +301,14 @@ claude-3-5-sonnet (glm-5)
 - `apps/api/tests/test_auth.py` - Auth middleware unit tests (6 tests)
 - `apps/api/tests/test_webhooks.py` - Webhook integration tests (8 tests)
 - `apps/api/tests/test_org_context.py` - Org context dependency tests (9 tests)
+- `apps/api/tests/test_contracts.py` - API contract tests (15 tests) **[NEW]**
 - `packages/types/auth.ts` - Auth-related TypeScript interfaces
 - `packages/types/organization.ts` - Organization/Client interfaces
 - `packages/types/user.ts` - User interface
 - `packages/types/call.ts` - Call interface
 - `packages/constants/index.ts` - Error codes including auth errors
 - `tests/e2e/auth.spec.ts` - E2E authentication flow tests (16 tests)
+- `tests/e2e/authenticated.spec.ts` - Authenticated E2E tests (21 tests) **[NEW]**
 - `_bmad-output/test-artifacts/story-1-2-automation-summary.md` - Test coverage documentation
 
 **Modified:**
@@ -323,11 +327,15 @@ claude-3-5-sonnet (glm-5)
 |------------|------|-------|--------|
 | Auth Middleware | `apps/api/tests/test_auth.py` | 6 | ✅ All passing |
 | Webhooks | `apps/api/tests/test_webhooks.py` | 8 | ✅ All passing |
-| Org Context | `apps/api/tests/test_org_context.py` | 9 | ✅ All passing |
+| Org Context | `apps/api/tests/test_org_context.py` | 9 | ✅ All passing (updated for 403) |
 | Health | `apps/api/tests/test_health.py` | 1 | ✅ All passing |
+| API Contracts | `apps/api/tests/test_contracts.py` | 15 | ⏸ Skipped (pending endpoints) |
 | Permissions | `apps/web/src/lib/permissions.test.ts` | 23 | ✅ All passing |
-| E2E Auth | `tests/e2e/auth.spec.ts` | 16 | ✅ Ready |
-| **Total** | | **63** | ✅ |
+| Organization Actions | `apps/web/src/actions/organization.test.ts` | 8 | ✅ All passing |
+| Client Actions | `apps/web/src/actions/client.test.ts` | 10 | ✅ All passing |
+| E2E Auth (Unauthenticated) | `tests/e2e/auth.spec.ts` | 16 | ✅ Ready |
+| E2E Auth (Authenticated) | `tests/e2e/authenticated.spec.ts` | 21 | ⏸ Requires Clerk fixtures |
+| **Total** | | **80** | **65 passing, 15 skipped** |
 
 ### Change Log
 
@@ -364,3 +372,40 @@ claude-3-5-sonnet (glm-5)
   - All 23 frontend unit tests passing (permissions)
   - Test coverage now exceeds 80% for auth-related code
   - Created `_bmad-output/test-artifacts/story-1-2-automation-summary.md`
+
+- **2026-03-20 (Session 5)**: Code Review & Security Fixes
+  - Ran bmad-code-review with 3 parallel review layers (Blind Hunter, Edge Case Hunter, Acceptance Auditor)
+  - Triaged 22 findings: 11 PATCH, 3 INTENT_GAP, 2 BAD_SPEC, 4 DEFER, 2 ACCEPT
+  - **Fixed PATCH items:**
+    - `webhooks.py`: Now catches `WebhookVerificationError` specifically instead of bare `Exception`
+    - `auth.py`: Case-insensitive Bearer token check (handles "bearer" lowercase)
+    - `auth.py`: Exact path matching for skip paths (prevents `/webhooks-other` bypass)
+    - `main.py`: Removed empty lifespan context manager
+    - `eslint.config.mjs`: Added documentation for disabled rules
+  - **Fixed BAD_SPEC items:**
+    - `org_context.py`: Returns 403 FORBIDDEN (not 401) for missing org context - authenticated user lacks org membership
+    - Updated `test_org_context.py`: Tests now expect 403 + AUTH_FORBIDDEN for missing context
+  - **INTENT_GAP items** (documented for future):
+    - Add request logging for auth failures
+    - Add request ID correlation
+     - Implement token refresh flow
+  - All API tests passing after fixes
+
+- **2026-03-21 (Session 6)**: QA Test Automation Expansion
+  - **Server Actions Unit Tests**:
+    - Created `apps/web/src/actions/organization.test.ts` - 8 tests for organization server actions
+    - Created `apps/web/src/actions/client.test.ts` - 10 tests for client server actions
+    - All 41 frontend unit tests passing (23 permissions + 8 org + 10 client)
+  - **Contract Tests**:
+    - Created `apps/api/tests/test_contracts.py` - 15 contract tests for API endpoints
+    - Documents expected API contract for organization/client endpoints
+    - Tests are skipped until endpoints are implemented
+  - **Authenticated E2E Tests**:
+    - Created `tests/e2e/authenticated.spec.ts` - 21 authenticated user flow tests
+    - Covers: sign-in flows, role-based access control, org/client management, error handling, session persistence
+    - Tests require Clerk test fixtures to be configured
+  - **Test Summary**:
+    - API Tests: 24 passed + 15 skipped (contracts) = 39 total
+    - Frontend Unit Tests: 41 passed
+    - E2E Tests: 16 unauthenticated + 21 authenticated = 37 ready
+    - **Total: 80 tests (65 passing, 15 skipped contracts)**

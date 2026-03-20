@@ -2,6 +2,7 @@ import json
 import logging
 from fastapi import APIRouter, Request, HTTPException, status, Depends
 from svix.webhooks import Webhook
+from svix.exceptions import WebhookVerificationError
 from typing import Any
 
 from config.settings import settings
@@ -26,7 +27,7 @@ async def handle_clerk_webhook(request: Request):
 
     try:
         evt = wh.verify(payload, headers)
-    except Exception as e:
+    except WebhookVerificationError as e:
         logger.error(f"Webhook verification failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid webhook signature"

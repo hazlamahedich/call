@@ -13,9 +13,9 @@ async def get_current_org_id(request: Request) -> Optional[str]:
     org_id = getattr(request.state, "org_id", None)
     if not org_id:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=status.HTTP_403_FORBIDDEN,
             detail={
-                "code": AUTH_ERROR_CODES["AUTH_UNAUTHORIZED"],
+                "code": AUTH_ERROR_CODES["AUTH_FORBIDDEN"],
                 "message": "Organization context required",
             },
         )
@@ -26,9 +26,9 @@ async def get_current_user_id(request: Request) -> Optional[str]:
     user_id = getattr(request.state, "user_id", None)
     if not user_id:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=status.HTTP_403_FORBIDDEN,
             detail={
-                "code": AUTH_ERROR_CODES["AUTH_UNAUTHORIZED"],
+                "code": AUTH_ERROR_CODES["AUTH_FORBIDDEN"],
                 "message": "User authentication required",
             },
         )

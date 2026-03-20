@@ -50,13 +50,13 @@ class TestGetCurrentOrgId:
         assert result == ORG_IDS["VALID"]
 
     @pytest.mark.asyncio
-    async def test_1_2_api_002_raises_401_when_org_id_missing(self):
+    async def test_1_2_api_002_raises_403_when_org_id_missing(self):
         request = make_mock_request(org_id=ORG_IDS["MISSING"])
         with pytest.raises(HTTPException) as exc_info:
             await get_current_org_id(request)
         exc = exc_info.value
-        assert exc.status_code == 401
-        assert exc.detail["code"] == AUTH_ERROR_CODES["AUTH_UNAUTHORIZED"]
+        assert exc.status_code == 403
+        assert exc.detail["code"] == AUTH_ERROR_CODES["AUTH_FORBIDDEN"]
         assert "Organization context required" in exc.detail["message"]
 
 
@@ -70,13 +70,13 @@ class TestGetCurrentUserId:
         assert result == USER_IDS["VALID"]
 
     @pytest.mark.asyncio
-    async def test_1_2_api_004_raises_401_when_user_id_missing(self):
+    async def test_1_2_api_004_raises_403_when_user_id_missing(self):
         request = make_mock_request(user_id=USER_IDS["MISSING"])
         with pytest.raises(HTTPException) as exc_info:
             await get_current_user_id(request)
         exc = exc_info.value
-        assert exc.status_code == 401
-        assert exc.detail["code"] == AUTH_ERROR_CODES["AUTH_UNAUTHORIZED"]
+        assert exc.status_code == 403
+        assert exc.detail["code"] == AUTH_ERROR_CODES["AUTH_FORBIDDEN"]
         assert "User authentication required" in exc.detail["message"]
 
 

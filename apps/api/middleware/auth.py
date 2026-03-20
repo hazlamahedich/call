@@ -34,16 +34,25 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         auth_header = request.headers.get("Authorization")
-        if not auth_header or not auth_header.startswith("Bearer "):
+        if not auth_header:
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 content={
                     "code": AUTH_ERROR_CODES["AUTH_INVALID_TOKEN"],
-                    "message": "Missing or invalid Authorization header",
+                    "message": "Missing Authorization header",
                 },
             )
 
-        token = auth_header.replace("Bearer ", "")
+        if not auth_header.lower().startswith("bearer "):
+            return JSONResponse(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                content={
+                    "code": AUTH_ERROR_CODES["AUTH_INVALID_TOKEN"],
+                    "message": "Invalid Authorization header format",
+                },
+            )
+
+        token = auth_header[7:]
 
         try:
             payload = await self._verify_token(token)
@@ -68,9 +77,14 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         return await call_next(request)
 
+    SKIP_AUTH_PATHS = frozenset(
+        ["/health", "/docs", "/openapi.json", "/webhooks/clerk"]
+    )
+
     def _should_skip_auth(self, path: str) -> bool:
-        skip_paths = ["/health", "/docs", "/openapi.json", "/webhooks"]
-        return any(path.startswith(skip_path) for skip_path in skip_paths)
+        return path in self.SKIP_AUTH_PATHS or path.startswith(
+            ("/docs", "/openapi.json")
+        )
 
     async def _verify_token(self, token: str) -> dict:
         signing_key = self.jwk_client.get_signing_key_from_jwt(token)
