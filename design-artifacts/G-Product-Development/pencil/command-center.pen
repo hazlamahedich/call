@@ -1,0 +1,120 @@
+{
+  "version": "1.0",
+  "name": "Command Center",
+  "variables": {
+    "background": { "value": "#09090B" },
+    "foreground": { "value": "#FAFAFA" },
+    "primary": { "value": "#10B981" },
+    "secondary": { "value": "#3B82F6" },
+    "destructive": { "value": "#F43F5E" },
+    "card": { "value": "#18181B" },
+    "border": { "value": "#27272A" },
+    "muted": { "value": "#27272A" },
+    "muted-foreground": { "value": "#71717A" }
+  },
+  "elements": [
+    {
+      "id": "root-artboard",
+      "type": "artboard",
+      "name": "Desktop - 1440",
+      "x": 0,
+      "y": 0,
+      "width": 1440,
+      "height": 900,
+      "backgroundColor": "variable:background",
+      "children": [
+        {
+          "id": "left-sidebar",
+          "type": "frame",
+          "name": "Fleet Navigator",
+          "x": 0,
+          "y": 0,
+          "width": 280,
+          "height": 900,
+          "backgroundColor": "variable:card",
+          "borderRight": "1px solid variable:border",
+          "children": [
+            {
+              "id": "sidebar-label",
+              "type": "text",
+              "text": "FLEET NAVIGATOR",
+              "x": 24,
+              "y": 24,
+              "fontSize": 12,
+              "fontWeight": "bold",
+              "color": "variable:muted-foreground"
+            }
+          ]
+        },
+        {
+          "id": "center-content",
+          "type": "frame",
+          "name": "Telemetry Stream",
+          "x": 280,
+          "y": 0,
+          "width": 840,
+          "height": 900,
+          "backgroundColor": "variable:background",
+          "children": [
+            {
+              "id": "content-header",
+              "type": "text",
+              "text": "COMMAND CENTER",
+              "x": 32,
+              "y": 32,
+              "fontSize": 24,
+              "fontWeight": "bold",
+              "color": "variable:foreground"
+            },
+            {
+              "id": "telemetry-card",
+              "type": "frame",
+              "name": "Live Feed",
+              "x": 32,
+              "y": 100,
+              "width": 776,
+              "height": 600,
+              "backgroundColor": "variable:card",
+              "borderRadius": 8,
+              "border": "1px solid variable:border",
+              "children": [
+                {
+                  "id": "status-bar",
+                  "type": "rect",
+                  "x": 0,
+                  "y": 0,
+                  "width": 776,
+                  "height": 4,
+                  "fill": "variable:primary"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "right-sidebar",
+          "type": "frame",
+          "name": "Rejection Shield",
+          "x": 1120,
+          "y": 0,
+          "width": 320,
+          "height": 900,
+          "backgroundColor": "variable:card",
+          "borderLeft": "1px solid variable:border",
+          "children": [
+            {
+              "id": "shield-label",
+              "type": "text",
+              "text": "REJECTION SHIELD",
+              "x": 24,
+              "y": 24,
+              "fontSize": 12,
+              "fontWeight": "bold",
+              "color": "variable:muted-foreground"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
