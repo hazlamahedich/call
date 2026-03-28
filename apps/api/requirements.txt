@@ -10,3 +10,8 @@ svix
 pytest
 pytest-asyncio
 httpx
+aiosqlite
+alembic
+asyncpg
+psycopg2-binary
+greenlet
