@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-03-17T17:46:51+08:00
-last_updated: 2026-03-28T22:00:00+08:00
+last_updated: 2026-03-29T12:00:00+08:00
 project: call
 project_key: NOKEY
 tracking_system: file-system
@@ -44,9 +44,9 @@ story_location: _bmad-output/implementation-artifacts
 development_status:
   epic-1: in-progress
   1-1-hybrid-monorepo-core-infrastructure-scaffolding: done
-  1-2-multi-layer-hierarchy-clerk-auth-integration: review
-  1-3-tenant-isolated-data-persistence-with-postgresql-rls: review
-  1-4-obsidian-design-system-foundation-reusable-components: backlog
+  1-2-multi-layer-hierarchy-clerk-auth-integration: done
+  1-3-tenant-isolated-data-persistence-with-postgresql-rls: done
+  1-4-obsidian-design-system-foundation-reusable-components: review
   1-5-white-labeled-admin-portal-custom-branding: backlog
   1-6-10-minute-launch-onboarding-wizard: backlog
   1-7-resource-guardrails-usage-monitoring-hard-caps: backlog

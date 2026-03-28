@@ -1,6 +1,6 @@
 # Story 1.2: Multi-layer Hierarchy & Clerk Auth Integration
 
-Status: complete
+Status: done
 
 ## Story
 

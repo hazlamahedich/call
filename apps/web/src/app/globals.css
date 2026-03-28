@@ -2,30 +2,30 @@
 
 @theme {
   /* Colors - Obsidian & Zinc (Base) */
-  --color-background: #09090B;
-  --color-foreground: #FAFAFA;
-  --color-card: #18181B;
-  --color-card-foreground: #FAFAFA;
-  --color-popover: #09090B;
-  --color-popover-foreground: #FAFAFA;
-  --color-primary: #FAFAFA;
-  --color-primary-foreground: #09090B;
-  --color-secondary: #27272A;
-  --color-secondary-foreground: #FAFAFA;
-  --color-muted: #27272A;
-  --color-muted-foreground: #71717A;
-  --color-accent: #27272A;
-  --color-accent-foreground: #FAFAFA;
-  --color-destructive: #F43F5E;
-  --color-destructive-foreground: #FAFAFA;
-  --color-border: #27272A;
-  --color-input: #27272A;
-  --color-ring: #3B82F6;
+  --color-background: #09090b;
+  --color-foreground: #fafafa;
+  --color-card: #18181b;
+  --color-card-foreground: #fafafa;
+  --color-popover: #09090b;
+  --color-popover-foreground: #fafafa;
+  --color-primary: #fafafa;
+  --color-primary-foreground: #09090b;
+  --color-secondary: #27272a;
+  --color-secondary-foreground: #fafafa;
+  --color-muted: #27272a;
+  --color-muted-foreground: #71717a;
+  --color-accent: #27272a;
+  --color-accent-foreground: #fafafa;
+  --color-destructive: #f43f5e;
+  --color-destructive-foreground: #fafafa;
+  --color-border: #27272a;
+  --color-input: #27272a;
+  --color-ring: #3b82f6;
 
   /* Custom Neon Accents */
-  --color-neon-emerald: #10B981;
-  --color-neon-crimson: #F43F5E;
-  --color-neon-blue: #3B82F6;
+  --color-neon-emerald: #10b981;
+  --color-neon-crimson: #f43f5e;
+  --color-neon-blue: #3b82f6;
 
   /* Spacing (4px Grid) */
   --spacing-xs: 0.25rem;
@@ -44,6 +44,31 @@
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
   --radius-xl: 1rem;
+
+  /* Glassmorphism */
+  --color-glass: rgba(24, 24, 27, 0.4);
+  --color-glass-heavy: rgba(24, 24, 27, 0.7);
+  --blur-glass: 12px;
+  --border-glass: rgba(39, 39, 42, 0.5);
+
+  /* Neon Glow Shadows */
+  --shadow-glow-emerald: 0 0 8px rgba(16, 185, 129, 0.5);
+  --shadow-glow-crimson: 0 0 8px rgba(244, 63, 94, 0.5);
+  --shadow-glow-blue: 0 0 8px rgba(59, 130, 246, 0.5);
+
+  /* Typography Scale */
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-md: 16px;
+  --text-lg: 20px;
+  --text-2xl: 32px;
+
+  /* Animation */
+  --duration-fast: 100ms;
+  --duration-normal: 300ms;
+  --duration-slow: 800ms;
+  --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
 }
 
 @layer base {
@@ -55,3 +80,104 @@
   }
 }
 
+@layer utilities {
+  @keyframes pulse-emerald {
+    0%,
+    100% {
+      box-shadow: 0 0 4px rgba(16, 185, 129, 0.3);
+    }
+    50% {
+      box-shadow: 0 0 12px rgba(16, 185, 129, 0.6);
+    }
+  }
+
+  @keyframes jitter-crimson {
+    0%,
+    10% {
+      transform: translateX(0);
+      box-shadow: 0 0 4px rgba(244, 63, 94, 0.3);
+    }
+    15% {
+      transform: translateX(-2px);
+      box-shadow: 0 0 8px rgba(244, 63, 94, 0.5);
+    }
+    40% {
+      transform: translateX(1px);
+    }
+    45% {
+      transform: translateX(-3px);
+      box-shadow: 0 0 12px rgba(244, 63, 94, 0.7);
+    }
+    50% {
+      transform: translateX(0);
+      box-shadow: 0 0 4px rgba(244, 63, 94, 0.3);
+    }
+    100% {
+      transform: translateX(0);
+      box-shadow: 0 0 4px rgba(244, 63, 94, 0.3);
+    }
+  }
+
+  @keyframes glitch-pip {
+    0% {
+      opacity: 0;
+      transform: translateX(0);
+    }
+    15% {
+      opacity: 1;
+      transform: translateX(1px);
+    }
+    30% {
+      opacity: 0.5;
+      transform: translateX(-1px);
+    }
+    50% {
+      opacity: 1;
+      background-color: rgba(244, 63, 94, 1);
+    }
+    55% {
+      opacity: 1;
+      background-color: rgba(255, 255, 255, 0.9);
+    }
+    60% {
+      opacity: 0.6;
+      background-color: rgba(244, 63, 94, 0.6);
+      transform: translateX(0);
+    }
+    100% {
+      opacity: 0;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes boot-glow {
+    0% {
+      opacity: 0;
+    }
+    30% {
+      opacity: 0.4;
+    }
+    60% {
+      opacity: 0.8;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+
+  .animate-pulse-emerald {
+    animation: pulse-emerald 800ms ease-in-out infinite;
+  }
+
+  .animate-jitter-crimson {
+    animation: jitter-crimson 600ms steps(1) infinite;
+  }
+
+  .animate-glitch-pip {
+    animation: glitch-pip 240ms steps(2) infinite;
+  }
+
+  .animate-boot-glow {
+    animation: boot-glow var(--duration-normal) var(--ease-default) forwards;
+  }
+}

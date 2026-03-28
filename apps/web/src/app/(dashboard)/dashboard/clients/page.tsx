@@ -3,8 +3,14 @@
 import { useState, useEffect, useCallback } from "react";
 import { useOrganization, useUser } from "@clerk/nextjs";
 import { getClients, createClient, deleteClient } from "@/actions/client";
-import { Client } from "@call/types";
+import { Client, OrgRole } from "@call/types";
 import { canCreateClient, canDeleteClient } from "@/lib/permissions";
+import { Button } from "@/components/ui/button";
+import { StatusMessage } from "@/components/ui/status-message";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
+import { ConfirmAction } from "@/components/ui/confirm-action";
 
 export default function ClientsPage() {
   const { organization } = useOrganization();
@@ -14,8 +20,9 @@ export default function ClientsPage() {
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [newClientName, setNewClientName] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
-  const userRole = user?.publicMetadata?.org_role as string | undefined;
+  const userRole = user?.publicMetadata?.org_role as OrgRole | undefined;
   const canAddClient = canCreateClient(userRole);
   const canRemoveClient = canDeleteClient(userRole);
 
@@ -59,7 +66,6 @@ export default function ClientsPage() {
 
   const handleDeleteClient = async (clientId: string) => {
     if (!organization?.id) return;
-    if (!confirm("Are you sure you want to delete this client?")) return;
 
     const result = await deleteClient({ orgId: organization.id, clientId });
     if (result.error) {
@@ -67,12 +73,13 @@ export default function ClientsPage() {
     } else {
       setClients((prev) => prev.filter((c) => c.id !== clientId));
     }
+    setDeleteTarget(null);
   };
 
   if (!organization) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
-        <p className="text-zinc-400">
+        <p className="text-muted-foreground">
           Please select an organization to manage clients.
         </p>
       </div>
@@ -82,86 +89,83 @@ export default function ClientsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">Clients</h1>
+        <h1 className="text-2xl font-bold text-foreground">Clients</h1>
         {canAddClient && (
-          <button
-            onClick={() => setShowForm(true)}
-            className="rounded bg-[#10B981] px-4 py-2 text-sm font-medium text-white hover:bg-[#10B981]/90"
-          >
-            Add Client
-          </button>
+          <Button onClick={() => setShowForm(true)}>Add Client</Button>
         )}
       </div>
 
-      {error && (
-        <div className="rounded bg-red-900/20 p-3 text-red-400">{error}</div>
-      )}
+      {error && <StatusMessage variant="error">{error}</StatusMessage>}
 
       {showForm && (
-        <form
-          onSubmit={handleCreateClient}
-          className="rounded border border-[#27272A] bg-[#18181B] p-4"
-        >
-          <div className="flex gap-3">
-            <input
+        <Card className="p-4">
+          <form onSubmit={handleCreateClient} className="flex gap-3">
+            <Input
               type="text"
               value={newClientName}
               onChange={(e) => setNewClientName(e.target.value)}
               placeholder="Client name"
-              className="flex-1 rounded border border-[#27272A] bg-[#09090B] px-3 py-2 text-white"
+              className="flex-1"
               required
             />
-            <button
-              type="submit"
-              className="rounded bg-[#10B981] px-4 py-2 text-sm font-medium text-white"
-            >
-              Create
-            </button>
-            <button
+            <Button type="submit">Create</Button>
+            <Button
               type="button"
+              variant="secondary"
               onClick={() => setShowForm(false)}
-              className="rounded border border-[#27272A] px-4 py-2 text-sm text-zinc-400 hover:bg-[#27272A]"
             >
               Cancel
-            </button>
-          </div>
-        </form>
+            </Button>
+          </form>
+        </Card>
       )}
 
       {isLoading ? (
         <div className="flex items-center justify-center py-8">
-          <p className="text-zinc-400">Loading clients...</p>
+          <p className="text-muted-foreground">Loading clients...</p>
         </div>
       ) : clients.length === 0 ? (
-        <div className="rounded border border-dashed border-[#27272A] p-8 text-center">
-          <p className="text-zinc-400">
-            {canAddClient
-              ? "No clients yet. Add your first client!"
-              : "No clients yet."}
-          </p>
-        </div>
+        <EmptyState
+          title="No clients yet"
+          description={
+            canAddClient ? "Add your first client to get started." : undefined
+          }
+          action={
+            canAddClient ? (
+              <Button onClick={() => setShowForm(true)}>Add Client</Button>
+            ) : undefined
+          }
+        />
       ) : (
         <div className="space-y-3">
           {clients.map((client) => (
-            <div
+            <Card
               key={client.id}
-              className="flex items-center justify-between rounded border border-[#27272A] bg-[#18181B] p-4"
+              className="flex items-center justify-between p-4"
             >
               <div>
-                <h3 className="font-medium text-white">{client.name}</h3>
-                <p className="text-sm text-zinc-400">
+                <h3 className="font-medium text-foreground">{client.name}</h3>
+                <p className="text-sm text-muted-foreground">
                   Created {new Date(client.createdAt).toLocaleDateString()}
                 </p>
               </div>
               {canRemoveClient && (
-                <button
-                  onClick={() => handleDeleteClient(client.id)}
-                  className="rounded px-3 py-1 text-sm text-red-400 hover:bg-red-900/20"
+                <ConfirmAction
+                  title="Delete Client"
+                  description="Are you sure you want to delete this client? This action cannot be undone."
+                  confirmLabel="Delete"
+                  onConfirm={() => handleDeleteClient(client.id)}
+                  open={deleteTarget === client.id}
+                  onOpenChange={(open) =>
+                    setDeleteTarget(open ? client.id : null)
+                  }
                 >
-                  Delete
-                </button>
+                  <Button variant="destructive" size="sm">
+                    Delete
+                  </Button>
+                </ConfirmAction>
               )}
-            </div>
+            </Card>
           ))}
         </div>
       )}

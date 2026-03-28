@@ -1,6 +1,6 @@
 # Story 1.3: Tenant-Isolated Data Persistence with PostgreSQL RLS
 
-Status: complete
+Status: done
 
 ## Story
 
