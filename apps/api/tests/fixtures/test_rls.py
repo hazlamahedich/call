@@ -209,14 +209,12 @@ class TestTenantSoftDelete:
         lead = Lead(name="To Delete", email="delete@example.com")
         created = await lead_service.create(tenant_a_session, lead)
 
-        deleted = await lead_service.mark_soft_deleted(
-            tenant_a_session, created.id if created.id else 0
-        )
+        assert created.id is not None, "Created record must have an id"
+
+        deleted = await lead_service.mark_soft_deleted(tenant_a_session, created.id)
         assert deleted is True
 
-        retrieved = await lead_service.get_by_id(
-            tenant_a_session, created.id if created.id else 0
-        )
+        retrieved = await lead_service.get_by_id(tenant_a_session, created.id)
         assert retrieved is None or retrieved.soft_delete is True
 
 
@@ -244,10 +242,11 @@ class TestSecurityRegression:
         )
         await db_session.commit()
 
-        verify_url = os.environ.get(
-            "TEST_RLS_DATABASE_URL",
-            "postgresql+asyncpg://test_rls_user@localhost:5432/call_test",
-        )
+        verify_url = os.environ.get("TEST_RLS_DATABASE_URL")
+        if not verify_url:
+            pytest.skip(
+                "TEST_RLS_DATABASE_URL not set — skipping non-superuser RLS verification"
+            )
         verify_engine = create_async_engine(verify_url, poolclass=NullPool)
         async with verify_engine.begin() as conn:
             await conn.execute(

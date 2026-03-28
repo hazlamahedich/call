@@ -28,6 +28,14 @@ def app():
     async def health_route():
         return {"status": "healthy"}
 
+    @application.get("/docs")
+    async def docs_route():
+        return {"docs": True}
+
+    @application.get("/openapi.json")
+    async def openapi_route():
+        return {"openapi": "3.0"}
+
     return application
 
 
@@ -129,3 +137,49 @@ class TestAuthMiddleware:
         assert response.status_code == 401
         data = response.json()
         assert data["code"] == "AUTH_INVALID_TOKEN"
+
+
+class TestAuthSkipPaths:
+    """[P1] Tests for _should_skip_auth on known public paths"""
+
+    def test_skip_auth_for_health(self, client):
+        response = client.get("/health")
+        assert response.status_code == 200
+        assert response.json() == {"status": "healthy"}
+
+    def test_skip_auth_for_docs_returns_ok(self, client):
+        response = client.get("/docs")
+        assert response.status_code == 200
+
+    def test_skip_auth_for_openapi_json(self, client):
+        response = client.get("/openapi.json")
+        assert response.status_code == 200
+        data = response.json()
+        assert "openapi" in data
+
+
+class TestShouldSkipAuthUnit:
+    """[P1] Direct unit tests for _should_skip_auth logic"""
+
+    @pytest.fixture
+    def middleware_instance(self):
+        return AuthMiddleware(app=MagicMock(), jwks_url="https://test.jwks.url")
+
+    def test_exact_match_paths(self, middleware_instance):
+        for path in ["/health", "/docs", "/openapi.json", "/webhooks/clerk"]:
+            assert middleware_instance._should_skip_auth(path) is True, (
+                f"_should_skip_auth should return True for {path}"
+            )
+
+    def test_non_skip_path_returns_false(self, middleware_instance):
+        assert middleware_instance._should_skip_auth("/protected") is False
+        assert middleware_instance._should_skip_auth("/api/leads") is False
+
+    def test_skip_auth_paths_constant_completeness(self):
+        from middleware.auth import AuthMiddleware
+
+        expected = {"/health", "/docs", "/openapi.json", "/webhooks/clerk"}
+        actual = set(AuthMiddleware.SKIP_AUTH_PATHS)
+        assert expected.issubset(actual), (
+            f"SKIP_AUTH_PATHS missing: {expected - actual}"
+        )

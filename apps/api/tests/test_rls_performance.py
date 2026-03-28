@@ -9,12 +9,15 @@ Note: These tests verify index usage and performance characteristics.
 For actual EXPLAIN ANALYZE, you would need a real PostgreSQL database with RLS enabled.
 """
 
+import os
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.lead import Lead
 from services.base import TenantService
+
+CI_MULTIPLIER = float(os.environ.get("CI_TIMEOUT_MULTIPLIER", "1.0"))
 
 PERFORMANCE_THRESHOLDS = {
     "MAX_RLS_OVERHEAD_MS": 10,
@@ -92,7 +95,9 @@ class TestRLSPerformanceCharacteristics:
         elapsed_ms = (time.time() - start_time) * 1000
 
         assert len(leads) == 10
-        assert elapsed_ms < 1000, f"Query took {elapsed_ms}ms, expected < 1000ms"
+        assert elapsed_ms < 1000 * CI_MULTIPLIER, (
+            f"Query took {elapsed_ms}ms, expected < {1000 * CI_MULTIPLIER}ms"
+        )
 
     @pytest.mark.asyncio
     async def test_1_3_api_043_large_dataset_performance(
@@ -117,7 +122,9 @@ class TestRLSPerformanceCharacteristics:
         elapsed_ms = (time.time() - start_time) * 1000
 
         assert len(leads) == batch_size
-        assert elapsed_ms < 500, f"Query took {elapsed_ms}ms for {batch_size} records"
+        assert elapsed_ms < 500 * CI_MULTIPLIER, (
+            f"Query took {elapsed_ms}ms for {batch_size} records"
+        )
 
 
 class TestQueryScoping:

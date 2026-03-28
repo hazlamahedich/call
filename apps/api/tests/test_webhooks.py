@@ -172,3 +172,48 @@ class TestWebhookReceiver:
         assert response2.status_code == 200
         assert response1.json() == {"received": True}
         assert response2.json() == {"received": True}
+
+    @patch("routers.webhooks.settings.CLERK_WEBHOOK_SECRET", "whsec_test_secret")
+    @patch("svix.webhooks.Webhook.verify")
+    def test_membership_updated_webhook(self, mock_verify, client):
+        payload = {
+            "type": "organizationMembership.updated",
+            "data": {
+                "id": "mem_789",
+                "organization": {"id": "org_123456"},
+                "public_user_data": {"user_id": "user_123456"},
+                "role": "org:member",
+            },
+        }
+        mock_verify.return_value = payload
+
+        response = client.post(
+            "/webhooks/clerk",
+            json=payload,
+            headers={"svix-id": "msg_130", "svix-signature": "valid_sig"},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"received": True}
+
+    @patch("routers.webhooks.settings.CLERK_WEBHOOK_SECRET", "whsec_test_secret")
+    @patch("svix.webhooks.Webhook.verify")
+    def test_membership_deleted_webhook(self, mock_verify, client):
+        payload = {
+            "type": "organizationMembership.deleted",
+            "data": {
+                "id": "mem_999",
+                "organization": {"id": "org_123456"},
+                "public_user_data": {"user_id": "user_123456"},
+            },
+        }
+        mock_verify.return_value = payload
+
+        response = client.post(
+            "/webhooks/clerk",
+            json=payload,
+            headers={"svix-id": "msg_131", "svix-signature": "valid_sig"},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"received": True}
