@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import Generic, List, Optional, TypeVar, Type
 
 from sqlalchemy import text
@@ -9,11 +8,36 @@ from models.base import TenantModel
 
 T = TypeVar("T", bound=TenantModel)
 
+_BASE_FIELDS: set[str] = {"id", "org_id", "created_at", "updated_at", "soft_delete"}
+_SQLALCHEMY_INTERNALS: set[str] = {
+    "_sa_instance_state",
+    "_sa_instance_state_hash",
+    "_sa_modified",
+    "__table__",
+    "__tablename__",
+}
+
+
+def _get_model_columns(model: Type[T]) -> List[str]:
+    columns = []
+    for name, _field_info in model.model_fields.items():
+        if name not in _BASE_FIELDS:
+            columns.append(name)
+    return columns
+
+
+def _build_select_columns(model: Type[T]) -> str:
+    model_cols = _get_model_columns(model)
+    return (
+        "id, org_id, " + ", ".join(model_cols) + ", created_at, updated_at, soft_delete"
+    )
+
 
 class TenantService(Generic[T]):
     def __init__(self, model: Type[T]):
         self.model = model
         self.table_name = model.__tablename__
+        self._select_cols = _build_select_columns(model)
 
     async def _ensure_tenant_context(self, session: AsyncSession) -> None:
         result = await session.execute(
@@ -26,18 +50,42 @@ class TenantService(Generic[T]):
                 message="No tenant context set",
             )
 
+    def _row_to_instance(self, row) -> T:
+        model_cols = _get_model_columns(self.model)
+        col_names = (
+            ["id", "org_id"] + model_cols + ["created_at", "updated_at", "soft_delete"]
+        )
+        base_fields = {"id", "org_id", "created_at", "updated_at", "soft_delete"}
+        row_map = {}
+        for idx, col_name in enumerate(col_names):
+            if idx < len(row):
+                row_map[col_name] = row[idx]
+        init_kwargs = {k: v for k, v in row_map.items() if k not in base_fields}
+        instance = self.model(**init_kwargs)
+        for col_name in base_fields:
+            if col_name in row_map:
+                object.__setattr__(instance, col_name, row_map[col_name])
+        return instance
+
     async def create(self, session: AsyncSession, record: T) -> T:
         await self._ensure_tenant_context(session)
         columns = []
         values = []
         params = {}
-        for idx, (col_name, col_value) in enumerate(record.__dict__.items()):
-            if col_name.startswith("_") or col_name == "id":
+        for idx, (col_name, col_value) in enumerate(
+            record.model_dump(exclude=_BASE_FIELDS | _SQLALCHEMY_INTERNALS).items()
+        ):
+            if col_name in _BASE_FIELDS or col_name in _SQLALCHEMY_INTERNALS:
                 continue
-            if col_value is not None:
-                columns.append(col_name)
-                values.append(f":p{idx}")
-                params[f"p{idx}"] = col_value
+            columns.append(col_name)
+            values.append(f":p{idx}")
+            params[f"p{idx}"] = col_value
+
+        if not columns:
+            raise TenantContextError(
+                error_code="TENANT_CONTEXT_MISSING",
+                message="No columns to insert",
+            )
 
         cols_str = ", ".join(columns)
         vals_str = ", ".join(values)
@@ -47,68 +95,50 @@ class TenantService(Generic[T]):
         )
         result = await session.execute(stmt.bindparams(**params))
         row = result.first()
-        if row:
-            record.id = row[0]
-            record.org_id = row[1]
+        if not row:
+            raise TenantContextError(
+                error_code="TENANT_ACCESS_DENIED",
+                message="Insert failed — no row returned",
+            )
+        record.id = row[0]
+        record.org_id = row[1]
         await session.flush()
         return record
 
     async def get_by_id(self, session: AsyncSession, record_id: int) -> Optional[T]:
         stmt = text(
-            f"SELECT id, org_id, name, email, phone, status, created_at, updated_at, soft_delete "
-            f"FROM {self.table_name} WHERE id = :record_id"
+            f"SELECT {self._select_cols} FROM {self.table_name} WHERE id = :record_id"
         )
         result = await session.execute(stmt.bindparams(record_id=record_id))
         row = result.first()
         if row is None:
             return None
-        instance = self.model(
-            id=row[0],
-            org_id=row[1],
-            name=row[2],
-            email=row[3],
-            phone=row[4],
-            status=row[5],
-            created_at=row[6],
-            updated_at=row[7],
-            soft_delete=row[8],
-        )
-        return instance
+        return self._row_to_instance(row)
 
     async def list_all(
         self, session: AsyncSession, *, limit: int = 100, offset: int = 0
     ) -> List[T]:
         stmt = text(
-            f"SELECT id, org_id, name, email, phone, status, created_at, updated_at, soft_delete "
-            f"FROM {self.table_name} LIMIT :lim OFFSET :off"
+            f"SELECT {self._select_cols} FROM {self.table_name} LIMIT :lim OFFSET :off"
         )
         result = await session.execute(stmt.bindparams(lim=limit, off=offset))
         rows = result.fetchall()
-        return [
-            self.model(
-                id=row[0],
-                org_id=row[1],
-                name=row[2],
-                email=row[3],
-                phone=row[4],
-                status=row[5],
-                created_at=row[6],
-                updated_at=row[7],
-                soft_delete=row[8],
-            )
-            for row in rows
-        ]
+        return [self._row_to_instance(row) for row in rows]
 
     async def update(self, session: AsyncSession, record: T) -> T:
+        if record.id is None:
+            raise TenantContextError(
+                error_code="TENANT_INVALID_ORG_ID",
+                message="Cannot update record with no id",
+            )
         updates = []
         params = {"record_id": record.id}
-        for col_name, col_value in record.__dict__.items():
-            if col_name.startswith("_") or col_name in (
-                "id",
-                "org_id",
-                "updated_at",
-                "created_at",
-            ):
+        for col_name, col_value in record.model_dump(
+            exclude=_BASE_FIELDS | _SQLALCHEMY_INTERNALS
+        ).items():
+            if col_name in _BASE_FIELDS or col_name in _SQLALCHEMY_INTERNALS:
+                continue
+            if col_value is None:
                 continue
             updates.append(f"{col_name} = :u_{col_name}")
             params[f"u_{col_name}"] = col_value
@@ -122,21 +152,24 @@ class TenantService(Generic[T]):
         result = await session.execute(stmt.bindparams(**params))
         row = result.first()
         if row is None:
-            return record
+            raise TenantContextError(
+                error_code="TENANT_ACCESS_DENIED",
+                message=f"Update failed for id={record.id} — record not found or RLS blocked",
+            )
         await session.flush()
         return record
 
-    async def delete(self, session: AsyncSession, record_id: int) -> bool:
+    async def hard_delete(self, session: AsyncSession, record_id: int) -> bool:
         stmt = text(f"DELETE FROM {self.table_name} WHERE id = :record_id")
         result = await session.execute(stmt.bindparams(record_id=record_id))
         await session.flush()
-        return result.rowcount > 0
+        return result.rowcount > 0  # type: ignore[union-attr]
 
-    async def soft_delete(self, session: AsyncSession, record_id: int) -> bool:
+    async def mark_soft_deleted(self, session: AsyncSession, record_id: int) -> bool:
         stmt = text(
             f"UPDATE {self.table_name} SET soft_delete = true, updated_at = NOW() "
             f"WHERE id = :record_id AND (soft_delete = false OR soft_delete IS NULL)"
         )
         result = await session.execute(stmt.bindparams(record_id=record_id))
         await session.flush()
-        return result.rowcount > 0
+        return result.rowcount > 0  # type: ignore[union-attr]

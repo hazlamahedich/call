@@ -1,7 +1,11 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
+
 from sqlmodel import Field, SQLModel
-from sqlalchemy import text
+from pydantic import AliasGenerator
+
+
+from pydantic.alias_generators import to_camel
 
 
 class TenantModel(SQLModel):
@@ -12,11 +16,18 @@ class TenantModel(SQLModel):
     The session must have app.current_org_id set via set_tenant_context().
     """
 
-    org_id: str = Field(default=None, index=True, description="Tenant organization ID")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    org_id: Optional[str] = Field(
+        default=None, index=True, description="Tenant organization ID"
+    )
+    created_at: Optional[datetime] = Field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Optional[datetime] = Field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
     soft_delete: bool = Field(default=False)
     id: Optional[int] = Field(default=None, primary_key=True)
 
     class Config:
         table: bool = False
+        alias_generator = AliasGenerator(to_camel)

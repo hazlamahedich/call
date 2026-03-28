@@ -1,7 +1,13 @@
-from typing import AsyncGenerator
-from fastapi import Depends
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from typing import AsyncGenerator, Optional
+
+from fastapi import Depends, Request
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy import text
+from sqlalchemy.pool import NullPool
 
 from config.settings import settings
 from dependencies.org_context import get_current_org_id
@@ -16,10 +22,17 @@ class TenantContextError(Exception):
         super().__init__(message)
 
 
-async_engine = create_async_engine(
-    settings.DATABASE_URL.replace("sqlite://", "sqlite+aiosqlite://"),
-    echo=False,
-)
+def _build_engine():
+    url = settings.DATABASE_URL
+    if "sqlite" in url:
+        return create_async_engine(
+            url.replace("sqlite://", "sqlite+aiosqlite://"),
+            echo=False,
+        )
+    return create_async_engine(url, echo=False, poolclass=NullPool)
+
+
+async_engine = _build_engine()
 
 AsyncSessionLocal = async_sessionmaker(
     bind=async_engine,
@@ -37,42 +50,42 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
             yield session
             await session.commit()
         except Exception:
-            await session.rollback()
+            try:
+                await session.rollback()
+            except Exception:
+                pass
             raise
 
 
-async def set_tenant_context(session: AsyncSession, org_id: str) -> None:
-    """
-    Set tenant context for RLS. Must be called at start of each transaction.
-
-    IMPORTANT: This sets the session variable on the current connection/transaction,
-    not on the entire connection pool. Each new transaction must set this.
-
-    SECURITY: Uses parameterized query to prevent SQL injection.
-    """
+async def set_tenant_context(
+    session: AsyncSession, org_id: Optional[str], *, is_local: bool = True
+) -> None:
     if not org_id:
         raise TenantContextError(
             error_code="TENANT_CONTEXT_MISSING",
             message="No tenant context set",
         )
     await session.execute(
-        text("SELECT set_config('app.current_org_id', :org_id, false)"),
-        {"org_id": org_id},
+        text("SELECT set_config('app.current_org_id', :org_id, :is_local)"),
+        {"org_id": org_id, "is_local": is_local},
     )
 
 
 async def get_tenant_scoped_session(
     session: AsyncSession = Depends(get_session),
-    org_id: str = Depends(lambda request: getattr(request.state, "org_id", None)),
+    org_id: str = Depends(get_current_org_id),
 ) -> AsyncGenerator[AsyncSession, None]:
-    """
-    Provides a database session with tenant context pre-configured for RLS.
-    Use this instead of get_session for any tenant-scoped operations.
-    """
     if not org_id:
         raise TenantContextError(
             error_code="TENANT_CONTEXT_MISSING",
             message="No tenant context set",
         )
-    await set_tenant_context(session, org_id)
-    yield session
+    await set_tenant_context(session, org_id, is_local=True)
+    try:
+        yield session
+    except Exception:
+        try:
+            await session.rollback()
+        except Exception:
+            pass
+        raise

@@ -2,7 +2,7 @@
 
 Revision ID: eb48e89c217f
 Revises:
-Create Date: 2026-03-28 13:05:12.281336
+Create Date: 2026-03-28 13:05:12.28+10:11:45
 
 """
 
@@ -10,7 +10,6 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-
 
 revision: str = "eb48e89c217f"
 down_revision: Union[str, Sequence[str], None] = None
@@ -30,7 +29,6 @@ TENANT_TABLES = [
 
 
 def upgrade() -> None:
-    """Enable RLS on all tenant-scoped tables."""
     conn = op.get_bind()
 
     for table_name in TENANT_TABLES:
@@ -45,49 +43,55 @@ def upgrade() -> None:
             )
         """)
         )
-
         conn.execute(
             sa.text(f"""
-            CREATE INDEX IF NOT EXISTS idx_{table_name}_org_id 
+            CREATE INDEX IF NOT EXISTS idx_{table_name}_org_id
             ON {table_name}(org_id)
         """)
         )
-
         conn.execute(
             sa.text(f"""
             ALTER TABLE {table_name} ENABLE ROW LEVEL SECURITY
         """)
         )
-
         conn.execute(
             sa.text(f"""
             CREATE POLICY tenant_isolation_{table_name} ON {table_name}
             USING (org_id = current_setting('app.current_org_id', true)::text)
         """)
         )
-
         conn.execute(
             sa.text(f"""
             CREATE POLICY tenant_insert_{table_name} ON {table_name}
             FOR INSERT WITH CHECK (org_id = current_setting('app.current_org_id', true)::text)
         """)
         )
-
-    conn.execute(
-        sa.text("""
-        CREATE POLICY platform_admin_bypass ON agencies
-        USING (current_setting('app.is_platform_admin', true)::boolean = true)
-    """)
-    )
+        conn.execute(
+            sa.text(f"""
+            CREATE POLICY platform_admin_bypass ON {table_name}
+            USING (current_setting('app.is_platform_admin', true)::boolean = true)
+        """)
+        )
+        conn.execute(
+            sa.text(f"""
+            CREATE POLICY platform_admin_bypass_insert ON {table_name}
+            FOR INSERT WITH CHECK (current_setting('app.is_platform_admin', true)::boolean = true)
+        """)
+        )
 
 
 def downgrade() -> None:
-    """Disable RLS and drop tenant tables."""
     conn = op.get_bind()
 
-    conn.execute(sa.text("DROP POLICY IF EXISTS platform_admin_bypass ON agencies"))
-
     for table_name in TENANT_TABLES:
+        conn.execute(
+            sa.text(
+                f"DROP POLICY IF EXISTS platform_admin_bypass_insert ON {table_name}"
+            )
+        )
+        conn.execute(
+            sa.text(f"DROP POLICY IF EXISTS platform_admin_bypass ON {table_name}")
+        )
         conn.execute(
             sa.text(f"""
             DROP POLICY IF EXISTS tenant_insert_{table_name} ON {table_name}

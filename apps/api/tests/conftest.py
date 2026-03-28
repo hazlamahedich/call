@@ -136,7 +136,7 @@ async def db_session():
     )
     async with factory() as session:
         await session.execute(
-            text("SELECT set_config('app.is_platform_admin', 'true', false)")
+            text("SELECT set_config('app.is_platform_admin', 'true', true)")
         )
         yield session
     await engine.dispose()
@@ -150,7 +150,7 @@ async def tenant_a_session():
     )
     async with factory() as session:
         await session.execute(
-            text("SELECT set_config('app.current_org_id', :org_id, false)"),
+            text("SELECT set_config('app.current_org_id', :org_id, true)"),
             {"org_id": ORG_A},
         )
         yield session
@@ -165,7 +165,7 @@ async def tenant_b_session():
     )
     async with factory() as session:
         await session.execute(
-            text("SELECT set_config('app.current_org_id', :org_id, false)"),
+            text("SELECT set_config('app.current_org_id', :org_id, true)"),
             {"org_id": ORG_B},
         )
         yield session

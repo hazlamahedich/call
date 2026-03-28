@@ -10,3 +10,12 @@ export const AUTH_ERROR_CODES = {
 
 export type AuthErrorCode =
   (typeof AUTH_ERROR_CODES)[keyof typeof AUTH_ERROR_CODES];
+
+export const TENANT_ERROR_CODES = {
+  TENANT_CONTEXT_MISSING: "TENANT_CONTEXT_MISSING",
+  TENANT_ACCESS_DENIED: "TENANT_ACCESS_DENIED",
+  TENANT_INVALID_ORG_ID: "TENANT_INVALID_ORG_ID",
+} as const;
+
+export type TenantErrorCode =
+  (typeof TENANT_ERROR_CODES)[keyof typeof TENANT_ERROR_CODES];

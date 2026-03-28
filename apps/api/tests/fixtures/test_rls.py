@@ -113,13 +113,11 @@ class TestTenantUpdateIsolation:
         original_name = created_b.name
 
         created_b.name = "Hacked by Tenant A"
-        update_result = await lead_service_a.update(tenant_a_session, created_b)
+        with pytest.raises(TenantContextError) as exc_info:
+            await lead_service_a.update(tenant_a_session, created_b)
+        assert exc_info.value.error_code == "TENANT_ACCESS_DENIED"
 
         verify_service = TenantService[Lead](Lead)
-        await tenant_b_session.execute(
-            text("SELECT set_config('app.current_org_id', :org_id, false)"),
-            {"org_id": TEST_ORG_IDS["TENANT_B"]},
-        )
         verified = await verify_service.get_by_id(tenant_b_session, created_b.id)
 
         assert verified is not None
@@ -164,11 +162,11 @@ class TestTenantDeleteIsolation:
         created_b = await lead_service_b.create(tenant_b_session, lead_b)
 
         lead_service_a = TenantService[Lead](Lead)
-        delete_result = await lead_service_a.delete(tenant_a_session, created_b.id)
+        delete_result = await lead_service_a.hard_delete(tenant_a_session, created_b.id)
 
         verify_service = TenantService[Lead](Lead)
         await tenant_b_session.execute(
-            text("SELECT set_config('app.current_org_id', :org_id, false)"),
+            text("SELECT set_config('app.current_org_id', :org_id, true)"),
             {"org_id": TEST_ORG_IDS["TENANT_B"]},
         )
         verified = await verify_service.get_by_id(tenant_b_session, created_b.id)
@@ -188,7 +186,7 @@ class TestTenantDeleteIsolation:
         lead = Lead(**TEST_LEAD_DATA["TENANT_A_LEAD"])
         created = await lead_service.create(tenant_a_session, lead)
 
-        delete_result = await lead_service.delete(tenant_a_session, created.id)
+        delete_result = await lead_service.hard_delete(tenant_a_session, created.id)
 
         assert delete_result is True
 
@@ -211,7 +209,7 @@ class TestTenantSoftDelete:
         lead = Lead(name="To Delete", email="delete@example.com")
         created = await lead_service.create(tenant_a_session, lead)
 
-        deleted = await lead_service.soft_delete(
+        deleted = await lead_service.mark_soft_deleted(
             tenant_a_session, created.id if created.id else 0
         )
         assert deleted is True
@@ -237,7 +235,7 @@ class TestSecurityRegression:
         test_org = "org_test_regression"
 
         await db_session.execute(
-            text("SELECT set_config('app.current_org_id', :org_id, false)"),
+            text("SELECT set_config('app.current_org_id', :org_id, true)"),
             {"org_id": test_org},
         )
         await db_session.execute(
@@ -253,7 +251,7 @@ class TestSecurityRegression:
         verify_engine = create_async_engine(verify_url, poolclass=NullPool)
         async with verify_engine.begin() as conn:
             await conn.execute(
-                text("SELECT set_config('app.current_org_id', :org_id, false)"),
+                text("SELECT set_config('app.current_org_id', :org_id, true)"),
                 {"org_id": "different_org"},
             )
             result = await conn.execute(text("SELECT COUNT(*) FROM leads"))
@@ -276,7 +274,7 @@ class TestSecurityRegression:
         await lead_service_b.create(tenant_b_session, lead_b)
 
         await tenant_a_session.execute(
-            text("SELECT set_config('app.is_platform_admin', 'false', false)")
+            text("SELECT set_config('app.is_platform_admin', 'false', true)")
         )
 
         direct_query = await tenant_a_session.execute(
