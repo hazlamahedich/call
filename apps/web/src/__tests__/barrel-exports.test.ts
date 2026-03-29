@@ -79,7 +79,7 @@ describe("[CROSS-STORY][Barrel Exports] — Design system module export verifica
       "Switch",
     ];
     for (const name of exportNames) {
-      expect(ui[name]).toBeDefined();
+      expect((ui as Record<string, unknown>)[name]).toBeDefined();
     }
   });
 
@@ -93,7 +93,7 @@ describe("[CROSS-STORY][Barrel Exports] — Design system module export verifica
       "TelemetryStreamObsidian",
     ];
     for (const name of exportNames) {
-      expect(obsidian[name]).toBeDefined();
+      expect((obsidian as Record<string, unknown>)[name]).toBeDefined();
     }
   });
 });
