@@ -170,7 +170,7 @@
   }
 
   .animate-jitter-crimson {
-    animation: jitter-crimson 600ms steps(1) infinite;
+    animation: jitter-crimson 600ms steps(4, start) infinite;
   }
 
   .animate-glitch-pip {

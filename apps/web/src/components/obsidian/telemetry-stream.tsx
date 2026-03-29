@@ -31,13 +31,20 @@ export function TelemetryStreamObsidian({
   ...props
 }: TelemetryStreamObsidianProps) {
   const bottomRef = React.useRef<HTMLDivElement>(null);
+  const onScrollBottomRef = React.useRef(onScrollBottom);
+  onScrollBottomRef.current = onScrollBottom;
+
+  const prevEntryCountRef = React.useRef(0);
 
   React.useEffect(() => {
-    bottomRef.current?.scrollIntoView({
-      behavior: reducedMotion ? "auto" : "smooth",
-    });
-    onScrollBottom?.();
-  }, [entries, onScrollBottom, reducedMotion]);
+    if (entries.length !== prevEntryCountRef.current) {
+      prevEntryCountRef.current = entries.length;
+      bottomRef.current?.scrollIntoView({
+        behavior: reducedMotion ? "auto" : "smooth",
+      });
+      onScrollBottomRef.current?.();
+    }
+  }, [entries, reducedMotion]);
 
   return (
     <div
@@ -53,12 +60,14 @@ export function TelemetryStreamObsidian({
           {entries.map((entry) => (
             <div key={entry.id} className="flex gap-sm">
               <span className="text-muted-foreground/50 shrink-0 text-xs pt-0.5">
-                {new Date(entry.timestamp).toLocaleTimeString("en-US", {
-                  hour12: false,
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  second: "2-digit",
-                })}
+                {isNaN(entry.timestamp) || !isFinite(entry.timestamp)
+                  ? "--:--:--"
+                  : new Date(entry.timestamp).toLocaleTimeString("en-US", {
+                      hour12: false,
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      second: "2-digit",
+                    })}
               </span>
               <div className="flex flex-col flex-1 min-w-0">
                 <span
@@ -68,7 +77,8 @@ export function TelemetryStreamObsidian({
                       "text-muted-foreground border-border",
                   )}
                 >
-                  {roleLabels[entry.role] ?? entry.role.toUpperCase()}
+                  {roleLabels[entry.role] ??
+                    String(entry.role ?? "unknown").toUpperCase()}
                 </span>
                 <p className="leading-relaxed text-foreground break-words">
                   {entry.text}

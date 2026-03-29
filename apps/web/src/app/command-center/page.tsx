@@ -1,13 +1,22 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { FleetNavigator } from "@/components/command-center/FleetNavigator"
-import { TelemetryStream } from "@/components/command-center/TelemetryStream"
-import { RejectionShield } from "@/components/command-center/RejectionShield"
-import { Search, Bell, Settings, Radio, ShieldCheck, MessageSquare } from "lucide-react"
+import { useState } from "react";
+import { FleetNavigator } from "@/components/command-center/FleetNavigator";
+import { TelemetryStream } from "@/components/command-center/TelemetryStream";
+import { RejectionShield } from "@/components/command-center/RejectionShield";
+import {
+  Search,
+  Bell,
+  Settings,
+  Radio,
+  ShieldCheck,
+  MessageSquare,
+} from "lucide-react";
 
 export default function CommandCenterPage() {
-  const [sentiment, setSentiment] = useState<"positive" | "negative" | "neutral">("neutral")
+  const [sentiment, setSentiment] = useState<
+    "positive" | "hostile" | "neutral"
+  >("neutral");
 
   return (
     <div className="flex flex-col h-screen bg-background overflow-hidden text-foreground">
@@ -18,22 +27,30 @@ export default function CommandCenterPage() {
             <div className="size-6 bg-neon-emerald rounded flex items-center justify-center">
               <Radio className="size-4 text-background" />
             </div>
-            <h1 className="text-lg font-bold tracking-tighter uppercase">Titan Cold Caller</h1>
+            <h1 className="text-lg font-bold tracking-tighter uppercase">
+              Titan Cold Caller
+            </h1>
           </div>
           <div className="h-4 w-px bg-border hidden md:block" />
           <nav className="hidden md:flex gap-6">
-            <span className="text-sm font-bold text-foreground border-b-2 border-neon-emerald pb-5 pt-1 -mb-1">COMMAND CENTER</span>
-            <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer pt-1">CAMPAIGNS</span>
-            <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer pt-1">ANALYTICS</span>
+            <span className="text-sm font-bold text-foreground border-b-2 border-neon-emerald pb-5 pt-1 -mb-1">
+              COMMAND CENTER
+            </span>
+            <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer pt-1">
+              CAMPAIGNS
+            </span>
+            <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer pt-1">
+              ANALYTICS
+            </span>
           </nav>
         </div>
 
         <div className="flex items-center gap-lg">
           <div className="relative group hidden lg:block">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground group-focus-within:text-foreground transition-colors" />
-            <input 
-              type="text" 
-              placeholder="Search fleet..." 
+            <input
+              type="text"
+              placeholder="Search fleet..."
               className="bg-card/50 border border-border rounded-md px-10 py-1.5 text-sm w-64 focus:outline-none focus:ring-1 focus:ring-ring transition-all placeholder:text-muted-foreground/50"
             />
           </div>
@@ -60,29 +77,35 @@ export default function CommandCenterPage() {
           <div className="flex items-center justify-between shrink-0">
             <div className="flex flex-col">
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-[10px] font-bold text-neon-emerald bg-neon-emerald/10 px-2 py-0.5 rounded border border-neon-emerald/30 uppercase tracking-widest">Live</span>
-                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Active Call: PHOENIX-01</span>
+                <span className="text-[10px] font-bold text-neon-emerald bg-neon-emerald/10 px-2 py-0.5 rounded border border-neon-emerald/30 uppercase tracking-widest">
+                  Live
+                </span>
+                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                  Active Call: PHOENIX-01
+                </span>
               </div>
-              <h2 className="text-2xl font-black tracking-tight uppercase leading-none">Main Telemetry</h2>
+              <h2 className="text-2xl font-black tracking-tight uppercase leading-none">
+                Main Telemetry
+              </h2>
             </div>
             <div className="flex items-center bg-card border border-border p-1 rounded-md">
-              <button 
+              <button
                 onClick={() => setSentiment("positive")}
                 className={`text-[9px] px-3 py-1 rounded transition-all font-bold uppercase tracking-wider ${sentiment === "positive" ? "bg-neon-emerald text-background" : "text-muted-foreground hover:text-foreground"}`}
               >
                 Positive
               </button>
-              <button 
+              <button
                 onClick={() => setSentiment("neutral")}
                 className={`text-[9px] px-3 py-1 rounded transition-all font-bold uppercase tracking-wider ${sentiment === "neutral" ? "bg-neon-blue text-background" : "text-muted-foreground hover:text-foreground"}`}
               >
                 Neutral
               </button>
-              <button 
-                onClick={() => setSentiment("negative")}
-                className={`text-[9px] px-3 py-1 rounded transition-all font-bold uppercase tracking-wider ${sentiment === "negative" ? "bg-neon-crimson text-background" : "text-muted-foreground hover:text-foreground"}`}
+              <button
+                onClick={() => setSentiment("hostile")}
+                className={`text-[9px] px-3 py-1 rounded transition-all font-bold uppercase tracking-wider ${sentiment === "hostile" ? "bg-neon-crimson text-background" : "text-muted-foreground hover:text-foreground"}`}
               >
-                Negative
+                Hostile
               </button>
             </div>
           </div>
@@ -96,26 +119,38 @@ export default function CommandCenterPage() {
 
         {/* Right Metrics Panel */}
         <div className="w-80 hidden lg:flex flex-col p-lg border-l border-border gap-lg overflow-y-auto shrink-0 bg-background/50">
-          <RejectionShield 
-            status={sentiment === "negative" ? "critical" : sentiment === "neutral" ? "alert" : "safe"} 
-            rejectionRate={sentiment === "negative" ? 24.8 : 12.4}
+          <RejectionShield
+            status={
+              sentiment === "hostile"
+                ? "critical"
+                : sentiment === "neutral"
+                  ? "alert"
+                  : "safe"
+            }
+            rejectionRate={sentiment === "hostile" ? 24.8 : 12.4}
           />
-          
+
           <div className="bg-card border border-border rounded-lg p-md">
-            <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-md">Quick Actions</h4>
+            <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-md">
+              Quick Actions
+            </h4>
             <div className="grid grid-cols-2 gap-sm">
               <button className="flex flex-col items-center justify-center gap-2 p-sm bg-background/50 border border-border rounded hover:bg-muted hover:border-neon-emerald/30 transition-all group">
                 <ShieldCheck className="size-4 text-muted-foreground group-hover:text-neon-emerald" />
-                <span className="text-[9px] font-bold uppercase text-muted-foreground group-hover:text-foreground">Verify Compliance</span>
+                <span className="text-[9px] font-bold uppercase text-muted-foreground group-hover:text-foreground">
+                  Verify Compliance
+                </span>
               </button>
               <button className="flex flex-col items-center justify-center gap-2 p-sm bg-background/50 border border-border rounded hover:bg-muted hover:border-neon-blue/30 transition-all group">
                 <MessageSquare className="size-4 text-muted-foreground group-hover:text-neon-blue" />
-                <span className="text-[9px] font-bold uppercase text-muted-foreground group-hover:text-foreground">Send Prompt</span>
+                <span className="text-[9px] font-bold uppercase text-muted-foreground group-hover:text-foreground">
+                  Send Prompt
+                </span>
               </button>
             </div>
           </div>
         </div>
       </div>
     </div>
-  )
+  );
 }

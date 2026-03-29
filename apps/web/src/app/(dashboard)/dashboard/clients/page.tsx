@@ -21,6 +21,7 @@ export default function ClientsPage() {
   const [showForm, setShowForm] = useState(false);
   const [newClientName, setNewClientName] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const userRole = user?.publicMetadata?.org_role as OrgRole | undefined;
   const canAddClient = canCreateClient(userRole);
@@ -65,7 +66,8 @@ export default function ClientsPage() {
   };
 
   const handleDeleteClient = async (clientId: string) => {
-    if (!organization?.id) return;
+    if (!organization?.id || deleting) return;
+    setDeleting(true);
 
     const result = await deleteClient({ orgId: organization.id, clientId });
     if (result.error) {
@@ -74,6 +76,7 @@ export default function ClientsPage() {
       setClients((prev) => prev.filter((c) => c.id !== clientId));
     }
     setDeleteTarget(null);
+    setDeleting(false);
   };
 
   if (!organization) {

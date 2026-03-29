@@ -33,10 +33,10 @@ export function VibeBorder({
 
   return (
     <div
+      {...props}
       className={cn(borderClass, "rounded-lg transition-colors", className)}
       aria-live="polite"
       aria-label={`Sentiment: ${sentiment}`}
-      {...props}
     >
       {children}
     </div>

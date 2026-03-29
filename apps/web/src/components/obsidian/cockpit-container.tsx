@@ -18,16 +18,22 @@ export function CockpitContainer({
   ...props
 }: CockpitContainerProps) {
   const [booted, setBooted] = React.useState(false);
+  const onBootCompleteRef = React.useRef(onBootComplete);
+  onBootCompleteRef.current = onBootComplete;
 
   React.useEffect(() => {
-    if (active && !booted) {
+    if (!active) {
+      setBooted(false);
+      return;
+    }
+    if (!booted) {
       const timer = setTimeout(() => {
         setBooted(true);
-        onBootComplete?.();
+        onBootCompleteRef.current?.();
       }, 300);
       return () => clearTimeout(timer);
     }
-  }, [active, booted, onBootComplete]);
+  }, [active, booted]);
 
   return (
     <div

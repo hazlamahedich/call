@@ -47,6 +47,9 @@ export default function NewOrganizationPage() {
     }
   };
 
+  const selectClassName =
+    "w-full rounded-md border border-input bg-background px-md py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
       <Card className="w-full max-w-md p-8">
@@ -62,10 +65,14 @@ export default function NewOrganizationPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="mb-2 block text-sm text-muted-foreground">
+            <label
+              htmlFor="org-name"
+              className="mb-2 block text-sm text-muted-foreground"
+            >
               Organization Name
             </label>
             <Input
+              id="org-name"
               type="text"
               value={formData.name}
               onChange={(e) =>
@@ -76,10 +83,14 @@ export default function NewOrganizationPage() {
           </div>
 
           <div>
-            <label className="mb-2 block text-sm text-muted-foreground">
+            <label
+              htmlFor="org-type"
+              className="mb-2 block text-sm text-muted-foreground"
+            >
               Type
             </label>
             <select
+              id="org-type"
               value={formData.type}
               onChange={(e) =>
                 setFormData((prev) => ({
@@ -87,17 +98,21 @@ export default function NewOrganizationPage() {
                   type: e.target.value as OrgType,
                 }))
               }
-              className="w-full rounded-md border border-input bg-background px-md py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className={selectClassName}
             >
               <option value="agency">Agency</option>
             </select>
           </div>
 
           <div>
-            <label className="mb-2 block text-sm text-muted-foreground">
+            <label
+              htmlFor="org-plan"
+              className="mb-2 block text-sm text-muted-foreground"
+            >
               Plan
             </label>
             <select
+              id="org-plan"
               value={formData.plan}
               onChange={(e) =>
                 setFormData((prev) => ({
@@ -105,7 +120,7 @@ export default function NewOrganizationPage() {
                   plan: e.target.value as PlanType,
                 }))
               }
-              className="w-full rounded-md border border-input bg-background px-md py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className={selectClassName}
             >
               <option value="free">Free</option>
               <option value="pro">Pro</option>

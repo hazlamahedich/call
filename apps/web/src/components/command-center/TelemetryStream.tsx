@@ -6,7 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface TelemetryStreamProps {
   className?: string;
-  sentiment?: "positive" | "negative" | "neutral";
+  sentiment?: "positive" | "hostile" | "neutral";
 }
 
 export function TelemetryStream({
@@ -55,7 +55,7 @@ export function TelemetryStream({
 
   const sentimentColors = {
     positive: "bg-neon-emerald",
-    negative: "bg-neon-crimson",
+    hostile: "bg-neon-crimson",
     neutral: "bg-neon-blue",
   };
 
@@ -86,7 +86,7 @@ export function TelemetryStream({
             <Heart
               className={cn(
                 "size-3",
-                sentiment === "negative"
+                sentiment === "hostile"
                   ? "text-neon-crimson"
                   : "text-neon-emerald",
               )}

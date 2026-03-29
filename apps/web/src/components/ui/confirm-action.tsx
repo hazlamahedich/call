@@ -78,13 +78,15 @@ function ConfirmAction({
                 {cancelLabel}
               </Button>
             </DialogPrimitive.Close>
-            <Button
-              variant={variant === "destructive" ? "destructive" : "primary"}
-              size="sm"
-              onClick={onConfirm}
-            >
-              {confirmLabel}
-            </Button>
+            <DialogPrimitive.Close asChild>
+              <Button
+                variant={variant === "destructive" ? "destructive" : "primary"}
+                size="sm"
+                onClick={onConfirm}
+              >
+                {confirmLabel}
+              </Button>
+            </DialogPrimitive.Close>
           </div>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
