@@ -8,9 +8,9 @@ describe("[1.4-AC1][Button] — Neon-emerald CTA with variants", () => {
   it("[1.4-UNIT-010][P0] Given default Button, When rendered, Then primary variant classes are applied", () => {
     const { container } = render(<Button>Click</Button>);
     const btn = container.firstChild as HTMLElement;
-    expect(btn.className).toContain("bg-neon-emerald");
+    expect(btn.className).toContain("brand-primary");
     expect(btn.className).toContain("text-background");
-    expect(btn.className).toContain("shadow-glow-emerald");
+    expect(btn.className).toContain("brand-primary-rgb");
   });
 
   it("[1.4-UNIT-011][P1] Given variant=secondary, When rendered, Then secondary classes are applied", () => {

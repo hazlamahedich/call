@@ -55,17 +55,11 @@ class TenantService(Generic[T]):
         col_names = (
             ["id", "org_id"] + model_cols + ["created_at", "updated_at", "soft_delete"]
         )
-        base_fields = {"id", "org_id", "created_at", "updated_at", "soft_delete"}
         row_map = {}
         for idx, col_name in enumerate(col_names):
             if idx < len(row):
                 row_map[col_name] = row[idx]
-        init_kwargs = {k: v for k, v in row_map.items() if k not in base_fields}
-        instance = self.model(**init_kwargs)
-        for col_name in base_fields:
-            if col_name in row_map:
-                object.__setattr__(instance, col_name, row_map[col_name])
-        return instance
+        return self.model.model_construct(**row_map)
 
     async def create(self, session: AsyncSession, record: T) -> T:
         await self._ensure_tenant_context(session)

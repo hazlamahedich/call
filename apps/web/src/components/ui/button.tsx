@@ -8,7 +8,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         primary:
-          "bg-neon-emerald text-background shadow-glow-emerald hover:bg-neon-emerald/90",
+          "bg-[var(--brand-primary,var(--color-neon-emerald))] text-background shadow-[0_0_8px_rgba(var(--brand-primary-rgb,16,185,129),0.5)] hover:opacity-90",
         secondary:
           "border border-border bg-transparent text-foreground hover:bg-muted",
         destructive:

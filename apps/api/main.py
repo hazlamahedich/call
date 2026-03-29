@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import health, webhooks
+from routers import health, webhooks, branding
 from middleware.auth import AuthMiddleware
 from config.settings import settings
 
@@ -21,3 +21,4 @@ app.add_middleware(AuthMiddleware, jwks_url=settings.CLERK_JWKS_URL)
 
 app.include_router(health.router, tags=["Health"])
 app.include_router(webhooks.router, tags=["Webhooks"])
+app.include_router(branding.router, tags=["Branding"])

@@ -73,7 +73,7 @@ describe("[1.4-AC3][ConfirmAction] — Confirmation dialog with destructive and 
 
     await userEvent.click(screen.getByText("Trigger"));
     const confirmBtn = screen.getByText("Switch");
-    expect(confirmBtn.className).toContain("bg-neon-emerald");
+    expect(confirmBtn.className).toContain("brand-primary");
   });
 
   it("[1.4-UNIT-060][P2] Given no custom labels, When dialog opens, Then default Confirm/Cancel labels are used", async () => {
