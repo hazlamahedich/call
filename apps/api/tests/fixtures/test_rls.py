@@ -16,16 +16,12 @@ from sqlalchemy.pool import NullPool
 from models.lead import Lead
 from services.base import TenantService
 from database.session import set_tenant_context, TenantContextError
+from tests.support.factories import LeadFactory
 
 TEST_ORG_IDS = {
     "TENANT_A": "org_test_tenant_a",
     "TENANT_B": "org_test_tenant_b",
     "MISSING": None,
-}
-
-TEST_LEAD_DATA = {
-    "TENANT_A_LEAD": {"name": "Tenant A Lead", "email": "tenant-a@example.com"},
-    "TENANT_B_LEAD": {"name": "Tenant B Lead", "email": "tenant-b@example.com"},
 }
 
 
@@ -44,7 +40,7 @@ class TestTenantReadIsolation:
         lead_service_a = TenantService[Lead](Lead)
         lead_service_b = TenantService[Lead](Lead)
 
-        lead_b = Lead(**TEST_LEAD_DATA["TENANT_B_LEAD"])
+        lead_b = LeadFactory.build(name="Tenant B Lead", email="tenant-b@example.com")
         await lead_service_b.create(tenant_b_session, lead_b)
 
         leads_for_a = await lead_service_a.list_all(tenant_a_session)
@@ -62,7 +58,7 @@ class TestTenantReadIsolation:
         """
         lead_service_b = TenantService[Lead](Lead)
 
-        lead_b = Lead(**TEST_LEAD_DATA["TENANT_B_LEAD"])
+        lead_b = LeadFactory.build(name="Tenant B Lead", email="tenant-b@example.com")
         created_b = await lead_service_b.create(tenant_b_session, lead_b)
 
         lead_service_a = TenantService[Lead](Lead)
@@ -81,11 +77,11 @@ class TestTenantReadIsolation:
         """
         lead_service = TenantService[Lead](Lead)
 
-        lead = Lead(**TEST_LEAD_DATA["TENANT_A_LEAD"])
+        lead = LeadFactory.build(name="Tenant A Lead", email="tenant-a@example.com")
         created_lead = await lead_service.create(tenant_a_session, lead)
 
         assert created_lead.id is not None
-        assert created_lead.name == TEST_LEAD_DATA["TENANT_A_LEAD"]["name"]
+        assert created_lead.name == "Tenant A Lead"
 
         retrieved = await lead_service.get_by_id(tenant_a_session, created_lead.id)
         assert retrieved is not None
@@ -106,7 +102,7 @@ class TestTenantUpdateIsolation:
         """
         lead_service_b = TenantService[Lead](Lead)
 
-        lead_b = Lead(**TEST_LEAD_DATA["TENANT_B_LEAD"])
+        lead_b = LeadFactory.build(name="Tenant B Lead", email="tenant-b@example.com")
         created_b = await lead_service_b.create(tenant_b_session, lead_b)
 
         lead_service_a = TenantService[Lead](Lead)
@@ -134,7 +130,7 @@ class TestTenantUpdateIsolation:
         """
         lead_service = TenantService[Lead](Lead)
 
-        lead = Lead(**TEST_LEAD_DATA["TENANT_A_LEAD"])
+        lead = LeadFactory.build(name="Tenant A Lead", email="tenant-a@example.com")
         created = await lead_service.create(tenant_a_session, lead)
 
         created.name = "Updated Name"
@@ -158,7 +154,7 @@ class TestTenantDeleteIsolation:
         """
         lead_service_b = TenantService[Lead](Lead)
 
-        lead_b = Lead(**TEST_LEAD_DATA["TENANT_B_LEAD"])
+        lead_b = LeadFactory.build(name="Tenant B Lead", email="tenant-b@example.com")
         created_b = await lead_service_b.create(tenant_b_session, lead_b)
 
         lead_service_a = TenantService[Lead](Lead)
@@ -172,7 +168,7 @@ class TestTenantDeleteIsolation:
         verified = await verify_service.get_by_id(tenant_b_session, created_b.id)
 
         assert verified is not None, "Tenant B's data should not be deleted by Tenant A"
-        assert verified.name == TEST_LEAD_DATA["TENANT_B_LEAD"]["name"]
+        assert verified.name == "Tenant B Lead"
 
     @pytest.mark.asyncio
     async def test_1_3_api_007_tenant_can_delete_own_data(
@@ -183,7 +179,7 @@ class TestTenantDeleteIsolation:
         """
         lead_service = TenantService[Lead](Lead)
 
-        lead = Lead(**TEST_LEAD_DATA["TENANT_A_LEAD"])
+        lead = LeadFactory.build(name="Tenant A Lead", email="tenant-a@example.com")
         created = await lead_service.create(tenant_a_session, lead)
 
         delete_result = await lead_service.hard_delete(tenant_a_session, created.id)
@@ -206,7 +202,7 @@ class TestTenantSoftDelete:
         """
         lead_service = TenantService[Lead](Lead)
 
-        lead = Lead(name="To Delete", email="delete@example.com")
+        lead = LeadFactory.build(name="To Delete", email="delete@example.com")
         created = await lead_service.create(tenant_a_session, lead)
 
         assert created.id is not None, "Created record must have an id"
@@ -269,7 +265,7 @@ class TestSecurityRegression:
         then RLS blocks access.
         """
         lead_service_b = TenantService[Lead](Lead)
-        lead_b = Lead(**TEST_LEAD_DATA["TENANT_B_LEAD"])
+        lead_b = LeadFactory.build(name="Tenant B Lead", email="tenant-b@example.com")
         await lead_service_b.create(tenant_b_session, lead_b)
 
         await tenant_a_session.execute(
@@ -314,7 +310,7 @@ class TestTenantContextError:
         then TenantContextError is raised.
         """
         lead_service = TenantService[Lead](Lead)
-        lead = Lead(**TEST_LEAD_DATA["TENANT_A_LEAD"])
+        lead = LeadFactory.build(name="Tenant A Lead", email="tenant-a@example.com")
 
         with pytest.raises(TenantContextError) as exc_info:
             await lead_service.create(db_session, lead)

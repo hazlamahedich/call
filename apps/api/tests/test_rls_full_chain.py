@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.lead import Lead
 from services.base import TenantService
 from database.session import set_tenant_context, TenantContextError
+from tests.support.factories import LeadFactory
 
 TEST_ORG_IDS = {
     "TENANT_A": "org_test_tenant_a",
@@ -50,7 +51,7 @@ class TestFullChainRLS:
         then app.current_org_id session variable is respected.
         """
         service = TenantService[Lead](Lead)
-        lead = Lead(name="Full Chain Test", email="chain@example.com")
+        lead = LeadFactory.build(name="Full Chain Test", email="chain@example.com")
         created = await service.create(tenant_a_session, lead)
 
         result = await tenant_a_session.execute(
@@ -75,7 +76,7 @@ class TestFullChainRLS:
         then TenantContextError with TENANT_CONTEXT_MISSING is raised.
         """
         service = TenantService[Lead](Lead)
-        lead = Lead(name="No Context", email="noctx@example.com")
+        lead = LeadFactory.build(name="No Context", email="noctx@example.com")
 
         with pytest.raises(TenantContextError) as exc_info:
             await service.create(db_session, lead)
@@ -97,8 +98,8 @@ class TestFullChainRLS:
         service_a = TenantService[Lead](Lead)
         service_b = TenantService[Lead](Lead)
 
-        lead_a = Lead(name="Tenant A Lead", email="a@example.com")
-        lead_b = Lead(name="Tenant B Lead", email="b@example.com")
+        lead_a = LeadFactory.build(name="Tenant A Lead", email="a@example.com")
+        lead_b = LeadFactory.build(name="Tenant B Lead", email="b@example.com")
 
         await service_a.create(tenant_a_session, lead_a)
         await service_b.create(tenant_b_session, lead_b)
@@ -123,7 +124,7 @@ class TestFullChainRLS:
         """
         service = TenantService[Lead](Lead)
 
-        lead = Lead(name="Auto Populated", email="auto@example.com")
+        lead = LeadFactory.build(name="Auto Populated", email="auto@example.com")
         created = await service.create(tenant_a_session, lead)
 
         assert created.org_id == TEST_ORG_IDS["TENANT_A"]

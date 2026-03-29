@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.lead import Lead
 from services.base import TenantService
+from tests.support.factories import LeadFactory
 
 CI_MULTIPLIER = float(os.environ.get("CI_TIMEOUT_MULTIPLIER", "1.0"))
 
@@ -60,7 +61,7 @@ class TestRLSIndexVerification:
         """
         service = TenantService[Lead](Lead)
 
-        lead = Lead(name="Performance Test", email="perf@example.com")
+        lead = LeadFactory.build(name="Performance Test", email="perf@example.com")
         await service.create(tenant_a_session, lead)
 
         leads = await service.list_all(tenant_a_session)
@@ -86,8 +87,8 @@ class TestRLSPerformanceCharacteristics:
 
         service = TenantService[Lead](Lead)
 
-        for i in range(10):
-            lead = Lead(name=f"Batch Lead {i}", email=f"batch{i}@example.com")
+        leads_batch = LeadFactory.build_batch(10)
+        for lead in leads_batch:
             await service.create(tenant_a_session, lead)
 
         start_time = time.time()
@@ -113,8 +114,8 @@ class TestRLSPerformanceCharacteristics:
         service = TenantService[Lead](Lead)
 
         batch_size = 50
-        for i in range(batch_size):
-            lead = Lead(name=f"Large Dataset Lead {i}", email=f"large{i}@example.com")
+        leads_batch = LeadFactory.build_batch(batch_size)
+        for lead in leads_batch:
             await service.create(tenant_a_session, lead)
 
         start_time = time.time()
@@ -142,12 +143,10 @@ class TestQueryScoping:
         service_a = TenantService[Lead](Lead)
         service_b = TenantService[Lead](Lead)
 
-        for i in range(5):
-            lead = Lead(name=f"Tenant A Lead {i}", email=f"a{i}@example.com")
+        for lead in LeadFactory.build_batch(5, name_prefix="Tenant A"):
             await service_a.create(tenant_a_session, lead)
 
-        for i in range(3):
-            lead = Lead(name=f"Tenant B Lead {i}", email=f"b{i}@example.com")
+        for lead in LeadFactory.build_batch(3, name_prefix="Tenant B"):
             await service_b.create(tenant_b_session, lead)
 
         leads_a = await service_a.list_all(tenant_a_session)
@@ -172,7 +171,9 @@ class TestQueryScoping:
         then None is returned (not Tenant B's data).
         """
         service_b = TenantService[Lead](Lead)
-        lead_b = Lead(name="Tenant B Exclusive", email="b-exclusive@example.com")
+        lead_b = LeadFactory.build(
+            name="Tenant B Exclusive", email="b-exclusive@example.com"
+        )
         created_b = await service_b.create(tenant_b_session, lead_b)
 
         service_a = TenantService[Lead](Lead)
@@ -193,8 +194,7 @@ class TestQueryScoping:
         """
         service = TenantService[Lead](Lead)
 
-        for i in range(20):
-            lead = Lead(name=f"Paginated Lead {i:02d}", email=f"page{i}@example.com")
+        for lead in LeadFactory.build_batch(20, name_prefix="Paginated"):
             await service.create(tenant_a_session, lead)
 
         page1 = await service.list_all(tenant_a_session, limit=10, offset=0)
