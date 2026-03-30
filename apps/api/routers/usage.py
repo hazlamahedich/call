@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import ValidationError as PydanticValidationError
 
 from database.session import get_session
+from middleware.usage_guard import check_call_cap
 from schemas.usage import UsageRecordPayload, UsageSummaryResponse
 from services.usage import (
     record_usage,
@@ -51,7 +52,11 @@ async def get_summary(
         )
 
 
-@router.post("/record", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/record",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(check_call_cap)],
+)
 async def record(
     request: Request,
     payload: UsageRecordPayload,

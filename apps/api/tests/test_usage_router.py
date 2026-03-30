@@ -140,6 +140,15 @@ class TestPostUsageRecord:
         mock_session.commit = AsyncMock()
 
         with (
+            patch(
+                "middleware.usage_guard.check_usage_cap",
+                new_callable=AsyncMock,
+                return_value="ok",
+            ),
+            patch(
+                "middleware.usage_guard.set_tenant_context",
+                new_callable=AsyncMock,
+            ),
             patch.object(
                 usage_mod, "record_usage", new_callable=AsyncMock, return_value=mock_log
             ),
@@ -190,12 +199,41 @@ class TestPostUsageRecord:
             "metadata": '{"duration": 120}',
         }
 
-        with patch.object(
-            usage_mod, "record_usage", new_callable=AsyncMock, return_value=mock_log
+        with (
+            patch(
+                "middleware.usage_guard.check_usage_cap",
+                new_callable=AsyncMock,
+                return_value="ok",
+            ),
+            patch(
+                "middleware.usage_guard.set_tenant_context",
+                new_callable=AsyncMock,
+            ),
+            patch.object(
+                usage_mod, "record_usage", new_callable=AsyncMock, return_value=mock_log
+            ),
         ):
             response = client.post("/usage/record", json=payload)
 
         assert response.status_code == 201
+
+    def test_1_7_int_012_record_blocked_when_cap_exceeded(self, client):
+        with (
+            patch(
+                "middleware.usage_guard.check_usage_cap",
+                new_callable=AsyncMock,
+                return_value="exceeded",
+            ),
+            patch(
+                "middleware.usage_guard.set_tenant_context",
+                new_callable=AsyncMock,
+            ),
+        ):
+            response = client.post("/usage/record", json=VALID_RECORD_PAYLOAD)
+
+        assert response.status_code == 403
+        data = response.json()
+        assert data["detail"]["code"] == "USAGE_LIMIT_EXCEEDED"
 
 
 class TestGetUsageCheck:
