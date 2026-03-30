@@ -58,3 +58,33 @@ class TestTenantErrorCodeValues:
 
         error = TenantContextError(error_code="TENANT_INVALID_ORG_ID", message="test")
         assert error.error_code == "TENANT_INVALID_ORG_ID"
+
+
+class TestUsageErrorCodeSync:
+    """[P1] Verify USAGE_ERROR_CODES consistency between Python and TypeScript"""
+
+    def test_usage_limit_exceeded_in_guard(self):
+        from pathlib import Path
+
+        guard_path = (
+            Path(__file__).resolve().parent.parent / "middleware" / "usage_guard.py"
+        )
+        content = guard_path.read_text()
+        assert "USAGE_LIMIT_EXCEEDED" in content
+
+    def test_usage_error_codes_in_ts_constants(self):
+        import re
+        from pathlib import Path
+
+        ts_path = (
+            Path(__file__).resolve().parent.parent.parent.parent
+            / "packages"
+            / "constants"
+            / "index.ts"
+        )
+        content = ts_path.read_text()
+        assert "USAGE_LIMIT_EXCEEDED" in content
+        assert "USAGE_CAP_NOT_CONFIGURED" in content
+        assert "USAGE_INVALID_RESOURCE" in content
+        assert "USAGE_INTERNAL_ERROR" in content
+        assert "UsageErrorCode" in content

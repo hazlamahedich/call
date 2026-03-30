@@ -4,3 +4,4 @@ from models.agency_branding import AgencyBranding
 from models.client import Client
 from models.agent import Agent
 from models.script import Script
+from models.usage_log import UsageLog

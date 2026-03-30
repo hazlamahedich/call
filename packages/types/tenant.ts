@@ -76,4 +76,5 @@ export interface DbUsageLog extends TenantScoped {
   resourceType: string;
   resourceId: string;
   action: string;
+  metadataJson?: string;
 }

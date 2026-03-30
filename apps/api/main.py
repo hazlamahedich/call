@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import health, webhooks, branding, clients, onboarding
+from routers import health, webhooks, branding, clients, onboarding, usage
 from middleware.auth import AuthMiddleware
 from config.settings import settings
 
@@ -24,3 +24,4 @@ app.include_router(webhooks.router, tags=["Webhooks"])
 app.include_router(branding.router, tags=["Branding"])
 app.include_router(clients.router, tags=["Clients"])
 app.include_router(onboarding.router, tags=["Onboarding"])
+app.include_router(usage.router, tags=["Usage"])

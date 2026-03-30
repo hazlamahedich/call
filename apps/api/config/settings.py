@@ -14,6 +14,9 @@ class Settings(BaseSettings):
 
     BRANDING_CNAME_TARGET: str = "cname.call.app"
 
+    DEFAULT_MONTHLY_CALL_CAP: int = 1000
+    PLAN_CALL_CAPS: dict[str, int] = {"free": 1000, "pro": 25000, "enterprise": 100000}
+
     model_config = SettingsConfigDict(env_file=".env")
 
 

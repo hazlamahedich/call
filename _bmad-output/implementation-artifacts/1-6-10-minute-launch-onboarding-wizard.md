@@ -585,6 +585,55 @@ zai-coding-plan/glm-5.1
 10. **Test quality review**: `_bmad-output/test-artifacts/story-1-6-test-quality-review.md` — scored 82/100 (A - Good), "Approve with Comments"
 
 ### File List
+- packages/constants/index.ts — MODIFY: add ONboarding error codes with `as const` pattern
+ (AC: 3, 6)
+- packages/types/agent.ts -- NEW (CREATE) Agent interface matching backend model with camelCase aliases
+- packages/types/onboarding.ts -- NEW (create) OnboardingPayload + OnboardingStatus interfaces, (AC: 3, 6)
+- apps/api/models/agent.py -- NEW (CREATE) Agent SQLModel
+- apps/api/models/script.py -- NEW (CREATE) Script SQLModel (extends existing table)
+ - apps/api/models/__init__.py -- register agent, script imports
+ ( AC: 3, 6)
+- apps/api/schemas/onboarding.py -- NEW (CREATE) Pydantic OnboardingPayload model with camelCase aliases
+  - apps/api/routers/onboarding.py -- NEW (CREATE) on boarding endpoints, APIRouter(prefix="/onboarding")`
+)
+- apps/api/schemas/__init__.py
+ - apps/api/tests/test_onboarding.py -- NEW (create) backend tests
+- apps/api/tests/test_onboarding_router.py -- new (CREATE) backend integration tests
+- apps/api/migrations/versions/f1g2h3i4j5k6_add_agents_and_extend_scripts.py -- new (CREATE) combined migration
+
+- apps/web/src/lib/onboarding-constants.ts-- new (create) onboarding constants
+- apps/web/src/app/(onboarding)/layout.tsx-- new (create) minimal Zen layout (no sidebar)
+ `apps/web/src/app/(onboarding)/onboarding/page.tsx-- new (create) wizard orchestrator (5-step wizard with multi-step state, step navigation, back/next/ progress indicator)
+ `OnboardingProgress` component)
+ Server actions: getOnboardingStatus` via server action; `completeOnboarding` in dashboard layout; `onboardingGuard` added; middleware updated for Zen-to-Obsidian transition via CockpitContainer boot animation)
+- apps/web/src/components/onboarding/__tests__/StepBusinessGoal.test.tsx -- 6 tests
+- apps/web/src/components/onboarding/__tests__/StepVoiceSelection.test.tsx -- 5 tests
+- apps/web/src/components/onboarding/__tests__/StepIntegrationChoice.test.tsx -- 5 tests
+- apps/web/src/components/onboarding/__tests__/StepSafetyLevel.test.tsx -- 5 tests
+- apps/web/src/components/onboarding/__tests__/OnboardingProgress.test.tsx -- 6 tests
+- apps/web/src/actions/onboarding.test.ts` -- 10 tests
+- apps/web/src/app/(onboarding)/onboarding/__tests__/page.test.tsx -- 9 tests (full wizard flow integration)
+- packages/constants/index.ts — MODIFY: add ONboarding error codes
+ as const` pattern
+- packages/types/agent.ts — NEW (CREATE) Agent interface matching backend model with camelCase aliases
+- packages/types/onboarding.ts -- NEW (CREATE) `OnboardingPayload` + `onboardingStatus` interfaces
+ `packages/types/tenant.ts` -- modify: add `agentId` + `scriptContext` to `DbScript` (existing type)
+- apps/api/models/__init__.py` -- register agent, script imports
+ register in `apps/api/main.py`
+- apps/api/routers/onboarding.py -- NEW (CREATE) on onboarding endpoints, APIRouter(prefix="/onboarding")
+`,)
+- apps/api/schemas/onboarding.py -- new (CREATE) Pydantic OnboardingPayload model with camelCase aliases
+- apps/api/tests/test_onboarding.py -- new (CREATE) backend tests
+- apps/web/src/lib/onboarding-constants.ts-- new (create)
+ onboarding constants
+- apps/web/src/app/(onboarding)/layout.tsx-- new (create) minimal Zen layout (no sidebar)
+ `apps/web/src/app/(onboarding)/onboarding/page.tsx-- new (create) wizard orchestrator (5-step wizard)
+ multi-step state, step navigation, back/next, progress indicator, `OnboardingProgress` component)
+ server actions: getOnboardingStatus`, via Server action; `completeOnboarding` for dashboard layout; `OnboardingGuard` added; middleware updated for Zen-to-Obsidian transition via CockpitContainer boot animation |
+ Onboarding page wizard orchestrator, All ACs 1-6 satisfied.
+ |
+
+
 
 **Backend (NEW):**
 - apps/api/models/agent.py
