@@ -1,6 +1,6 @@
 # Story 1.6: 10-Minute Launch Onboarding Wizard
 
-Status: review
+Status: done
 As a New User,
 I want a 5-Question onboarding ritual,
 so that I can set up my first AI agent and begin dialing in under 10 minutes.
@@ -566,6 +566,10 @@ zai-coding-plan/glm-5.1
 - **Test automation expansion**: SQLModel `table=True` constructor silently ignores kwargs — must use `model_validate()` with camelCase aliases or `setattr()` for test factories
 - **Bug fix**: `apps/web/src/actions/onboarding.ts` was truncated at 19 lines with broken syntax (`import { API_URL }` instead of `const API_URL =`). Reconstructed with complete `getOnboardingStatus()` and `completeOnboarding()` functions.
 - **Test fix**: UNIT-075 back-navigation assertion corrected — `fillThroughStep3()` advances to step 4, so Back goes to step 3 not step 2
+- **Test quality review fixes** (commit `1ef183b`):
+  - P1 fix: Added `PydanticValidationError` catch block in `apps/api/routers/onboarding.py` returning `ONBOARDING_VALIDATION_ERROR` — resolves `test_router_uses_matching_error_codes` failure
+  - P2 fix: Added `onboardingPage` fixture to `tests/support/merged-fixtures.ts` with configurable `waitForUrl` param; refactored 7 E2E tests to use shared fixture (removed 100 lines of duplicated Clerk sign-in boilerplate)
+  - P2 fix: Created `apps/web/src/actions/onboarding.test.ts` with 10 unit tests (`[1.6-UNIT-080..089]`) covering `getOnboardingStatus` and `completeOnboarding` server actions (success, no-auth, API error, network error, non-JSON error)
 
 ### Completion Notes List
 
@@ -578,6 +582,7 @@ zai-coding-plan/glm-5.1
 7. /onboarding(.*) added to Clerk protected route matcher in middleware.ts
 8. Zen layout created as separate (onboarding) route group from (dashboard)
 9. **Test automation summary**: `_bmad-output/test-artifacts/story-1-6-automation-summary.md`
+10. **Test quality review**: `_bmad-output/test-artifacts/story-1-6-test-quality-review.md` — scored 82/100 (A - Good), "Approve with Comments"
 
 ### File List
 
@@ -616,6 +621,7 @@ zai-coding-plan/glm-5.1
 - apps/web/src/components/onboarding/__tests__/OnboardingProgress.test.tsx
 - apps/web/src/components/__tests__/onboarding-guard.test.tsx
 - apps/web/src/app/(onboarding)/onboarding/__tests__/page.test.tsx
+- apps/web/src/actions/onboarding.test.ts
 
 **Frontend (MODIFIED):**
 - apps/web/src/app/(dashboard)/dashboard/layout.tsx
@@ -623,6 +629,9 @@ zai-coding-plan/glm-5.1
 
 **E2E (NEW):**
 - tests/e2e/onboarding.spec.ts
+
+**E2E (MODIFIED):**
+- tests/support/merged-fixtures.ts (added `onboardingPage` fixture + configurable `waitForUrl` param)
 
 **Shared Packages (MODIFIED):**
 - packages/constants/index.ts
@@ -638,3 +647,4 @@ zai-coding-plan/glm-5.1
 | 2026-03-30 | Story status: ready-for-dev → review. All tasks completed.  |
 | 2026-03-30 | Backend: 18/18 tests passing. Frontend: 26/26 tests passing. |
 | 2026-03-30 | Test automation expansion: +43 tests (9 backend integration, 26 frontend unit, 8 E2E). Fixed truncated onboarding.ts. Backend: 27/27 tests (18 unit + 9 integration). Frontend: 52/52 tests (320 total suite). |
+| 2026-03-30 | Test quality review: scored 82/100 (A - Good), "Approve with Comments". 3 findings fixed: P1 PydanticValidationError catch block, P2 E2E auth fixture extraction, P2 server action unit tests (+10 tests). Final: 357 tests (330 frontend + 27 backend), 100% pass rate. |

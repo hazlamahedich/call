@@ -48,7 +48,7 @@ development_status:
   1-3-tenant-isolated-data-persistence-with-postgresql-rls: done
   1-4-obsidian-design-system-foundation-reusable-components: done
   1-5-white-labeled-admin-portal-custom-branding: done
-  1-6-10-minute-launch-onboarding-wizard: review
+  1-6-10-minute-launch-onboarding-wizard: done
   1-7-resource-guardrails-usage-monitoring-hard-caps: backlog
   epic-1-retrospective: optional
   epic-2: backlog
