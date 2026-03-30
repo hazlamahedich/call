@@ -45,4 +45,20 @@ describe("[1.6-AC5][StepSafetyLevel] — Safety level selection step", () => {
     const results = await axe(container);
     expect(results.violations).toHaveLength(0);
   });
+
+  it("[1.6-UNIT-045][P1] Given keyboard navigation, When pressing Enter on a level, Then onChange fires", async () => {
+    const onChange = vi.fn();
+    render(<StepSafetyLevel value="" onChange={onChange} />);
+    const firstRadio = screen.getAllByRole("radio")[0];
+    await userEvent.type(firstRadio, "{Enter}");
+    expect(onChange).toHaveBeenCalledWith(SAFETY_LEVELS[0].id);
+  });
+
+  it("[1.6-UNIT-046][P1] Given keyboard navigation, When pressing Space on a level, Then onChange fires", async () => {
+    const onChange = vi.fn();
+    render(<StepSafetyLevel value="" onChange={onChange} />);
+    const firstRadio = screen.getAllByRole("radio")[0];
+    await userEvent.type(firstRadio, " ");
+    expect(onChange).toHaveBeenCalledWith(SAFETY_LEVELS[0].id);
+  });
 });

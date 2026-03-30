@@ -45,4 +45,20 @@ describe("[1.6-AC3][StepVoiceSelection] — Voice selection step", () => {
     const results = await axe(container);
     expect(results.violations).toHaveLength(0);
   });
+
+  it("[1.6-UNIT-025][P1] Given keyboard navigation, When pressing Enter on a voice, Then onChange fires", async () => {
+    const onChange = vi.fn();
+    render(<StepVoiceSelection value="" onChange={onChange} />);
+    const firstRadio = screen.getAllByRole("radio")[0];
+    await userEvent.type(firstRadio, "{Enter}");
+    expect(onChange).toHaveBeenCalledWith(VOICE_OPTIONS[0].id);
+  });
+
+  it("[1.6-UNIT-026][P1] Given keyboard navigation, When pressing Space on a voice, Then onChange fires", async () => {
+    const onChange = vi.fn();
+    render(<StepVoiceSelection value="" onChange={onChange} />);
+    const firstRadio = screen.getAllByRole("radio")[0];
+    await userEvent.type(firstRadio, " ");
+    expect(onChange).toHaveBeenCalledWith(VOICE_OPTIONS[0].id);
+  });
 });

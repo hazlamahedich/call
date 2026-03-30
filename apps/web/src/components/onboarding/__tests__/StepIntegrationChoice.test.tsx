@@ -45,4 +45,20 @@ describe("[1.6-AC4][StepIntegrationChoice] — Integration selection step", () =
     const results = await axe(container);
     expect(results.violations).toHaveLength(0);
   });
+
+  it("[1.6-UNIT-035][P1] Given keyboard navigation, When pressing Enter on an option, Then onChange fires", async () => {
+    const onChange = vi.fn();
+    render(<StepIntegrationChoice value="" onChange={onChange} />);
+    const firstRadio = screen.getAllByRole("radio")[0];
+    await userEvent.type(firstRadio, "{Enter}");
+    expect(onChange).toHaveBeenCalledWith(INTEGRATION_OPTIONS[0].id);
+  });
+
+  it("[1.6-UNIT-036][P1] Given keyboard navigation, When pressing Space on an option, Then onChange fires", async () => {
+    const onChange = vi.fn();
+    render(<StepIntegrationChoice value="" onChange={onChange} />);
+    const firstRadio = screen.getAllByRole("radio")[0];
+    await userEvent.type(firstRadio, " ");
+    expect(onChange).toHaveBeenCalledWith(INTEGRATION_OPTIONS[0].id);
+  });
 });
