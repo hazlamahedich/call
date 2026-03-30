@@ -2,6 +2,7 @@ import logging
 import re
 from typing import Optional
 
+import jwt as pyjwt
 from fastapi import APIRouter, HTTPException, Request, status, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,35 +18,39 @@ logger = logging.getLogger(__name__)
 _branding_service = TenantService[AgencyBranding](AgencyBranding)
 
 HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+DOMAIN_RE = re.compile(
+    r"^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$"
+)
 MAX_LOGO_SIZE = 2 * 1024 * 1024
 ALLOWED_LOGO_PREFIXES = ("data:image/png", "data:image/jpeg", "data:image/svg+xml")
 
 
 def _require_admin(request: Request) -> None:
     user_role = getattr(request.state, "user_role", None)
-    if user_role != "org:admin":
-        org_id = getattr(request.state, "org_id", None)
-        if org_id:
-            import jwt as pyjwt
-
-            auth_header = request.headers.get("Authorization", "")
-            if auth_header.lower().startswith("bearer "):
-                try:
-                    token = auth_header[7:]
-                    payload = pyjwt.decode(
-                        token, options={"verify_signature": False, "verify_aud": False}
-                    )
-                    org_role = payload.get("org_role") or payload.get("orgs", {}).get(
-                        org_id, {}
-                    ).get("role")
-                    if org_role == "org:admin":
-                        return
-                except Exception:
-                    pass
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"code": "AUTH_FORBIDDEN", "message": "Admin access required"},
-        )
+    if user_role == "org:admin":
+        return
+    org_id = getattr(request.state, "org_id", None)
+    if org_id:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.lower().startswith("bearer "):
+            try:
+                token = auth_header[7:]
+                payload = pyjwt.decode(
+                    token, options={"verify_signature": False, "verify_aud": False}
+                )
+                orgs = payload.get("orgs")
+                if isinstance(orgs, dict):
+                    org_role = orgs.get(org_id, {}).get("role")
+                else:
+                    org_role = payload.get("org_role")
+                if org_role == "org:admin":
+                    return
+            except Exception:
+                pass
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail={"code": "AUTH_FORBIDDEN", "message": "Admin access required"},
+    )
 
 
 def _validate_logo(logo_url: str) -> None:
@@ -57,8 +62,16 @@ def _validate_logo(logo_url: str) -> None:
                 "message": "Logo must be a PNG, JPEG, or SVG data URL",
             },
         )
-    base64_part = logo_url.split(",", 1)
-    if len(base64_part) == 2 and len(base64_part[1]) > MAX_LOGO_SIZE * 1.34:
+    parts = logo_url.split(",", 1)
+    if len(parts) != 2:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "BRANDING_INVALID_LOGO",
+                "message": "Malformed data URL",
+            },
+        )
+    if len(parts[1]) > MAX_LOGO_SIZE * 1.34:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
@@ -117,7 +130,16 @@ async def update_branding(
             },
         )
 
-    body = await request.json()
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "BRANDING_INVALID_BODY",
+                "message": "Invalid JSON body",
+            },
+        )
 
     logo_url = body.get("logoUrl")
     primary_color = body.get("primaryColor")
@@ -128,24 +150,43 @@ async def update_branding(
         _validate_color(primary_color)
     if logo_url is not None:
         _validate_logo(logo_url)
+    if custom_domain is not None and custom_domain != "":
+        if not DOMAIN_RE.match(custom_domain):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "BRANDING_INVALID_DOMAIN",
+                    "message": "Invalid domain format",
+                },
+            )
 
     await set_tenant_context(session, org_id)
     results = await _branding_service.list_all(session, limit=1)
 
     if results:
         existing = results[0]
-        if logo_url is not None:
-            existing.logo_url = logo_url
-        if primary_color is not None:
-            existing.primary_color = primary_color
-        if custom_domain is not None:
-            existing.custom_domain = custom_domain
-            existing.domain_verified = False
-        if brand_name is not None:
-            existing.brand_name = brand_name
+        existing.logo_url = logo_url
+        existing.primary_color = (
+            primary_color if primary_color is not None else existing.primary_color
+        )
+        existing.custom_domain = custom_domain
+        existing.domain_verified = (
+            False
+            if custom_domain != results[0].custom_domain
+            else existing.domain_verified
+        )
+        existing.brand_name = brand_name
         updated = await _branding_service.update(session, existing)
         return updated.model_dump(by_alias=True)
     else:
+        if custom_domain and not DOMAIN_RE.match(custom_domain):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "BRANDING_INVALID_DOMAIN",
+                    "message": "Invalid domain format",
+                },
+            )
         record = AgencyBranding(
             logo_url=logo_url,
             primary_color=primary_color or "#10B981",
@@ -172,7 +213,17 @@ async def verify_domain(
             },
         )
 
-    body = await request.json()
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "BRANDING_INVALID_BODY",
+                "message": "Invalid JSON body",
+            },
+        )
+
     domain = body.get("domain", "").strip()
 
     if not domain:
@@ -184,6 +235,15 @@ async def verify_domain(
             },
         )
 
+    if not DOMAIN_RE.match(domain):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "BRANDING_INVALID_DOMAIN",
+                "message": "Invalid domain format",
+            },
+        )
+
     result = await verify_cname(domain, settings.BRANDING_CNAME_TARGET)
 
     if result.verified:
@@ -192,6 +252,13 @@ async def verify_domain(
         if results:
             results[0].domain_verified = True
             await _branding_service.update(session, results[0])
+        else:
+            record = AgencyBranding(
+                custom_domain=domain,
+                domain_verified=True,
+                primary_color="#10B981",
+            )
+            await _branding_service.create(session, record)
 
     return {
         "verified": result.verified,

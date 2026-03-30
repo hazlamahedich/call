@@ -58,6 +58,17 @@ class AuthMiddleware(BaseHTTPMiddleware):
             payload = await self._verify_token(token)
             request.state.org_id = payload.get("org_id")
             request.state.user_id = payload.get("sub")
+            org_id = payload.get("org_id")
+            if org_id:
+                orgs = payload.get("orgs")
+                if isinstance(orgs, dict):
+                    org_role = orgs.get(org_id, {}).get("role")
+                    if org_role:
+                        request.state.user_role = org_role
+                if not hasattr(request.state, "user_role"):
+                    org_role = payload.get("org_role")
+                    if org_role:
+                        request.state.user_role = org_role
         except jwt.ExpiredSignatureError:
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,

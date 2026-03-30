@@ -19,11 +19,14 @@ export async function getBranding(
 
     if (response.status === 404) return { data: null, error: null };
     if (!response.ok) {
-      const err = await response.json();
-      return {
-        data: null,
-        error: err.detail?.message || "Failed to fetch branding",
-      };
+      let errMsg = "Failed to fetch branding";
+      try {
+        const err = await response.json();
+        errMsg = err.detail?.message || errMsg;
+      } catch {
+        // non-JSON response
+      }
+      return { data: null, error: errMsg };
     }
 
     const data = await response.json();
@@ -57,11 +60,14 @@ export async function updateBranding(
     });
 
     if (!response.ok) {
-      const err = await response.json();
-      return {
-        data: null,
-        error: err.detail?.message || "Failed to update branding",
-      };
+      let errMsg = "Failed to update branding";
+      try {
+        const err = await response.json();
+        errMsg = err.detail?.message || errMsg;
+      } catch {
+        // non-JSON response
+      }
+      return { data: null, error: errMsg };
     }
 
     const result = await response.json();
@@ -90,11 +96,14 @@ export async function verifyDomain(
     });
 
     if (!response.ok) {
-      const err = await response.json();
-      return {
-        data: null,
-        error: err.detail?.message || "Failed to verify domain",
-      };
+      let errMsg = "Failed to verify domain";
+      try {
+        const err = await response.json();
+        errMsg = err.detail?.message || errMsg;
+      } catch {
+        // non-JSON response
+      }
+      return { data: null, error: errMsg };
     }
 
     const result = await response.json();

@@ -39,4 +39,24 @@ describe("[1.5-AC1][ColorPicker] — Hex color picker", () => {
     const results = await axe(container);
     expect(results.violations).toHaveLength(0);
   });
+
+  it("[1.5-UNIT-014][P1] Given ColorPicker, When invalid hex entered, Then onChange is NOT called after debounce", () => {
+    vi.useFakeTimers();
+    const onChange = vi.fn();
+    render(<ColorPicker value="#10B981" onChange={onChange} />);
+    const input = screen.getByPlaceholderText("#10B981");
+    fireEvent.change(input, { target: { value: "#GGGGGG" } });
+    act(() => {
+      vi.advanceTimersByTime(400);
+    });
+    expect(onChange).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it("[1.5-UNIT-015][P1] Given ColorPicker, When invalid 7-char hex entered, Then error message is shown", () => {
+    render(<ColorPicker value="#10B981" onChange={vi.fn()} />);
+    const input = screen.getByPlaceholderText("#10B981");
+    fireEvent.change(input, { target: { value: "#GGGGGG" } });
+    expect(screen.getByText("Invalid hex color")).toBeTruthy();
+  });
 });

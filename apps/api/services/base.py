@@ -112,6 +112,7 @@ class TenantService(Generic[T]):
     async def list_all(
         self, session: AsyncSession, *, limit: int = 100, offset: int = 0
     ) -> List[T]:
+        await self._ensure_tenant_context(session)
         stmt = text(
             f"SELECT {self._select_cols} FROM {self.table_name} LIMIT :lim OFFSET :off"
         )
@@ -131,8 +132,6 @@ class TenantService(Generic[T]):
             exclude=_BASE_FIELDS | _SQLALCHEMY_INTERNALS
         ).items():
             if col_name in _BASE_FIELDS or col_name in _SQLALCHEMY_INTERNALS:
-                continue
-            if col_value is None:
                 continue
             updates.append(f"{col_name} = :u_{col_name}")
             params[f"u_{col_name}"] = col_value

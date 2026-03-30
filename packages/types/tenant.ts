@@ -12,13 +12,12 @@ export interface WithOrgId {
 export function assertTenantScoped<T extends TenantScoped>(
   record: T,
   expectedOrgId: string,
-): void {
+): asserts record is T & { orgId: string } {
   if (record.orgId !== expectedOrgId) {
     throw new Error(
       `Tenant isolation violation: record.orgId (${record.orgId}) !== expectedOrgId (${expectedOrgId})`,
     );
   }
-  return true;
 }
 
 export interface Lead extends TenantScoped {
@@ -29,26 +28,26 @@ export interface Lead extends TenantScoped {
   status: string;
 }
 
-export interface Agency extends TenantScoped {
+export interface DbAgency extends TenantScoped {
   id: number;
   name: string;
   clerkOrgId: string;
   plan: "free" | "pro" | "enterprise";
 }
 
-export interface Client extends TenantScoped {
+export interface DbClient extends TenantScoped {
   id: number;
   name: string;
   agencyId: string;
 }
 
-export interface Campaign extends TenantScoped {
+export interface DbCampaign extends TenantScoped {
   id: number;
   name: string;
   status: "draft" | "active" | "paused" | "completed";
 }
 
-export interface Call extends TenantScoped {
+export interface DbCall extends TenantScoped {
   id: number;
   leadId: number;
   campaignId: number;
@@ -56,21 +55,21 @@ export interface Call extends TenantScoped {
   duration?: number;
 }
 
-export interface Script extends TenantScoped {
+export interface DbScript extends TenantScoped {
   id: number;
   name: string;
   content: string;
   version: number;
 }
 
-export interface KnowledgeBase extends TenantScoped {
+export interface DbKnowledgeBase extends TenantScoped {
   id: number;
   name: string;
   content: string;
   embedding?: number[];
 }
 
-export interface UsageLog extends TenantScoped {
+export interface DbUsageLog extends TenantScoped {
   id: number;
   resourceType: string;
   resourceId: string;

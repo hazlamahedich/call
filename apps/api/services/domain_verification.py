@@ -24,7 +24,10 @@ async def verify_cname(domain: str, expected_target: str) -> DomainVerificationR
         resolver.lifetime = 15.0
         answers = await resolver.resolve(domain, "CNAME")
         for rdata in answers:
-            if expected_target in str(rdata.target):
+            target_str = str(rdata.target).rstrip(".")
+            if target_str == expected_target or target_str.endswith(
+                "." + expected_target
+            ):
                 return DomainVerificationResult(
                     verified=True, message="CNAME verified successfully"
                 )

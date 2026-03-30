@@ -11,12 +11,26 @@ interface BrandingPreviewProps {
   reducedMotion?: boolean;
 }
 
+const SAFE_HEX_RE = /^#[0-9a-fA-F]{6}$/;
+
+interface BrandingPreviewProps {
+  logoUrl: string | null;
+  primaryColor: string;
+  brandName: string | null;
+  reducedMotion?: boolean;
+}
+
+function safeColor(color: string): string {
+  return SAFE_HEX_RE.test(color) ? color : "#10B981";
+}
+
 export function BrandingPreview({
   logoUrl,
   primaryColor,
   brandName,
   reducedMotion,
 }: BrandingPreviewProps) {
+  const safe = safeColor(primaryColor);
   return (
     <Card variant="standard" className="p-0 overflow-hidden">
       <div
@@ -39,7 +53,7 @@ export function BrandingPreview({
         <div className="flex-1" />
         <div
           className="h-4 w-16 rounded-sm"
-          style={{ backgroundColor: primaryColor, opacity: 0.3 }}
+          style={{ backgroundColor: safe, opacity: 0.3 }}
         />
       </div>
       <div className="flex flex-col gap-xs p-md">
@@ -50,9 +64,9 @@ export function BrandingPreview({
             size="sm"
             style={
               {
-                "--brand-primary": primaryColor,
-                backgroundColor: primaryColor,
-                boxShadow: `0 0 8px ${primaryColor}66`,
+                "--brand-primary": safe,
+                backgroundColor: safe,
+                boxShadow: `0 0 8px ${safe}66`,
               } as React.CSSProperties
             }
           >
@@ -60,9 +74,9 @@ export function BrandingPreview({
           </Button>
           <div
             className="h-8 w-px"
-            style={{ backgroundColor: primaryColor, opacity: 0.3 }}
+            style={{ backgroundColor: safe, opacity: 0.3 }}
           />
-          <span className="text-xs" style={{ color: primaryColor }}>
+          <span className="text-xs" style={{ color: safe }}>
             Accent text
           </span>
         </div>

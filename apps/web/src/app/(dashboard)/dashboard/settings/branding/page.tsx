@@ -19,10 +19,12 @@ import {
   BrandingPreview,
 } from "@/components/branding";
 import { getBranding, updateBranding, verifyDomain } from "@/actions/branding";
+import { useBranding } from "@/lib/branding-context";
 import type { AgencyBranding, DomainVerificationResult } from "@call/types";
 
 export default function BrandingSettingsPage() {
   const { organization } = useOrganization();
+  const { refreshBranding } = useBranding();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{
@@ -82,10 +84,22 @@ export default function BrandingSettingsPage() {
       setDomainVerified(data.domainVerified);
       setMessage({ type: "success", text: "Branding saved successfully" });
       const cacheKey = `branding_${organization.id}`;
-      sessionStorage.removeItem(cacheKey);
+      try {
+        sessionStorage.removeItem(cacheKey);
+      } catch {
+        // storage unavailable
+      }
+      refreshBranding();
     }
     setSaving(false);
-  }, [organization, logoUrl, primaryColor, brandName, customDomain]);
+  }, [
+    organization,
+    logoUrl,
+    primaryColor,
+    brandName,
+    customDomain,
+    refreshBranding,
+  ]);
 
   const handleVerify = useCallback(
     async (domain: string): Promise<DomainVerificationResult | null> => {

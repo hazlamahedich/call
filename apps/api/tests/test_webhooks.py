@@ -1,7 +1,7 @@
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 import json
 
 from routers.webhooks import router
@@ -56,8 +56,9 @@ class TestWebhookReceiver:
 
     @patch("routers.webhooks.settings.CLERK_WEBHOOK_SECRET", "whsec_test_secret")
     @patch("svix.webhooks.Webhook.verify")
+    @patch("routers.webhooks.handle_organization_created", new_callable=AsyncMock)
     def test_valid_organization_created_webhook(
-        self, mock_verify, client, valid_webhook_payload
+        self, mock_handler, mock_verify, client, valid_webhook_payload
     ):
         mock_verify.return_value = valid_webhook_payload
 
@@ -69,6 +70,7 @@ class TestWebhookReceiver:
 
         assert response.status_code == 200
         assert response.json() == {"received": True}
+        mock_handler.assert_called_once()
 
     @patch("routers.webhooks.settings.CLERK_WEBHOOK_SECRET", "whsec_test_secret")
     @patch("svix.webhooks.Webhook.verify")
@@ -88,7 +90,8 @@ class TestWebhookReceiver:
 
     @patch("routers.webhooks.settings.CLERK_WEBHOOK_SECRET", "whsec_test_secret")
     @patch("svix.webhooks.Webhook.verify")
-    def test_organization_updated_webhook(self, mock_verify, client):
+    @patch("routers.webhooks.handle_organization_updated", new_callable=AsyncMock)
+    def test_organization_updated_webhook(self, mock_handler, mock_verify, client):
         payload = {
             "type": "organization.updated",
             "data": {"id": "org_123456", "name": "Updated Agency Name"},
@@ -102,10 +105,12 @@ class TestWebhookReceiver:
         )
 
         assert response.status_code == 200
+        mock_handler.assert_called_once()
 
     @patch("routers.webhooks.settings.CLERK_WEBHOOK_SECRET", "whsec_test_secret")
     @patch("svix.webhooks.Webhook.verify")
-    def test_organization_deleted_webhook(self, mock_verify, client):
+    @patch("routers.webhooks.handle_organization_deleted", new_callable=AsyncMock)
+    def test_organization_deleted_webhook(self, mock_handler, mock_verify, client):
         payload = {"type": "organization.deleted", "data": {"id": "org_123456"}}
         mock_verify.return_value = payload
 
@@ -116,6 +121,7 @@ class TestWebhookReceiver:
         )
 
         assert response.status_code == 200
+        mock_handler.assert_called_once()
 
     @patch("routers.webhooks.settings.CLERK_WEBHOOK_SECRET", "whsec_test_secret")
     @patch("svix.webhooks.Webhook.verify")
@@ -151,8 +157,9 @@ class TestWebhookReceiver:
 
     @patch("routers.webhooks.settings.CLERK_WEBHOOK_SECRET", "whsec_test_secret")
     @patch("svix.webhooks.Webhook.verify")
+    @patch("routers.webhooks.handle_organization_created", new_callable=AsyncMock)
     def test_idempotent_webhook_handling(
-        self, mock_verify, client, valid_webhook_payload
+        self, mock_handler, mock_verify, client, valid_webhook_payload
     ):
         mock_verify.return_value = valid_webhook_payload
 

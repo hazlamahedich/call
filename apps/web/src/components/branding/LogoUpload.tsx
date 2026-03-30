@@ -36,34 +36,42 @@ function checkMagicBytes(buf: ArrayBuffer): string | null {
   return null;
 }
 
-function resizeImage(file: File): Promise<string> {
+function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        let { width, height } = img;
-        if (width > MAX_WIDTH) {
-          height = (height * MAX_WIDTH) / width;
-          width = MAX_WIDTH;
-        }
-        if (height > MAX_HEIGHT) {
-          width = (width * MAX_HEIGHT) / height;
-          height = MAX_HEIGHT;
-        }
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return reject(new Error("Canvas not supported"));
-        ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL("image/png"));
-      };
-      img.onerror = () => reject(new Error("Failed to load image"));
-      img.src = reader.result as string;
-    };
+    reader.onload = () => resolve(reader.result as string);
     reader.onerror = () => reject(new Error("Failed to read file"));
     reader.readAsDataURL(file);
+  });
+}
+
+function resizeImage(file: File, dataUrl: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > MAX_WIDTH) {
+        height = (height * MAX_WIDTH) / width;
+        width = MAX_WIDTH;
+      }
+      if (height > MAX_HEIGHT) {
+        width = (width * MAX_HEIGHT) / height;
+        height = MAX_HEIGHT;
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return reject(new Error("Canvas not supported"));
+      ctx.drawImage(img, 0, 0, width, height);
+      URL.revokeObjectURL(img.src);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(img.src);
+      reject(new Error("Failed to load image"));
+    };
+    img.src = dataUrl;
   });
 }
 
@@ -90,8 +98,14 @@ export function LogoUpload({
         return;
       }
       try {
-        const dataUrl = await resizeImage(file);
-        onLogoChange(dataUrl);
+        const dataUrl = await readFileAsDataUrl(file);
+        if (mime === "image/svg+xml") {
+          onLogoChange(dataUrl);
+        } else {
+          const objectUrl = URL.createObjectURL(file);
+          const resized = await resizeImage(file, objectUrl);
+          onLogoChange(resized);
+        }
       } catch {
         setError("Failed to process image");
       }

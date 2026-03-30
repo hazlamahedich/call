@@ -1,14 +1,22 @@
 import json
 import logging
-from fastapi import APIRouter, Request, HTTPException, status, Depends
+from fastapi import APIRouter, Request, HTTPException, status
 from svix.webhooks import Webhook
 from svix.exceptions import WebhookVerificationError
 from typing import Any
+from sqlalchemy import text
 
 from config.settings import settings
+from database.session import AsyncSessionLocal, set_tenant_context
+from models.agency_branding import AgencyBranding
+from models.client import Client
+from services.base import TenantService
 
 router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
 logger = logging.getLogger(__name__)
+
+_branding_service = TenantService[AgencyBranding](AgencyBranding)
+_client_service = TenantService[Client](Client)
 
 
 @router.post("/clerk")
@@ -60,12 +68,26 @@ async def handle_organization_created(data: dict[str, Any]) -> None:
     org_id = data.get("id")
     name = data.get("name")
     slug = data.get("slug")
-    public_metadata = data.get("public_metadata", {})
 
     logger.info(f"Organization created: {org_id} - {name}")
 
-    # TODO: Sync to local database
-    # This will be implemented when database models are added
+    if not org_id:
+        logger.warning("organization.created event missing id, skipping")
+        return
+
+    async with AsyncSessionLocal() as session:
+        await set_tenant_context(session, org_id)
+
+        branding = AgencyBranding()
+        if name:
+            branding.brand_name = name
+        try:
+            await _branding_service.create(session, branding)
+            await session.commit()
+            logger.info(f"Created default branding for org {org_id}")
+        except Exception as e:
+            await session.rollback()
+            logger.error(f"Failed to create branding for org {org_id}: {e}")
 
 
 async def handle_organization_updated(data: dict[str, Any]) -> None:
@@ -74,7 +96,33 @@ async def handle_organization_updated(data: dict[str, Any]) -> None:
 
     logger.info(f"Organization updated: {org_id} - {name}")
 
-    # TODO: Update local database record
+    if not org_id:
+        return
+
+    async with AsyncSessionLocal() as session:
+        await set_tenant_context(session, org_id)
+
+        try:
+            rows = await _branding_service.list_all(session, limit=1)
+            if rows:
+                branding = rows[0]
+                if name:
+                    branding.brand_name = name
+                await _branding_service.update(session, branding)
+                await session.commit()
+                logger.info(f"Updated branding for org {org_id}")
+            else:
+                logger.warning(
+                    f"No branding row found for org {org_id} on update, creating"
+                )
+                branding = AgencyBranding()
+                if name:
+                    branding.brand_name = name
+                await _branding_service.create(session, branding)
+                await session.commit()
+        except Exception as e:
+            await session.rollback()
+            logger.error(f"Failed to update branding for org {org_id}: {e}")
 
 
 async def handle_organization_deleted(data: dict[str, Any]) -> None:
@@ -82,7 +130,23 @@ async def handle_organization_deleted(data: dict[str, Any]) -> None:
 
     logger.info(f"Organization deleted: {org_id}")
 
-    # TODO: Soft delete in local database
+    if not org_id:
+        return
+
+    async with AsyncSessionLocal() as session:
+        await session.execute(
+            text("SELECT set_config('app.is_platform_admin', 'true', true)")
+        )
+        try:
+            rows = await _branding_service.list_all(session, limit=100)
+            for row in rows:
+                if row.id is not None:
+                    await _branding_service.mark_soft_deleted(session, row.id)
+            await session.commit()
+            logger.info(f"Soft-deleted branding for org {org_id}")
+        except Exception as e:
+            await session.rollback()
+            logger.error(f"Failed to soft-delete branding for org {org_id}: {e}")
 
 
 async def handle_membership_created(data: dict[str, Any]) -> None:
@@ -91,8 +155,7 @@ async def handle_membership_created(data: dict[str, Any]) -> None:
     role = data.get("role")
 
     logger.info(f"Membership created: org={org_id}, user={user_id}, role={role}")
-
-    # TODO: Sync membership to local database
+    logger.info("Membership tracking not yet implemented — no membership table exists")
 
 
 async def handle_membership_updated(data: dict[str, Any]) -> None:
@@ -101,8 +164,7 @@ async def handle_membership_updated(data: dict[str, Any]) -> None:
     role = data.get("role")
 
     logger.info(f"Membership updated: org={org_id}, user={user_id}, role={role}")
-
-    # TODO: Update membership in local database
+    logger.info("Membership tracking not yet implemented — no membership table exists")
 
 
 async def handle_membership_deleted(data: dict[str, Any]) -> None:
@@ -110,5 +172,4 @@ async def handle_membership_deleted(data: dict[str, Any]) -> None:
     user_id = data.get("public_user_data", {}).get("user_id")
 
     logger.info(f"Membership deleted: org={org_id}, user={user_id}")
-
-    # TODO: Remove membership from local database
+    logger.info("Membership tracking not yet implemented — no membership table exists")

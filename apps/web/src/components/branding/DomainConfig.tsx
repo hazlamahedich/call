@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Link } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,15 @@ export function DomainConfig({
   const [input, setInput] = useState(domain ?? "");
   const [status, setStatus] = useState<Status>(verified ? "success" : "idle");
   const [result, setResult] = useState<DomainVerificationResult | null>(null);
+  const originalDomain = useRef(domain ?? "");
+
+  const handleInputChange = (value: string) => {
+    setInput(value);
+    if (value !== originalDomain.current) {
+      setStatus("idle");
+      setResult(null);
+    }
+  };
 
   const handleVerify = async () => {
     if (!input.trim()) return;
@@ -57,7 +66,7 @@ export function DomainConfig({
               <Input
                 type="text"
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => handleInputChange(e.target.value)}
                 placeholder="custom.yourdomain.com"
               />
             </div>

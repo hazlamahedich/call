@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS agency_branding (
     id SERIAL PRIMARY KEY,
     org_id VARCHAR NOT NULL,
     logo_url VARCHAR,
+    logo_storage_type VARCHAR(16),
     primary_color VARCHAR(7) NOT NULL DEFAULT '#10B981',
     custom_domain VARCHAR(255),
     domain_verified BOOLEAN NOT NULL DEFAULT FALSE,
@@ -63,16 +64,17 @@ def _make_engine():
 
 
 _schema_initialized = False
+_shared_engine = None
 
 
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def _init_branding_schema():
-    global _schema_initialized
-    if _schema_initialized:
+    global _schema_initialized, _shared_engine
+    if _schema_initialized and _shared_engine:
         yield
         return
-    engine = _make_engine()
-    async with engine.begin() as conn:
+    _shared_engine = _make_engine()
+    async with _shared_engine.begin() as conn:
         await conn.execute(text("DROP TABLE IF EXISTS agency_branding CASCADE"))
         await conn.execute(text(BRANDING_SCHEMA_SQL))
         await conn.execute(text(INDEX_SQL))
@@ -104,39 +106,43 @@ async def _init_branding_schema():
                 "FOR EACH ROW EXECUTE FUNCTION set_org_id_from_context()"
             )
         )
-    await engine.dispose()
     _schema_initialized = True
     yield
+    await _shared_engine.dispose()
+    _shared_engine = None
+
+
+@pytest_asyncio.fixture(scope="session")
+async def _db_engine():
+    global _shared_engine
+    if _shared_engine is None:
+        _shared_engine = _make_engine()
+    yield _shared_engine
 
 
 @pytest_asyncio.fixture(autouse=True)
-async def _clean_branding_table():
-    engine = _make_engine()
-    async with engine.begin() as conn:
+async def _clean_branding_table(_db_engine):
+    async with _db_engine.begin() as conn:
         await conn.execute(text("TRUNCATE agency_branding CASCADE"))
-    await engine.dispose()
     yield
 
 
 @pytest_asyncio.fixture
-async def admin_session():
-    engine = _make_engine()
+async def admin_session(_db_engine):
     factory = async_sessionmaker(
-        bind=engine, class_=AsyncSession, expire_on_commit=False
+        bind=_db_engine, class_=AsyncSession, expire_on_commit=False
     )
     async with factory() as session:
         await session.execute(
             text("SELECT set_config('app.is_platform_admin', 'true', true)")
         )
         yield session
-    await engine.dispose()
 
 
 @pytest_asyncio.fixture
-async def tenant_a_session():
-    engine = _make_engine()
+async def tenant_a_session(_db_engine):
     factory = async_sessionmaker(
-        bind=engine, class_=AsyncSession, expire_on_commit=False
+        bind=_db_engine, class_=AsyncSession, expire_on_commit=False
     )
     async with factory() as session:
         await session.execute(
@@ -144,14 +150,12 @@ async def tenant_a_session():
             {"org_id": ORG_A},
         )
         yield session
-    await engine.dispose()
 
 
 @pytest_asyncio.fixture
-async def tenant_b_session():
-    engine = _make_engine()
+async def tenant_b_session(_db_engine):
     factory = async_sessionmaker(
-        bind=engine, class_=AsyncSession, expire_on_commit=False
+        bind=_db_engine, class_=AsyncSession, expire_on_commit=False
     )
     async with factory() as session:
         await session.execute(
@@ -159,7 +163,6 @@ async def tenant_b_session():
             {"org_id": ORG_B},
         )
         yield session
-    await engine.dispose()
 
 
 @pytest.fixture

@@ -1,8 +1,8 @@
-export interface Call {
+export interface TelecomCall {
   id: string;
   orgId: string;
   clientId?: string;
-  status: CallStatus;
+  status: TelecomCallStatus;
   phoneNumber: string;
   duration?: number;
   recordingUrl?: string;
@@ -11,7 +11,7 @@ export interface Call {
   endedAt?: string;
 }
 
-export type CallStatus =
+export type TelecomCallStatus =
   | "pending"
   | "dialing"
   | "ringing"
