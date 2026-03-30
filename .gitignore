@@ -67,3 +67,4 @@ _bmad/
 .roo/
 .serena/
 _bmad-output/
+*.db
