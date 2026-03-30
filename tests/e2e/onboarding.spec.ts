@@ -13,79 +13,28 @@ import { test, expect } from "../support/merged-fixtures";
 
 test.describe("[P0] Onboarding Wizard Flow", () => {
   test("[1.6-E2E-001][P0] Given fresh user, When navigating to /onboarding, Then onboarding page loads with wizard", async ({
-    page,
+    onboardingPage: page,
   }) => {
-    test.skip(
-      !process.env.E2E_CLERK_EMAIL,
-      "Requires E2E_CLERK_EMAIL and E2E_CLERK_PASSWORD env vars",
-    );
-
-    await page.goto("/sign-in");
-    await page
-      .locator('input[name="email"]')
-      .fill(process.env.E2E_CLERK_EMAIL || "");
-    await page
-      .locator('input[name="password"]')
-      .fill(process.env.E2E_CLERK_PASSWORD || "");
-    await page.locator('button[type="submit"]').click();
-    await page.waitForURL("**/onboarding**", { timeout: 15000 });
-
     await expect(page.getByText("Launch Your Agent")).toBeVisible();
     await expect(page.getByText("Answer 5 quick questions")).toBeVisible();
   });
 
   test("[1.6-E2E-002][P0] Given onboarding page, When rendered, Then progress indicator shows Step 1 of 5", async ({
-    page,
+    onboardingPage: page,
   }) => {
-    test.skip(!process.env.E2E_CLERK_EMAIL, "Requires Clerk test fixtures");
-
-    await page.goto("/sign-in");
-    await page
-      .locator('input[name="email"]')
-      .fill(process.env.E2E_CLERK_EMAIL || "");
-    await page
-      .locator('input[name="password"]')
-      .fill(process.env.E2E_CLERK_PASSWORD || "");
-    await page.locator('button[type="submit"]').click();
-    await page.waitForURL("**/onboarding**", { timeout: 15000 });
-
     await expect(page.getByText("Step 1 of 5")).toBeVisible();
   });
 
   test("[1.6-E2E-003][P0] Given step 1 business goal, When no selection made, Then Next button is disabled", async ({
-    page,
+    onboardingPage: page,
   }) => {
-    test.skip(!process.env.E2E_CLERK_EMAIL, "Requires Clerk test fixtures");
-
-    await page.goto("/sign-in");
-    await page
-      .locator('input[name="email"]')
-      .fill(process.env.E2E_CLERK_EMAIL || "");
-    await page
-      .locator('input[name="password"]')
-      .fill(process.env.E2E_CLERK_PASSWORD || "");
-    await page.locator('button[type="submit"]').click();
-    await page.waitForURL("**/onboarding**", { timeout: 15000 });
-
     const nextButton = page.getByRole("button", { name: "Next" });
     await expect(nextButton).toBeDisabled();
   });
 
   test("[1.6-E2E-004][P1] Given step 1, When selecting a business goal and clicking Next, Then step 2 is shown", async ({
-    page,
+    onboardingPage: page,
   }) => {
-    test.skip(!process.env.E2E_CLERK_EMAIL, "Requires Clerk test fixtures");
-
-    await page.goto("/sign-in");
-    await page
-      .locator('input[name="email"]')
-      .fill(process.env.E2E_CLERK_EMAIL || "");
-    await page
-      .locator('input[name="password"]')
-      .fill(process.env.E2E_CLERK_PASSWORD || "");
-    await page.locator('button[type="submit"]').click();
-    await page.waitForURL("**/onboarding**", { timeout: 15000 });
-
     await page.getByText("Lead Generation").click();
     const nextButton = page.getByRole("button", { name: "Next" });
     await expect(nextButton).toBeEnabled();
@@ -95,20 +44,8 @@ test.describe("[P0] Onboarding Wizard Flow", () => {
   });
 
   test("[1.6-E2E-005][P1] Given step 2 script context, When entering text below minimum, Then Next is disabled", async ({
-    page,
+    onboardingPage: page,
   }) => {
-    test.skip(!process.env.E2E_CLERK_EMAIL, "Requires Clerk test fixtures");
-
-    await page.goto("/sign-in");
-    await page
-      .locator('input[name="email"]')
-      .fill(process.env.E2E_CLERK_EMAIL || "");
-    await page
-      .locator('input[name="password"]')
-      .fill(process.env.E2E_CLERK_PASSWORD || "");
-    await page.locator('button[type="submit"]').click();
-    await page.waitForURL("**/onboarding**", { timeout: 15000 });
-
     await page.getByText("Lead Generation").click();
     await page.getByRole("button", { name: "Next" }).click();
 
@@ -119,20 +56,8 @@ test.describe("[P0] Onboarding Wizard Flow", () => {
   });
 
   test("[1.6-E2E-006][P1] Given step 2, When entering valid script context and clicking Next, Then step 3 is shown", async ({
-    page,
+    onboardingPage: page,
   }) => {
-    test.skip(!process.env.E2E_CLERK_EMAIL, "Requires Clerk test fixtures");
-
-    await page.goto("/sign-in");
-    await page
-      .locator('input[name="email"]')
-      .fill(process.env.E2E_CLERK_EMAIL || "");
-    await page
-      .locator('input[name="password"]')
-      .fill(process.env.E2E_CLERK_PASSWORD || "");
-    await page.locator('button[type="submit"]').click();
-    await page.waitForURL("**/onboarding**", { timeout: 15000 });
-
     await page.getByText("Lead Generation").click();
     await page.getByRole("button", { name: "Next" }).click();
 
@@ -148,20 +73,8 @@ test.describe("[P0] Onboarding Wizard Flow", () => {
   });
 
   test("[1.6-E2E-007][P1] Given onboarding wizard, When clicking Back, Then previous step is shown", async ({
-    page,
+    onboardingPage: page,
   }) => {
-    test.skip(!process.env.E2E_CLERK_EMAIL, "Requires Clerk test fixtures");
-
-    await page.goto("/sign-in");
-    await page
-      .locator('input[name="email"]')
-      .fill(process.env.E2E_CLERK_EMAIL || "");
-    await page
-      .locator('input[name="password"]')
-      .fill(process.env.E2E_CLERK_PASSWORD || "");
-    await page.locator('button[type="submit"]').click();
-    await page.waitForURL("**/onboarding**", { timeout: 15000 });
-
     await page.getByText("Lead Generation").click();
     await page.getByRole("button", { name: "Next" }).click();
     await expect(page.getByText("Step 2 of 5")).toBeVisible();

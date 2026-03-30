@@ -73,6 +73,15 @@ async def complete_onboarding(
             "agent": agent.model_dump(by_alias=True),
             "script": script.model_dump(by_alias=True),
         }
+    except PydanticValidationError as e:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "ONBOARDING_VALIDATION_ERROR",
+                "message": str(e.errors()),
+            },
+        )
     except HTTPException:
         raise
     except Exception as e:
