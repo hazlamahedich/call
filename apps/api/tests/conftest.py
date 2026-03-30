@@ -89,12 +89,25 @@ async def _ensure_schema():
         await conn.execute(text("REVOKE ALL ON SCHEMA public FROM test_rls_user"))
         await conn.execute(text("REVOKE ALL ON DATABASE call_test FROM test_rls_user"))
         await conn.execute(text("REVOKE ALL ON leads FROM test_rls_user"))
+        await conn.execute(text("REVOKE ALL ON usage_logs FROM test_rls_user"))
+        await conn.execute(
+            text("REVOKE ALL ON SEQUENCE usage_logs_id_seq FROM test_rls_user")
+        )
         await conn.execute(text("DROP ROLE IF EXISTS test_rls_user"))
         await conn.execute(text("CREATE ROLE test_rls_user WITH LOGIN"))
         await conn.execute(text("GRANT CONNECT ON DATABASE call_test TO test_rls_user"))
         await conn.execute(text("GRANT USAGE ON SCHEMA public TO test_rls_user"))
         await conn.execute(
             text("GRANT SELECT, INSERT, UPDATE, DELETE ON leads TO test_rls_user")
+        )
+        await conn.execute(
+            text("GRANT USAGE, SELECT ON SEQUENCE leads_id_seq TO test_rls_user")
+        )
+        await conn.execute(
+            text("GRANT SELECT, INSERT, UPDATE, DELETE ON usage_logs TO test_rls_user")
+        )
+        await conn.execute(
+            text("GRANT USAGE, SELECT ON SEQUENCE usage_logs_id_seq TO test_rls_user")
         )
     await engine.dispose()
 

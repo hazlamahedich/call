@@ -41,11 +41,13 @@ async def record_usage(
     metadata: str = "{}",
 ) -> UsageLog:
     await set_tenant_context(session, org_id)
-    log = UsageLog(
-        resource_type=resource_type,
-        resource_id=resource_id,
-        action=action,
-        metadata_json=metadata,
+    log = UsageLog.model_validate(
+        {
+            "resourceType": resource_type,
+            "resourceId": resource_id,
+            "action": action,
+            "metadataJson": metadata,
+        }
     )
     return await _usage_service.create(session, log)
 
