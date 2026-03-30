@@ -18,7 +18,7 @@ _agent_service = TenantService[Agent](Agent)
 _script_service = TenantService[Script](Script)
 
 
-@router.post("/complete")
+@router.post("/complete", status_code=status.HTTP_201_CREATED)
 async def complete_onboarding(
     request: Request,
     payload: OnboardingPayload,
@@ -31,18 +31,6 @@ async def complete_onboarding(
             detail={
                 "code": "AUTH_FORBIDDEN",
                 "message": "Organization context required",
-            },
-        )
-
-    try:
-        OnboardingPayload.model_validate(payload.model_dump())
-    except PydanticValidationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={
-                "code": "ONBOARDING_VALIDATION_ERROR",
-                "message": "Invalid onboarding payload",
-                "errors": e.errors(),
             },
         )
 
@@ -117,7 +105,9 @@ async def get_onboarding_status(
     await set_tenant_context(session, org_id)
 
     result = await session.execute(
-        text("SELECT id FROM agents WHERE onboarding_complete = true LIMIT 1")
+        text(
+            "SELECT id FROM agents WHERE onboarding_complete = true AND soft_delete = false LIMIT 1"
+        )
     )
     row = result.first()
 

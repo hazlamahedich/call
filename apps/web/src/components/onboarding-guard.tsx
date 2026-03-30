@@ -15,13 +15,21 @@ export function OnboardingGuard({ children }: { children: React.ReactNode }) {
       setChecking(false);
       return;
     }
-    getOnboardingStatus().then(({ data }) => {
-      if (data && !data.completed) {
-        router.push("/onboarding");
-      } else {
+    getOnboardingStatus()
+      .then(({ data, error }) => {
+        if (error) {
+          setChecking(false);
+          return;
+        }
+        if (data && !data.completed) {
+          router.push("/onboarding");
+        } else {
+          setChecking(false);
+        }
+      })
+      .catch(() => {
         setChecking(false);
-      }
-    });
+      });
   }, [organization, router]);
 
   if (checking) {

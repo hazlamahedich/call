@@ -87,6 +87,9 @@ export default function OnboardingPage() {
     }
     if (agent) {
       setShowBootAnimation(true);
+    } else {
+      setSubmitError("Unexpected response from server");
+      setIsSubmitting(false);
     }
   };
 

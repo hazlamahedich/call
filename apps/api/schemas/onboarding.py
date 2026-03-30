@@ -15,6 +15,20 @@ class OnboardingPayload(BaseModel):
 
     model_config = {"alias_generator": to_camel, "populate_by_name": True}
 
+    @field_validator("business_goal")
+    @classmethod
+    def validate_business_goal(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("business_goal must not be empty")
+        return v
+
+    @field_validator("voice_id")
+    @classmethod
+    def validate_voice_id(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("voice_id must not be empty")
+        return v
+
     @field_validator("safety_level")
     @classmethod
     def validate_safety_level(cls, v: str) -> str:

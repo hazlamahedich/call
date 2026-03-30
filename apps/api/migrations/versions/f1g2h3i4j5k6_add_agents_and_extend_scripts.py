@@ -72,6 +72,9 @@ def upgrade() -> None:
         )
     )
     conn.execute(
+        sa.text("CREATE INDEX IF NOT EXISTS idx_scripts_agent_id ON scripts(agent_id)")
+    )
+    conn.execute(
         sa.text(
             "ALTER TABLE scripts ADD COLUMN IF NOT EXISTS name VARCHAR(255) NOT NULL DEFAULT 'Initial Script'"
         )
