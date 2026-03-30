@@ -2,6 +2,7 @@
 
 import { BrandingProvider } from "@/lib/branding-context";
 import { DashboardHeader } from "@/components/dashboard-header";
+import { OnboardingGuard } from "@/components/onboarding-guard";
 
 export default function DashboardLayout({
   children,
@@ -9,11 +10,13 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <BrandingProvider>
-      <div className="flex min-h-screen flex-col">
-        <DashboardHeader />
-        <main className="flex-1">{children}</main>
-      </div>
-    </BrandingProvider>
+    <OnboardingGuard>
+      <BrandingProvider>
+        <div className="flex min-h-screen flex-col">
+          <DashboardHeader />
+          <main className="flex-1">{children}</main>
+        </div>
+      </BrandingProvider>
+    </OnboardingGuard>
   );
 }

@@ -60,6 +60,8 @@ export interface DbScript extends TenantScoped {
   name: string;
   content: string;
   version: number;
+  agentId?: number;
+  scriptContext?: string;
 }
 
 export interface DbKnowledgeBase extends TenantScoped {

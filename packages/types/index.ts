@@ -5,3 +5,5 @@ export * from "./organization";
 export * from "./transcript";
 export * from "./branding";
 export * from "./tenant";
+export * from "./agent";
+export * from "./onboarding";
