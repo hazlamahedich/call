@@ -46,6 +46,7 @@ def membership_created_payload():
 
 
 class TestWebhookReceiver:
+    @patch("routers.webhooks.settings.CLERK_WEBHOOK_SECRET", "")
     def test_webhook_missing_secret_returns_500(self, client):
         payload = {"type": "test", "data": {}}
         response = client.post(

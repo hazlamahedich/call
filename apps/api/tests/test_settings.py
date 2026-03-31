@@ -24,9 +24,8 @@ class TestSettingsDefaults:
     def test_default_database_url(self):
         from config.settings import Settings
 
-        with patch.dict(os.environ, {}, clear=False):
-            s = Settings()
-        assert s.DATABASE_URL == "sqlite:///./app.db"
+        field_info = Settings.model_fields["DATABASE_URL"]
+        assert field_info.default == "sqlite:///./app.db"
 
     def test_default_secret_key(self):
         from config.settings import Settings

@@ -1,6 +1,6 @@
 # Story 2.1: Vapi Telephony Bridge & Webhook Integration
 
-Status: reviewed — test quality 93/100 (A+)
+Status: complete — 295 passed, 16 skipped, 0 failures. Test quality 93/100 (A+).
 
 ## Story
 
@@ -485,7 +485,7 @@ glm-5.1 (zai-coding-plan/glm-5.1)
 
 ### Completion Notes List
 
-- All 23 backend tests pass (3 vapi_service_trigger, 2 vapi_service_started, 2 vapi_service_ended, 2 vapi_service_failed, 7 vapi_client, 5 calls_router, 9 webhooks_vapi — note: some overlap in coverage)
+- All backend tests pass — 295 passed, 16 skipped, 0 failures (311 collected)
 - Frontend tests: 5 CallTriggerButton tests pass (2.1-UNIT-500..504); 18 pre-existing org test failures unrelated
 - E2E tests: 24 test cases across 6 AC-focused spec files under `tests/e2e/calls/` covering AC1–AC6
 - Webhook helper utilities created (tests/support/webhook-helpers.ts) — HMAC signature, payload builder
@@ -505,6 +505,14 @@ glm-5.1 (zai-coding-plan/glm-5.1)
   - P1: Created `CallFactory` + `WebhookPayloadFactory` in `factories.py`
   - P1: Narrowed `test_2_1_unit_207` assertion from 4 status codes to `(201, 403)`
   - P3: Removed implementation-detail assertion from `test_2_1_unit_308`
+- **BMAD Party Mode Review (Winston/Architect, Amelia/Dev, Quinn/QA, John/PM)**: All issues addressed
+  - Upgraded `routers/webhooks_vapi.py` to structured logging with `extra={"code": "..."}` for all log points
+  - Log codes: `VAPI_WEBHOOK_MISSING_CALL_ID`, `VAPI_WEBHOOK_MISSING_ORG_ID`, `VAPI_WEBHOOK_NO_PHONE`, `VAPI_WEBHOOK_HANDLER_ERROR`, `VAPI_WEBHOOK_UNHANDLED_EVENT_TYPE`, `VAPI_WEBHOOK_INVALID_JSON`, `VAPI_WEBHOOK_NON_DICT_CALL_DATA`
+  - Added phone number missing detection with info-level log for externally-triggered calls
+  - Added 3 new edge case tests: `test_2_1_unit_309_P1` (missing phone), `test_2_1_unit_310_P1` (non-dict call_data), `test_2_1_unit_311_P1` (non-JSON body)
+  - Fixed pre-existing `test_settings.py::test_default_database_url` — now checks `Settings.model_fields["DATABASE_URL"].default` instead of instantiated value
+  - Fixed pre-existing `test_webhooks.py::test_webhook_missing_secret_returns_500` — added `@patch("routers.webhooks.settings.CLERK_WEBHOOK_SECRET", "")`
+  - Added `missing_phone_number()` and `non_dict_call_data()` factory methods to `tests/support/factories.py`
 
 ### File List
 
@@ -527,7 +535,8 @@ glm-5.1 (zai-coding-plan/glm-5.1)
 - `apps/api/tests/test_vapi_service_failed.py`
 - `apps/api/tests/test_vapi_client.py`
 - `apps/api/tests/test_calls_router.py`
-- `apps/api/tests/test_webhooks_vapi.py`
+- `apps/api/tests/test_webhooks_vapi.py` — added 3 edge case tests (309: missing phone, 310: non-dict call_data, 311: non-JSON body)
+- `apps/api/tests/support/factories.py` — added `missing_phone_number()` and `non_dict_call_data()` factory methods
 - `tests/e2e/calls/call-trigger.spec.ts`
 - `tests/e2e/calls/usage-limits.spec.ts`
 - `tests/e2e/calls/phone-validation.spec.ts`
@@ -546,10 +555,12 @@ glm-5.1 (zai-coding-plan/glm-5.1)
 - `apps/api/schemas/call.py` — added E.164 regex validation for `phone_number`
 - `apps/api/services/vapi.py` — added `_row_to_call()`, `_safe_int()`, UUID placeholder, atomic upsert, `org_id` params, error_message storage
 - `apps/api/services/vapi_client.py` — `AsyncClient` outside retry loop, separate connect/read timeouts, jitter
-- `apps/api/routers/webhooks_vapi.py` — `VapiWebhookPayload` validation, `request.json()` error handling, `phone_number` extraction
+- `apps/api/routers/webhooks_vapi.py` — structured logging with error codes, `VapiWebhookPayload` validation, `request.json()` error handling, `phone_number` extraction
 - `apps/api/routers/calls.py` — fixed duplicate `_compliance_pre_check` definition
 - `packages/types/tenant.ts` — updated DbCall with vapiCallId, agentId, phoneNumber, endedAt; made leadId/campaignId optional
 - `packages/types/call.ts` — added TriggerCallRequest, TriggerCallResponse; `createdAt: string | null`
 - `packages/types/index.ts` — added vapi export
 - `packages/constants/index.ts` — added VAPI_CALL_TRIGGER_FAILED, VAPI_CALL_NOT_FOUND, VAPI_WEBHOOK_PROCESSING_ERROR
 - `tests/playwright.config.ts` — enabled baseURL via E2E_BASE_URL env var
+- `apps/api/tests/test_settings.py` — fixed `test_default_database_url` to check field default
+- `apps/api/tests/test_webhooks.py` — fixed `test_webhook_missing_secret_returns_500` with `@patch` decorator

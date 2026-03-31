@@ -20,13 +20,19 @@ async def handle_call_events(
     try:
         raw = await request.json()
     except Exception:
-        logger.warning("Vapi webhook received non-JSON body")
+        logger.warning(
+            "Vapi webhook received non-JSON body",
+            extra={"code": "VAPI_WEBHOOK_INVALID_BODY"},
+        )
         return {"received": True}
 
     try:
         body = VapiWebhookPayload.model_validate(raw)
     except Exception:
-        logger.warning("Vapi webhook payload validation failed")
+        logger.warning(
+            "Vapi webhook payload validation failed",
+            extra={"code": "VAPI_WEBHOOK_VALIDATION_FAILED"},
+        )
         return {"received": True}
 
     message = body.message or {}
@@ -34,10 +40,16 @@ async def handle_call_events(
     call_data = message.get("call") or {}
     vapi_call_id = call_data.get("id", "") if isinstance(call_data, dict) else ""
 
-    logger.info(f"Received Vapi webhook event: {event_type} (call_id={vapi_call_id})")
+    logger.info(
+        "Vapi webhook event received",
+        extra={"event_type": event_type, "vapi_call_id": vapi_call_id},
+    )
 
     if not vapi_call_id:
-        logger.warning(f"Vapi webhook missing call_id for event type: {event_type}")
+        logger.warning(
+            "Vapi webhook missing call_id",
+            extra={"code": "VAPI_WEBHOOK_MISSING_CALL_ID", "event_type": event_type},
+        )
         return {"received": True}
 
     metadata = message.get("metadata") or {}
@@ -47,7 +59,12 @@ async def handle_call_events(
 
     if not org_id:
         logger.warning(
-            f"Vapi webhook missing org_id in metadata for call {vapi_call_id}"
+            "Vapi webhook missing org_id — cannot route to tenant",
+            extra={
+                "code": "VAPI_WEBHOOK_MISSING_ORG_ID",
+                "vapi_call_id": vapi_call_id,
+                "event_type": event_type,
+            },
         )
         return {"received": True}
 
@@ -56,6 +73,15 @@ async def handle_call_events(
         phone_number = call_data.get(
             "phoneNumber", call_data.get("customer", {}).get("number", "")
         )
+        if not phone_number:
+            logger.info(
+                "Vapi webhook has no phone_number — may be externally triggered call",
+                extra={
+                    "code": "VAPI_WEBHOOK_NO_PHONE",
+                    "vapi_call_id": vapi_call_id,
+                    "event_type": event_type,
+                },
+            )
 
     try:
         if event_type == "call-start":
@@ -92,10 +118,19 @@ async def handle_call_events(
                 session, vapi_call_id, org_id=org_id, error_message=error_str
             )
         else:
-            logger.info(f"Unhandled Vapi event type: {event_type}")
+            logger.info(
+                "Unhandled Vapi event type",
+                extra={"event_type": event_type, "vapi_call_id": vapi_call_id},
+            )
     except Exception as e:
         logger.error(
-            f"Error processing Vapi webhook {event_type} for call {vapi_call_id}: {e}"
+            "Error processing Vapi webhook",
+            extra={
+                "code": "VAPI_WEBHOOK_HANDLER_ERROR",
+                "event_type": event_type,
+                "vapi_call_id": vapi_call_id,
+                "error": str(e),
+            },
         )
 
     return {"received": True}

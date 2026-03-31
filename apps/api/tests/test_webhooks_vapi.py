@@ -177,3 +177,47 @@ class TestWebhookCallEvents:
             )
 
         assert response.status_code == 200
+
+    def test_2_1_unit_309_P1_given_missing_phone_when_call_start_then_still_processes(
+        self, client, factory
+    ):
+        payload = factory.missing_phone_number(vapi_call_id="vapi_no_phone")
+
+        with patch(
+            "routers.webhooks_vapi.handle_call_started",
+            new_callable=AsyncMock,
+            return_value=MagicMock(),
+        ) as mock_started:
+            response = client.post(
+                "/webhooks/vapi/call-events",
+                json=payload,
+            )
+
+        assert response.status_code == 200
+        mock_started.assert_called_once()
+        call_kwargs = mock_started.call_args
+        assert call_kwargs.kwargs.get("phone_number", "") == ""
+
+    def test_2_1_unit_310_P1_given_non_dict_call_data_when_webhook_then_returns_200(
+        self, client, factory
+    ):
+        payload = factory.non_dict_call_data()
+
+        response = client.post(
+            "/webhooks/vapi/call-events",
+            json=payload,
+        )
+
+        assert response.status_code == 200
+
+    def test_2_1_unit_311_P1_given_non_json_body_when_webhook_then_returns_200(
+        self, client
+    ):
+        response = client.post(
+            "/webhooks/vapi/call-events",
+            content=b"not-json",
+            headers={"Content-Type": "application/json"},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"received": True}

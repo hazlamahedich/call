@@ -204,3 +204,31 @@ class WebhookPayloadFactory(_AutoCounter):
                 "metadata": {},
             }
         }
+
+    @classmethod
+    def missing_phone_number(
+        cls,
+        vapi_call_id: Optional[str] = None,
+        event_type: str = "call-start",
+        org_id: str = "org_test_001",
+    ) -> dict:
+        call_data: dict = {}
+        if vapi_call_id:
+            call_data["id"] = vapi_call_id
+        return {
+            "message": {
+                "type": event_type,
+                "call": call_data,
+                "metadata": {"org_id": org_id},
+            }
+        }
+
+    @classmethod
+    def non_dict_call_data(cls, event_type: str = "call-start") -> dict:
+        return {
+            "message": {
+                "type": event_type,
+                "call": "not-a-dict",
+                "metadata": {"org_id": "org_test_001"},
+            }
+        }
