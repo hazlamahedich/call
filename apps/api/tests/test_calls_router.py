@@ -63,7 +63,7 @@ class TestTriggerCallEndpoint:
         )
         assert response.status_code == 422
 
-    def test_2_1_unit_207_P0_given_valid_e164_phone_when_trigger_then_returns_422_or_500(
+    def test_2_1_unit_207_P0_given_valid_e164_phone_when_trigger_then_returns_201(
         self, client
     ):
         with (
@@ -92,7 +92,14 @@ class TestTriggerCallEndpoint:
                 json={"phoneNumber": "+1234567890"},
             )
 
-        assert response.status_code in (200, 201, 403, 500)
+        assert response.status_code in (201, 403)
+        if response.status_code == 403:
+            assert response.json()["detail"]["code"] == "AUTH_FORBIDDEN"
+        else:
+            assert response.status_code == 201
+            body = response.json()
+            assert body["vapiCallId"] == "vapi_123"
+            assert body["status"] == "pending"
 
 
 class TestCallsRouterRegistration:

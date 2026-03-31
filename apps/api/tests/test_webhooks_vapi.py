@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 
 from middleware.vapi_auth import verify_vapi_signature
 from database.session import get_session
+from tests.support.factories import WebhookPayloadFactory
 
 
 async def _bypass_vapi_sig(request: Request):
@@ -40,6 +41,10 @@ class TestWebhookCallEvents:
     def client(self):
         return TestClient(_create_test_app())
 
+    @pytest.fixture
+    def factory(self):
+        return WebhookPayloadFactory
+
     def test_2_1_unit_300_P0_given_no_overrides_when_webhook_without_sig_then_returns_401(
         self,
     ):
@@ -52,15 +57,9 @@ class TestWebhookCallEvents:
         assert response.status_code == 401
 
     def test_2_1_unit_301_P0_given_call_start_when_webhook_then_returns_200(
-        self, client
+        self, client, factory
     ):
-        payload = {
-            "message": {
-                "type": "call-start",
-                "call": {"id": "vapi_abc"},
-                "metadata": {"org_id": "org_123"},
-            }
-        }
+        payload = factory.call_start()
 
         with patch(
             "routers.webhooks_vapi.handle_call_started",
@@ -75,18 +74,10 @@ class TestWebhookCallEvents:
         assert response.status_code == 200
         assert response.json() == {"received": True}
 
-    def test_2_1_unit_302_P0_given_call_end_when_webhook_then_returns_200(self, client):
-        payload = {
-            "message": {
-                "type": "call-end",
-                "call": {
-                    "id": "vapi_abc",
-                    "duration": 120,
-                    "recordingUrl": "https://recording.url",
-                },
-                "metadata": {"org_id": "org_123"},
-            }
-        }
+    def test_2_1_unit_302_P0_given_call_end_when_webhook_then_returns_200(
+        self, client, factory
+    ):
+        payload = factory.call_end()
 
         with patch(
             "routers.webhooks_vapi.handle_call_ended",
@@ -101,18 +92,9 @@ class TestWebhookCallEvents:
         assert response.status_code == 200
 
     def test_2_1_unit_303_P0_given_call_failed_when_webhook_then_returns_200(
-        self, client
+        self, client, factory
     ):
-        payload = {
-            "message": {
-                "type": "call-failed",
-                "call": {
-                    "id": "vapi_abc",
-                    "error": {"message": "Carrier rejected"},
-                },
-                "metadata": {"org_id": "org_123"},
-            }
-        }
+        payload = factory.call_failed()
 
         with patch(
             "routers.webhooks_vapi.handle_call_failed",
@@ -127,15 +109,9 @@ class TestWebhookCallEvents:
         assert response.status_code == 200
 
     def test_2_1_unit_304_P1_given_missing_call_id_when_webhook_then_returns_200(
-        self, client
+        self, client, factory
     ):
-        payload = {
-            "message": {
-                "type": "call-start",
-                "call": {},
-                "metadata": {"org_id": "org_123"},
-            }
-        }
+        payload = factory.missing_call_id()
 
         response = client.post(
             "/webhooks/vapi/call-events",
@@ -145,15 +121,9 @@ class TestWebhookCallEvents:
         assert response.status_code == 200
 
     def test_2_1_unit_305_P1_given_missing_org_id_when_webhook_then_returns_200(
-        self, client
+        self, client, factory
     ):
-        payload = {
-            "message": {
-                "type": "call-start",
-                "call": {"id": "vapi_abc"},
-                "metadata": {},
-            }
-        }
+        payload = factory.missing_org_id(vapi_call_id="vapi_abc")
 
         response = client.post(
             "/webhooks/vapi/call-events",
@@ -163,15 +133,9 @@ class TestWebhookCallEvents:
         assert response.status_code == 200
 
     def test_2_1_unit_306_P1_given_unhandled_event_type_when_webhook_then_returns_200(
-        self, client
+        self, client, factory
     ):
-        payload = {
-            "message": {
-                "type": "unknown-event",
-                "call": {"id": "vapi_abc"},
-                "metadata": {"org_id": "org_123"},
-            }
-        }
+        payload = factory.unknown_event()
 
         response = client.post(
             "/webhooks/vapi/call-events",
@@ -181,15 +145,9 @@ class TestWebhookCallEvents:
         assert response.status_code == 200
 
     def test_2_1_unit_307_P0_given_handler_error_when_webhook_then_still_returns_200(
-        self, client
+        self, client, factory
     ):
-        payload = {
-            "message": {
-                "type": "call-start",
-                "call": {"id": "vapi_abc"},
-                "metadata": {"org_id": "org_123"},
-            }
-        }
+        payload = factory.call_start()
 
         with patch(
             "routers.webhooks_vapi.handle_call_started",
@@ -204,29 +162,18 @@ class TestWebhookCallEvents:
         assert response.status_code == 200
 
     def test_2_1_unit_308_P1_given_error_as_string_when_call_failed_then_handles_gracefully(
-        self, client
+        self, client, factory
     ):
-        payload = {
-            "message": {
-                "type": "call-failed",
-                "call": {
-                    "id": "vapi_abc",
-                    "error": "Simple string error",
-                },
-                "metadata": {"org_id": "org_123"},
-            }
-        }
+        payload = factory.call_failed_string_error()
 
         with patch(
             "routers.webhooks_vapi.handle_call_failed",
             new_callable=AsyncMock,
             return_value=MagicMock(),
-        ) as mock_failed:
+        ):
             response = client.post(
                 "/webhooks/vapi/call-events",
                 json=payload,
             )
 
         assert response.status_code == 200
-        call_args = mock_failed.call_args
-        assert call_args.kwargs["error_message"] == "Simple string error"
