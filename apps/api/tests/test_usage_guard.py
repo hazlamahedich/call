@@ -41,7 +41,7 @@ class TestCheckCallCap:
                 new_callable=AsyncMock,
             ),
             patch(
-                "middleware.usage_guard.check_usage_cap",
+                "middleware.usage_guard.check_usage_cap_locked",
                 new_callable=AsyncMock,
                 side_effect=Exception("DB connection lost"),
             ),
@@ -63,7 +63,7 @@ class TestCheckCallCap:
                 new_callable=AsyncMock,
             ),
             patch(
-                "middleware.usage_guard.check_usage_cap",
+                "middleware.usage_guard.check_usage_cap_locked",
                 new_callable=AsyncMock,
                 return_value="exceeded",
             ),
@@ -88,7 +88,7 @@ class TestCheckCallCap:
                 new_callable=AsyncMock,
             ),
             patch(
-                "middleware.usage_guard.check_usage_cap",
+                "middleware.usage_guard.check_usage_cap_locked",
                 new_callable=AsyncMock,
                 return_value="ok",
             ),
@@ -110,7 +110,7 @@ class TestCheckCallCap:
                 new_callable=AsyncMock,
             ),
             patch(
-                "middleware.usage_guard.check_usage_cap",
+                "middleware.usage_guard.check_usage_cap_locked",
                 new_callable=AsyncMock,
                 return_value="warning",
             ),
@@ -132,7 +132,7 @@ class TestCheckCallCap:
                 new_callable=AsyncMock,
             ),
             patch(
-                "middleware.usage_guard.check_usage_cap",
+                "middleware.usage_guard.check_usage_cap_locked",
                 new_callable=AsyncMock,
                 return_value="critical",
             ),

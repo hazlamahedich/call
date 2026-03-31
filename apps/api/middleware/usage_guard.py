@@ -4,7 +4,7 @@ from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.session import get_session, set_tenant_context
-from services.usage import check_usage_cap
+from services.usage import check_usage_cap_locked
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ async def check_call_cap(
         return
     try:
         await set_tenant_context(session, org_id)
-        threshold = await check_usage_cap(session, org_id)
+        threshold = await check_usage_cap_locked(session, org_id)
     except Exception as e:
         # DELIBERATE DESIGN DECISION: fail-open on DB errors.
         # If the database is unavailable, we allow requests through rather than

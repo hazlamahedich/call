@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     CLERK_JWKS_URL: str = "https://api.clerk.dev/v1/jwks"
     CLERK_WEBHOOK_SECRET: str = ""
 
+    VAPI_WEBHOOK_SECRET: str = ""
+
     BRANDING_CNAME_TARGET: str = "cname.call.app"
 
     DEFAULT_MONTHLY_CALL_CAP: int = 1000

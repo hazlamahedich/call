@@ -1,6 +1,9 @@
 "use server";
 
+import { auth } from "@clerk/nextjs/server";
 import { Client, ClientSettings } from "@call/types";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export async function createClient(data: {
   orgId: string;
@@ -8,23 +11,34 @@ export async function createClient(data: {
   settings?: ClientSettings;
 }): Promise<{ client: Client | null; error: string | null }> {
   try {
+    const { getToken } = await auth();
+    const token = await getToken();
+    if (!token) return { client: null, error: "Not authenticated" };
+
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/organizations/${data.orgId}/clients`,
+      `${API_URL}/api/organizations/${data.orgId}/clients`,
       {
         method: "POST",
         headers: {
+          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           name: data.name,
           settings: data.settings,
         }),
-      }
+      },
     );
 
     if (!response.ok) {
-      const error = await response.json();
-      return { client: null, error: error.message || "Failed to create client" };
+      let errMsg = "Failed to create client";
+      try {
+        const err = await response.json();
+        errMsg = err.detail?.message || err.message || errMsg;
+      } catch {
+        // non-JSON response
+      }
+      return { client: null, error: errMsg };
     }
 
     const client = await response.json();
@@ -40,20 +54,31 @@ export async function updateClient(data: {
   updates: Partial<Client>;
 }): Promise<{ client: Client | null; error: string | null }> {
   try {
+    const { getToken } = await auth();
+    const token = await getToken();
+    if (!token) return { client: null, error: "Not authenticated" };
+
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/organizations/${data.orgId}/clients/${data.clientId}`,
+      `${API_URL}/api/organizations/${data.orgId}/clients/${data.clientId}`,
       {
         method: "PATCH",
         headers: {
+          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(data.updates),
-      }
+      },
     );
 
     if (!response.ok) {
-      const error = await response.json();
-      return { client: null, error: error.message || "Failed to update client" };
+      let errMsg = "Failed to update client";
+      try {
+        const err = await response.json();
+        errMsg = err.detail?.message || err.message || errMsg;
+      } catch {
+        // non-JSON response
+      }
+      return { client: null, error: errMsg };
     }
 
     const client = await response.json();
@@ -68,16 +93,27 @@ export async function deleteClient(data: {
   clientId: string;
 }): Promise<{ success: boolean; error: string | null }> {
   try {
+    const { getToken } = await auth();
+    const token = await getToken();
+    if (!token) return { success: false, error: "Not authenticated" };
+
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/organizations/${data.orgId}/clients/${data.clientId}`,
+      `${API_URL}/api/organizations/${data.orgId}/clients/${data.clientId}`,
       {
         method: "DELETE",
-      }
+        headers: { Authorization: `Bearer ${token}` },
+      },
     );
 
     if (!response.ok) {
-      const error = await response.json();
-      return { success: false, error: error.message || "Failed to delete client" };
+      let errMsg = "Failed to delete client";
+      try {
+        const err = await response.json();
+        errMsg = err.detail?.message || err.message || errMsg;
+      } catch {
+        // non-JSON response
+      }
+      return { success: false, error: errMsg };
     }
 
     return { success: true, error: null };
@@ -86,15 +122,28 @@ export async function deleteClient(data: {
   }
 }
 
-export async function getClients(orgId: string): Promise<{ clients: Client[]; error: string | null }> {
+export async function getClients(
+  orgId: string,
+): Promise<{ clients: Client[]; error: string | null }> {
   try {
+    const { getToken } = await auth();
+    const token = await getToken();
+    if (!token) return { clients: [], error: "Not authenticated" };
+
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/organizations/${orgId}/clients`
+      `${API_URL}/api/organizations/${orgId}/clients`,
+      { headers: { Authorization: `Bearer ${token}` } },
     );
 
     if (!response.ok) {
-      const error = await response.json();
-      return { clients: [], error: error.message || "Failed to fetch clients" };
+      let errMsg = "Failed to fetch clients";
+      try {
+        const err = await response.json();
+        errMsg = err.detail?.message || err.message || errMsg;
+      } catch {
+        // non-JSON response
+      }
+      return { clients: [], error: errMsg };
     }
 
     const clients = await response.json();

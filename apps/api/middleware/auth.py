@@ -89,7 +89,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
     SKIP_AUTH_PATHS = frozenset(
-        ["/health", "/docs", "/openapi.json", "/webhooks/clerk"]
+        ["/health", "/docs", "/openapi.json", "/webhooks/clerk", "/webhooks/vapi"]
     )
 
     def _should_skip_auth(self, path: str) -> bool:

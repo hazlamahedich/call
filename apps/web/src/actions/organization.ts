@@ -1,6 +1,14 @@
 "use server";
 
-import { Organization, OrgType, PlanType, OrganizationSettings } from "@call/types";
+import { auth } from "@clerk/nextjs/server";
+import {
+  Organization,
+  OrgType,
+  PlanType,
+  OrganizationSettings,
+} from "@call/types";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export async function createOrganization(data: {
   name: string;
@@ -10,17 +18,28 @@ export async function createOrganization(data: {
   settings?: OrganizationSettings;
 }): Promise<{ organization: Organization | null; error: string | null }> {
   try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/organizations`, {
+    const { getToken } = await auth();
+    const token = await getToken();
+    if (!token) return { organization: null, error: "Not authenticated" };
+
+    const response = await fetch(`${API_URL}/api/organizations`, {
       method: "POST",
       headers: {
+        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(data),
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      return { organization: null, error: error.message || "Failed to create organization" };
+      let errMsg = "Failed to create organization";
+      try {
+        const err = await response.json();
+        errMsg = err.detail?.message || err.message || errMsg;
+      } catch {
+        // non-JSON response
+      }
+      return { organization: null, error: errMsg };
     }
 
     const organization = await response.json();
@@ -32,23 +51,31 @@ export async function createOrganization(data: {
 
 export async function updateOrganization(
   orgId: string,
-  data: Partial<Organization>
+  data: Partial<Organization>,
 ): Promise<{ organization: Organization | null; error: string | null }> {
   try {
-    const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/organizations/${orgId}`,
-      {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      }
-    );
+    const { getToken } = await auth();
+    const token = await getToken();
+    if (!token) return { organization: null, error: "Not authenticated" };
+
+    const response = await fetch(`${API_URL}/api/organizations/${orgId}`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+    });
 
     if (!response.ok) {
-      const error = await response.json();
-      return { organization: null, error: error.message || "Failed to update organization" };
+      let errMsg = "Failed to update organization";
+      try {
+        const err = await response.json();
+        errMsg = err.detail?.message || err.message || errMsg;
+      } catch {
+        // non-JSON response
+      }
+      return { organization: null, error: errMsg };
     }
 
     const organization = await response.json();
@@ -59,16 +86,26 @@ export async function updateOrganization(
 }
 
 export async function getOrganization(
-  orgId: string
+  orgId: string,
 ): Promise<{ organization: Organization | null; error: string | null }> {
   try {
-    const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/organizations/${orgId}`
-    );
+    const { getToken } = await auth();
+    const token = await getToken();
+    if (!token) return { organization: null, error: "Not authenticated" };
+
+    const response = await fetch(`${API_URL}/api/organizations/${orgId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
 
     if (!response.ok) {
-      const error = await response.json();
-      return { organization: null, error: error.message || "Failed to fetch organization" };
+      let errMsg = "Failed to fetch organization";
+      try {
+        const err = await response.json();
+        errMsg = err.detail?.message || err.message || errMsg;
+      } catch {
+        // non-JSON response
+      }
+      return { organization: null, error: errMsg };
     }
 
     const organization = await response.json();

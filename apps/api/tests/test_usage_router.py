@@ -149,7 +149,7 @@ class TestPostUsageRecord:
 
         with (
             patch(
-                "middleware.usage_guard.check_usage_cap",
+                "middleware.usage_guard.check_usage_cap_locked",
                 new_callable=AsyncMock,
                 return_value="ok",
             ),
@@ -217,7 +217,7 @@ class TestPostUsageRecord:
 
         with (
             patch(
-                "middleware.usage_guard.check_usage_cap",
+                "middleware.usage_guard.check_usage_cap_locked",
                 new_callable=AsyncMock,
                 return_value="ok",
             ),
@@ -238,7 +238,7 @@ class TestPostUsageRecord:
     ):
         with (
             patch(
-                "middleware.usage_guard.check_usage_cap",
+                "middleware.usage_guard.check_usage_cap_locked",
                 new_callable=AsyncMock,
                 return_value="exceeded",
             ),

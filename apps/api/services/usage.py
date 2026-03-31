@@ -92,6 +92,26 @@ async def get_monthly_usage(session: AsyncSession, org_id: str) -> int:
     return row if row is not None else 0
 
 
+async def get_monthly_usage_locked(session: AsyncSession, org_id: str) -> int:
+    await set_tenant_context(session, org_id)
+    result = await session.execute(
+        text(
+            """
+            SELECT COUNT(*) FROM (
+                SELECT 1 FROM usage_logs
+                WHERE action = 'call_initiated'
+                  AND org_id = :org_id
+                  AND created_at >= date_trunc('month', CURRENT_DATE)
+                FOR UPDATE
+            ) sub
+            """
+        ),
+        {"org_id": org_id},
+    )
+    row = result.scalar()
+    return row if row is not None else 0
+
+
 async def get_usage_summary(session: AsyncSession, org_id: str) -> dict:
     await set_tenant_context(session, org_id)
     plan = await get_org_plan(session, org_id)
@@ -122,10 +142,24 @@ def _compute_threshold(used: int, cap: int) -> str:
 
 
 async def check_usage_cap(
-    session: AsyncSession, org_id: str, plan: str | None = None
+    session: AsyncSession,
+    org_id: str,
+    plan: str | None = None,
 ) -> str:
     await set_tenant_context(session, org_id)
     effective_plan = plan or await get_org_plan(session, org_id)
     used = await get_monthly_usage(session, org_id)
+    cap = await get_monthly_cap(session, org_id, plan=effective_plan)
+    return _compute_threshold(used, cap)
+
+
+async def check_usage_cap_locked(
+    session: AsyncSession,
+    org_id: str,
+    plan: str | None = None,
+) -> str:
+    await set_tenant_context(session, org_id)
+    effective_plan = plan or await get_org_plan(session, org_id)
+    used = await get_monthly_usage_locked(session, org_id)
     cap = await get_monthly_cap(session, org_id, plan=effective_plan)
     return _compute_threshold(used, cap)

@@ -11,6 +11,11 @@ async function clerkSignIn(
   page: Page,
   waitForUrl = "**/dashboard**",
 ): Promise<void> {
+  if (!hasClerkFixtures()) {
+    throw new Error(
+      "Clerk E2E fixtures not configured. Set E2E_CLERK_EMAIL and E2E_CLERK_PASSWORD env vars.",
+    );
+  }
   await page.goto("/sign-in");
   await page.locator('input[name="email"]').fill(E2E_CLERK_EMAIL);
   await page.locator('input[name="password"]').fill(E2E_CLERK_PASSWORD);
@@ -42,5 +47,13 @@ export const test = base.extend<AuthFixtures>({
   },
 });
 
+function clerkSignInHelper(page: Page, targetUrl = "/dashboard") {
+  return clerkSignIn(page, targetUrl);
+}
+
 export { expect } from "@playwright/test";
-export { clerkSignIn, hasClerkFixtures };
+export { clerkSignIn, hasClerkFixtures, clerkSignInHelper };
+
+export function skipWithoutClerkFixtures() {
+  return !hasClerkFixtures();
+}

@@ -48,3 +48,12 @@ export const USAGE_ERROR_CODES = {
 
 export type UsageErrorCode =
   (typeof USAGE_ERROR_CODES)[keyof typeof USAGE_ERROR_CODES];
+
+export const VAPI_ERROR_CODES = {
+  VAPI_SIGNATURE_MISSING: "VAPI_SIGNATURE_MISSING",
+  VAPI_SIGNATURE_INVALID: "VAPI_SIGNATURE_INVALID",
+  VAPI_NOT_CONFIGURED: "VAPI_NOT_CONFIGURED",
+} as const;
+
+export type VapiErrorCode =
+  (typeof VAPI_ERROR_CODES)[keyof typeof VAPI_ERROR_CODES];
