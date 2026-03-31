@@ -20,3 +20,24 @@ export type TelecomCallStatus =
   | "failed"
   | "busy"
   | "no_answer";
+
+export interface TriggerCallRequest {
+  leadId?: number;
+  agentId?: number;
+  phoneNumber: string;
+  campaignId?: number;
+}
+
+export interface TriggerCallResponse {
+  call: {
+    id: number;
+    vapiCallId: string;
+    orgId: string;
+    leadId: number | null;
+    agentId: number | null;
+    campaignId: number | null;
+    status: string;
+    phoneNumber: string;
+    createdAt: string;
+  };
+}

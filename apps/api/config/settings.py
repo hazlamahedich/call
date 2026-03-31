@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     CLERK_WEBHOOK_SECRET: str = ""
 
     VAPI_WEBHOOK_SECRET: str = ""
+    VAPI_API_KEY: str = ""
+    VAPI_BASE_URL: str = "https://api.vapi.ai"
 
     BRANDING_CNAME_TARGET: str = "cname.call.app"
 

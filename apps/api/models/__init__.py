@@ -5,3 +5,4 @@ from models.client import Client
 from models.agent import Agent
 from models.script import Script
 from models.usage_log import UsageLog
+from models.call import Call

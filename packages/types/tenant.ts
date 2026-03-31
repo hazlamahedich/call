@@ -49,10 +49,15 @@ export interface DbCampaign extends TenantScoped {
 
 export interface DbCall extends TenantScoped {
   id: number;
-  leadId: number;
-  campaignId: number;
+  vapiCallId: string;
+  leadId?: number;
+  agentId?: number;
+  campaignId?: number;
   status: "pending" | "in_progress" | "completed" | "failed";
   duration?: number;
+  recordingUrl?: string;
+  phoneNumber: string;
+  endedAt?: string;
 }
 
 export interface DbScript extends TenantScoped {

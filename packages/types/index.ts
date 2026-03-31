@@ -8,3 +8,4 @@ export * from "./tenant";
 export * from "./agent";
 export * from "./onboarding";
 export * from "./usage";
+export * from "./vapi";
