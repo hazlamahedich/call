@@ -31,6 +31,20 @@ TENANT_TABLES = [
 def upgrade() -> None:
     conn = op.get_bind()
 
+    conn.execute(
+        sa.text("""
+        CREATE OR REPLACE FUNCTION set_org_id_from_context()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            IF NEW.org_id IS NULL THEN
+                NEW.org_id = current_setting('app.current_org_id', true);
+            END IF;
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql
+    """)
+    )
+
     for table_name in TENANT_TABLES:
         conn.execute(
             sa.text(f"""

@@ -30,6 +30,9 @@ def upgrade() -> None:
     )
 
     conn.execute(
+        sa.text("ALTER TABLE usage_logs ALTER COLUMN metadata_json DROP DEFAULT")
+    )
+    conn.execute(
         sa.text(
             """
             ALTER TABLE usage_logs

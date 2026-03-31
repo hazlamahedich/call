@@ -12,7 +12,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision: str = "g2h3i4j5k6l7"
-down_revision: Union[str, Sequence[str], None] = "f1g2h3i4j5k6"
+down_revision: Union[str, Sequence[str], None] = "b3c4d5e6f7g8"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -21,29 +21,43 @@ def upgrade() -> None:
     conn = op.get_bind()
 
     conn.execute(
-        sa.text("""
-        CREATE TABLE IF NOT EXISTS calls (
-            id SERIAL PRIMARY KEY,
-            org_id VARCHAR(255) NOT NULL,
-            vapi_call_id VARCHAR(255) NOT NULL UNIQUE,
-            lead_id INTEGER REFERENCES leads(id),
-            agent_id INTEGER REFERENCES agents(id),
-            campaign_id INTEGER,
-            status VARCHAR(50) NOT NULL DEFAULT 'pending',
-            duration INTEGER,
-            recording_url VARCHAR(500),
-            phone_number VARCHAR(20) NOT NULL DEFAULT '',
-            transcript TEXT,
-            ended_at TIMESTAMP,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            soft_delete BOOLEAN DEFAULT FALSE
-        )
-    """)
+        sa.text("ALTER TABLE calls ADD COLUMN IF NOT EXISTS vapi_call_id VARCHAR(255)")
     )
     conn.execute(
         sa.text(
-            "CREATE INDEX IF NOT EXISTS idx_calls_vapi_call_id ON calls(vapi_call_id)"
+            "ALTER TABLE calls ADD COLUMN IF NOT EXISTS lead_id INTEGER REFERENCES leads(id)"
+        )
+    )
+    conn.execute(
+        sa.text(
+            "ALTER TABLE calls ADD COLUMN IF NOT EXISTS agent_id INTEGER REFERENCES agents(id)"
+        )
+    )
+    conn.execute(
+        sa.text("ALTER TABLE calls ADD COLUMN IF NOT EXISTS campaign_id INTEGER")
+    )
+    conn.execute(
+        sa.text(
+            "ALTER TABLE calls ADD COLUMN IF NOT EXISTS status VARCHAR(50) NOT NULL DEFAULT 'pending'"
+        )
+    )
+    conn.execute(sa.text("ALTER TABLE calls ADD COLUMN IF NOT EXISTS duration INTEGER"))
+    conn.execute(
+        sa.text("ALTER TABLE calls ADD COLUMN IF NOT EXISTS recording_url VARCHAR(500)")
+    )
+    conn.execute(
+        sa.text(
+            "ALTER TABLE calls ADD COLUMN IF NOT EXISTS phone_number VARCHAR(20) NOT NULL DEFAULT ''"
+        )
+    )
+    conn.execute(sa.text("ALTER TABLE calls ADD COLUMN IF NOT EXISTS transcript TEXT"))
+    conn.execute(
+        sa.text("ALTER TABLE calls ADD COLUMN IF NOT EXISTS ended_at TIMESTAMP")
+    )
+
+    conn.execute(
+        sa.text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_calls_vapi_call_id ON calls(vapi_call_id)"
         )
     )
     conn.execute(
@@ -51,43 +65,20 @@ def upgrade() -> None:
             "CREATE INDEX IF NOT EXISTS idx_calls_phone_number ON calls(phone_number)"
         )
     )
-    conn.execute(
-        sa.text("CREATE INDEX IF NOT EXISTS idx_calls_org_id ON calls(org_id)")
-    )
-    conn.execute(sa.text("ALTER TABLE calls ENABLE ROW LEVEL SECURITY"))
-    conn.execute(
-        sa.text("""
-        CREATE POLICY tenant_isolation_calls ON calls
-        USING (org_id = current_setting('app.current_org_id', true)::text)
-    """)
-    )
-    conn.execute(
-        sa.text("""
-        CREATE POLICY tenant_insert_calls ON calls
-        FOR INSERT WITH CHECK (org_id = current_setting('app.current_org_id', true)::text)
-    """)
-    )
-    conn.execute(
-        sa.text("""
-        CREATE POLICY platform_admin_bypass_calls ON calls
-        USING (current_setting('app.is_platform_admin', true)::boolean = true)
-    """)
-    )
-    conn.execute(
-        sa.text("""
-        CREATE POLICY platform_admin_bypass_insert_calls ON calls
-        FOR INSERT WITH CHECK (current_setting('app.is_platform_admin', true)::boolean = true)
-    """)
-    )
 
 
 def downgrade() -> None:
     conn = op.get_bind()
 
-    conn.execute(
-        sa.text("DROP POLICY IF EXISTS platform_admin_bypass_insert_calls ON calls")
-    )
-    conn.execute(sa.text("DROP POLICY IF EXISTS platform_admin_bypass_calls ON calls"))
-    conn.execute(sa.text("DROP POLICY IF EXISTS tenant_insert_calls ON calls"))
-    conn.execute(sa.text("DROP POLICY IF EXISTS tenant_isolation_calls ON calls"))
-    conn.execute(sa.text("DROP TABLE IF EXISTS calls"))
+    conn.execute(sa.text("DROP INDEX IF EXISTS idx_calls_phone_number"))
+    conn.execute(sa.text("DROP INDEX IF EXISTS idx_calls_vapi_call_id"))
+    conn.execute(sa.text("ALTER TABLE calls DROP COLUMN IF EXISTS ended_at"))
+    conn.execute(sa.text("ALTER TABLE calls DROP COLUMN IF EXISTS transcript"))
+    conn.execute(sa.text("ALTER TABLE calls DROP COLUMN IF EXISTS phone_number"))
+    conn.execute(sa.text("ALTER TABLE calls DROP COLUMN IF EXISTS recording_url"))
+    conn.execute(sa.text("ALTER TABLE calls DROP COLUMN IF EXISTS duration"))
+    conn.execute(sa.text("ALTER TABLE calls DROP COLUMN IF EXISTS status"))
+    conn.execute(sa.text("ALTER TABLE calls DROP COLUMN IF EXISTS campaign_id"))
+    conn.execute(sa.text("ALTER TABLE calls DROP COLUMN IF EXISTS agent_id"))
+    conn.execute(sa.text("ALTER TABLE calls DROP COLUMN IF EXISTS lead_id"))
+    conn.execute(sa.text("ALTER TABLE calls DROP COLUMN IF EXISTS vapi_call_id"))
