@@ -7,6 +7,11 @@ from database.session import get_session
 from middleware.vapi_auth import verify_vapi_signature
 from schemas.call import VapiWebhookPayload
 from services.vapi import handle_call_started, handle_call_ended, handle_call_failed
+from services.transcription import (
+    handle_transcript_event,
+    handle_speech_start,
+    handle_speech_end,
+)
 
 router = APIRouter(prefix="/webhooks/vapi", tags=["Vapi Webhooks"])
 logger = logging.getLogger(__name__)
@@ -117,6 +122,26 @@ async def handle_call_events(
             await handle_call_failed(
                 session, vapi_call_id, org_id=org_id, error_message=error_str
             )
+        elif event_type == "transcript":
+            transcript_data = message.get("transcript", {})
+            await handle_transcript_event(
+                session,
+                vapi_call_id,
+                org_id,
+                transcript_data={"transcript": transcript_data, **message},
+            )
+        elif event_type == "speech-start":
+            speech_data = message.get("speech", {})
+            if not isinstance(speech_data, dict):
+                speech_data = {}
+            speech_data.setdefault("speaker", message.get("speaker", "lead"))
+            await handle_speech_start(session, vapi_call_id, org_id, speech_data)
+        elif event_type == "speech-end":
+            speech_data = message.get("speech", {})
+            if not isinstance(speech_data, dict):
+                speech_data = {}
+            speech_data.setdefault("speaker", message.get("speaker", "lead"))
+            await handle_speech_end(session, vapi_call_id, org_id, speech_data)
         else:
             logger.info(
                 "Unhandled Vapi event type",

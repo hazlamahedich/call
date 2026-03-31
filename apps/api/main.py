@@ -10,6 +10,7 @@ from routers import (
     calls,
     webhooks_vapi,
 )
+from routers.ws_transcript import router as ws_transcript_router
 from middleware.auth import AuthMiddleware
 from config.settings import settings
 
@@ -36,3 +37,4 @@ app.include_router(onboarding.router, tags=["Onboarding"])
 app.include_router(usage.router, tags=["Usage"])
 app.include_router(calls.router, tags=["Calls"])
 app.include_router(webhooks_vapi.router, tags=["Vapi Webhooks"])
+app.include_router(ws_transcript_router, tags=["WebSocket Transcription"])

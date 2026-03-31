@@ -97,6 +97,112 @@ class CallFactory(_AutoCounter):
         return cls.build(status="failed", **overrides)
 
 
+class TranscriptEntryFactory(_AutoCounter):
+    @classmethod
+    def build(cls, **overrides) -> dict:
+        cls._counter += 1
+        defaults = {
+            "id": cls._counter,
+            "org_id": "org_test_001",
+            "call_id": 1,
+            "vapi_call_id": f"vci_{cls._counter}",
+            "role": "lead",
+            "text": f"Hello world {cls._counter}",
+            "start_time": 0.0,
+            "end_time": 1.5,
+            "confidence": 0.95,
+            "words_json": None,
+            "received_at": datetime.now(timezone.utc).isoformat(),
+            "vapi_event_timestamp": None,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "soft_delete": False,
+        }
+        defaults.update(overrides)
+        return defaults
+
+
+class VoiceEventFactory(_AutoCounter):
+    @classmethod
+    def build(cls, **overrides) -> dict:
+        cls._counter += 1
+        defaults = {
+            "id": cls._counter,
+            "org_id": "org_test_001",
+            "call_id": 1,
+            "vapi_call_id": f"vci_{cls._counter}",
+            "event_type": "speech_start",
+            "speaker": "lead",
+            "event_metadata": None,
+            "received_at": datetime.now(timezone.utc).isoformat(),
+            "vapi_event_timestamp": None,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "soft_delete": False,
+        }
+        defaults.update(overrides)
+        return defaults
+
+
+class TranscriptWebhookFactory(_AutoCounter):
+    @classmethod
+    def _base(
+        cls,
+        event_type: str,
+        call_overrides: Optional[dict] = None,
+        metadata_overrides: Optional[dict] = None,
+        extra_message: Optional[dict] = None,
+    ) -> dict:
+        cls._counter += 1
+        call_data: dict = {"id": f"call_wh_{cls._counter}"}
+        if call_overrides:
+            call_data.update(call_overrides)
+
+        metadata: dict = {"org_id": "org_test_001"}
+        if metadata_overrides:
+            metadata.update(metadata_overrides)
+
+        message: dict = {
+            "type": event_type,
+            "call": call_data,
+            "metadata": metadata,
+        }
+        if extra_message:
+            message.update(extra_message)
+
+        return {"message": message}
+
+    @classmethod
+    def transcript(
+        cls,
+        role: str = "user",
+        text: str = "Hello, I am interested",
+        words: Optional[list] = None,
+        **extra,
+    ) -> dict:
+        transcript_obj: dict = {"role": role, "text": text}
+        if words:
+            transcript_obj["words"] = words
+        return cls._base(
+            "transcript",
+            extra_message={"transcript": transcript_obj},
+        )
+
+    @classmethod
+    def speech_start(cls, speaker: str = "lead", **extra) -> dict:
+        return cls._base(
+            "speech-start",
+            extra_message={"speaker": speaker},
+        )
+
+    @classmethod
+    def speech_end(cls, speaker: str = "lead", **extra) -> dict:
+        return cls._base(
+            "speech-end",
+            extra_message={"speaker": speaker},
+        )
+
+
 class WebhookPayloadFactory(_AutoCounter):
     @classmethod
     def _base(

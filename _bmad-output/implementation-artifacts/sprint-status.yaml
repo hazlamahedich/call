@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-03-17T17:46:51+08:00
-last_updated: 2026-03-31T12:29:29+08:00
+last_updated: 2026-03-31T22:01:22+08:00
 project: call
 project_key: NOKEY
 tracking_system: file-system
@@ -53,7 +53,7 @@ development_status:
   epic-1-retrospective: done
   epic-2: in-progress
   2-1-vapi-telephony-bridge-webhook-integration: review
-  2-2-real-time-audio-stream-transcription-pipeline: backlog
+  2-2-real-time-audio-stream-transcription-pipeline: review
   2-3-low-latency-tts-provider-fallback-logic: backlog
   2-4-asynchronous-telemetry-sidecars-for-voice-events: backlog
   2-5-pulse-maker-visual-visualizer-component: backlog

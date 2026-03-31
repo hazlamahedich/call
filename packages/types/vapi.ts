@@ -41,3 +41,37 @@ export interface VapiCallFailedPayload {
     [key: string]: unknown;
   };
 }
+
+export interface VapiTranscriptWord {
+  word: string;
+  start: number;
+  end: number;
+  confidence: number;
+}
+
+export interface VapiTranscriptEvent {
+  message: {
+    type: "transcript";
+    call: {
+      id: string;
+      [key: string]: unknown;
+    };
+    transcript: {
+      role: "assistant" | "user";
+      text: string;
+      words?: VapiTranscriptWord[];
+    };
+    [key: string]: unknown;
+  };
+}
+
+export interface VapiSpeechEvent {
+  message: {
+    type: "speech-start" | "speech-end";
+    call: {
+      id: string;
+      [key: string]: unknown;
+    };
+    [key: string]: unknown;
+  };
+}

@@ -189,7 +189,45 @@ async def handle_call_ended(
         if not row:
             raise ValueError(f"Call not found for vapi_call_id: {vapi_call_id}")
 
-    return _row_to_call(row)
+    call = _row_to_call(row)
+
+    if call.id:
+        try:
+            te_result = await session.execute(
+                text(
+                    "SELECT role, text FROM transcript_entries "
+                    "WHERE call_id = :cid ORDER BY start_time ASC, id ASC"
+                ),
+                {"cid": call.id},
+            )
+            entries = te_result.fetchall()
+            if entries:
+                role_prefixes = {
+                    "assistant-ai": "[AI]",
+                    "assistant-human": "[Human]",
+                    "lead": "[Lead]",
+                }
+                lines = []
+                for entry in entries:
+                    prefix = role_prefixes.get(entry[0], "[Unknown]")
+                    lines.append(f"{prefix}: {entry[1]}")
+                transcript_text = "\n".join(lines)
+                await session.execute(
+                    text("UPDATE calls SET transcript = :transcript WHERE id = :cid"),
+                    {"transcript": transcript_text, "cid": call.id},
+                )
+                call.transcript = transcript_text
+        except Exception as e:
+            logger.error(
+                "Transcript aggregation error",
+                extra={
+                    "code": "TRANSCRIPT_AGGREGATION_ERROR",
+                    "call_id": call.id,
+                    "error": str(e),
+                },
+            )
+
+    return call
 
 
 async def handle_call_failed(

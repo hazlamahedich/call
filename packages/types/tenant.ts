@@ -83,3 +83,33 @@ export interface DbUsageLog extends TenantScoped {
   action: string;
   metadataJson?: string;
 }
+
+export interface DbTranscriptEntry extends TenantScoped {
+  id: number;
+  callId: number;
+  vapiCallId: string;
+  role: "assistant-ai" | "assistant-human" | "lead";
+  text: string;
+  startTime: number;
+  endTime: number;
+  confidence: number | null;
+  wordsJson: string | null;
+  receivedAt: string;
+  vapiEventTimestamp: number | null;
+}
+
+export interface DbVoiceEvent extends TenantScoped {
+  id: number;
+  callId: number;
+  vapiCallId: string;
+  eventType:
+    | "speech_start"
+    | "speech_end"
+    | "interruption"
+    | "silence"
+    | "noise";
+  speaker: "ai" | "lead" | null;
+  eventMetadata: string | null;
+  receivedAt: string;
+  vapiEventTimestamp: number | null;
+}

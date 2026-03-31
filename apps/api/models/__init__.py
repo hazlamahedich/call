@@ -6,3 +6,5 @@ from models.agent import Agent
 from models.script import Script
 from models.usage_log import UsageLog
 from models.call import Call
+from models.transcript import TranscriptEntry
+from models.voice_event import VoiceEvent
