@@ -65,4 +65,76 @@ describe("[1.7-AC5][UsageProgressBar] — Visual progress bar with threshold col
     const results = await axe(container);
     expect(results.violations).toHaveLength(0);
   });
+
+  it("[1.7-UNIT-048b][P1] Given reducedMotion=true, When rendered, Then no CSS transition duration in styles", () => {
+    const { container } = render(
+      <UsageProgressBar percentage={60} reducedMotion={true} />,
+    );
+    const fill = container.querySelector("[style*='width']");
+    expect(fill?.className).not.toContain("transition-all");
+    expect(fill?.className).not.toContain("duration-500");
+  });
+
+  it("[1.7-UNIT-048c][P1] Given reducedMotion=true with exceeded threshold, When rendered, Then destructive color shown without transition", () => {
+    const { container } = render(
+      <UsageProgressBar percentage={100} reducedMotion={true} />,
+    );
+    const fill = container.querySelector(".bg-destructive");
+    expect(fill).toBeInTheDocument();
+    expect(fill?.className).not.toContain("transition-all");
+  });
+});
+
+describe("[1.7-AC5][UsageProgressBar] — Color transition boundaries", () => {
+  it("[1.7-UNIT-049][P0] Given percentage=79, When rendered, Then ok (emerald) color class is applied", () => {
+    const { container } = render(<UsageProgressBar percentage={79} />);
+    const fill = container.querySelector(".bg-neon-emerald");
+    expect(fill).toBeInTheDocument();
+  });
+
+  it("[1.7-UNIT-049b][P0] Given percentage=80, When rendered, Then warning (blue) color class is applied", () => {
+    const { container } = render(<UsageProgressBar percentage={80} />);
+    const fill = container.querySelector(".bg-neon-blue");
+    expect(fill).toBeInTheDocument();
+  });
+
+  it("[1.7-UNIT-049c][P0] Given percentage=94, When rendered, Then warning (blue) color class is applied", () => {
+    const { container } = render(<UsageProgressBar percentage={94} />);
+    const fill = container.querySelector(".bg-neon-blue");
+    expect(fill).toBeInTheDocument();
+  });
+
+  it("[1.7-UNIT-049d][P0] Given percentage=95, When rendered, Then critical (destructive) color class is applied", () => {
+    const { container } = render(<UsageProgressBar percentage={95} />);
+    const fill = container.querySelector(".bg-destructive");
+    expect(fill).toBeInTheDocument();
+  });
+
+  it("[1.7-UNIT-049e][P0] Given percentage=100, When rendered, Then exceeded (destructive) color class is applied", () => {
+    const { container } = render(<UsageProgressBar percentage={100} />);
+    const fill = container.querySelector(".bg-destructive");
+    expect(fill).toBeInTheDocument();
+  });
+
+  it("[1.7-UNIT-049f][P1] Given percentage=0, When rendered, Then ok (emerald) color class is applied", () => {
+    const { container } = render(<UsageProgressBar percentage={0} />);
+    const fill = container.querySelector(".bg-neon-emerald");
+    expect(fill).toBeInTheDocument();
+  });
+
+  it("[1.7-UNIT-049g][P1] Given NaN percentage, When rendered, Then falls back to 0% with ok color", () => {
+    const { container } = render(<UsageProgressBar percentage={NaN} />);
+    const bar = screen.getByRole("progressbar");
+    expect(bar).toHaveAttribute("aria-valuenow", "0");
+    const fill = container.querySelector(".bg-neon-emerald");
+    expect(fill).toBeInTheDocument();
+  });
+
+  it("[1.7-UNIT-049h][P1] Given Infinity percentage, When rendered, Then falls back to 0% with ok color", () => {
+    const { container } = render(<UsageProgressBar percentage={Infinity} />);
+    const bar = screen.getByRole("progressbar");
+    expect(bar).toHaveAttribute("aria-valuenow", "0");
+    const fill = container.querySelector(".bg-neon-emerald");
+    expect(fill).toBeInTheDocument();
+  });
 });

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { axe } from "vitest-axe";
 import { UsageThresholdAlert } from "../UsageThresholdAlert";
+import { createUsageSummaryAtThreshold } from "@/test/factories/usage";
 
 describe("[1.7-AC2,AC3][UsageThresholdAlert] — Conditional threshold alert", () => {
   it("[1.7-UNIT-049][P0] Given threshold=ok, When rendered, Then nothing is displayed", () => {

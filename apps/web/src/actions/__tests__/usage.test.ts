@@ -1,19 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createUsageSummary } from "@/test/factories/usage";
 
-const mockFetch = vi.fn();
 const mockGetToken = vi.fn();
 
 vi.mock("@clerk/nextjs/server", () => ({
   auth: () => ({ getToken: mockGetToken }),
 }));
 
-global.fetch = mockFetch;
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
 describe("[1.7][usage.ts] — Server actions for usage API", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.stubGlobal("fetch", vi.fn());
     mockGetToken.mockResolvedValue("test-token");
   });
 
@@ -27,17 +24,11 @@ describe("[1.7][usage.ts] — Server actions for usage API", () => {
     });
 
     it("[1.7-UNIT-091][P0] Given valid token, When API returns 200, Then returns usage data", async () => {
-      const summary = {
-        used: 500,
-        cap: 1000,
-        percentage: 50.0,
-        plan: "free",
-        threshold: "ok",
-      };
-      mockFetch.mockResolvedValue({
+      const summary = createUsageSummary();
+      vi.mocked(global.fetch).mockResolvedValue({
         ok: true,
         json: () => Promise.resolve(summary),
-      });
+      } as Response);
       const { getUsageSummary } = await import("@/actions/usage");
       const result = await getUsageSummary();
       expect(result.data).toEqual(summary);
@@ -45,13 +36,13 @@ describe("[1.7][usage.ts] — Server actions for usage API", () => {
     });
 
     it("[1.7-UNIT-092][P0] Given API returns 403, When called, Then returns error message", async () => {
-      mockFetch.mockResolvedValue({
+      vi.mocked(global.fetch).mockResolvedValue({
         ok: false,
         json: () =>
           Promise.resolve({
             detail: { message: "Monthly call limit reached" },
           }),
-      });
+      } as Response);
       const { getUsageSummary } = await import("@/actions/usage");
       const result = await getUsageSummary();
       expect(result.data).toBeNull();
@@ -59,10 +50,10 @@ describe("[1.7][usage.ts] — Server actions for usage API", () => {
     });
 
     it("[1.7-UNIT-093][P1] Given API returns non-JSON error, When called, Then returns fallback error", async () => {
-      mockFetch.mockResolvedValue({
+      vi.mocked(global.fetch).mockResolvedValue({
         ok: false,
         json: () => Promise.reject(new Error("Not JSON")),
-      });
+      } as Response);
       const { getUsageSummary } = await import("@/actions/usage");
       const result = await getUsageSummary();
       expect(result.data).toBeNull();
@@ -70,7 +61,7 @@ describe("[1.7][usage.ts] — Server actions for usage API", () => {
     });
 
     it("[1.7-UNIT-094][P1] Given fetch throws, When called, Then returns error message", async () => {
-      mockFetch.mockRejectedValue(new Error("Network error"));
+      vi.mocked(global.fetch).mockRejectedValue(new Error("Network error"));
       const { getUsageSummary } = await import("@/actions/usage");
       const result = await getUsageSummary();
       expect(result.data).toBeNull();
@@ -95,10 +86,10 @@ describe("[1.7][usage.ts] — Server actions for usage API", () => {
       const logData = {
         usageLog: { id: 1, resourceType: "call", action: "call_initiated" },
       };
-      mockFetch.mockResolvedValue({
+      vi.mocked(global.fetch).mockResolvedValue({
         ok: true,
         json: () => Promise.resolve(logData),
-      });
+      } as Response);
       const { recordUsage } = await import("@/actions/usage");
       const result = await recordUsage({
         resourceType: "call",
@@ -110,7 +101,7 @@ describe("[1.7][usage.ts] — Server actions for usage API", () => {
     });
 
     it("[1.7-UNIT-097][P1] Given API returns 403 USAGE_LIMIT_EXCEEDED, When called, Then returns limit error", async () => {
-      mockFetch.mockResolvedValue({
+      vi.mocked(global.fetch).mockResolvedValue({
         ok: false,
         json: () =>
           Promise.resolve({
@@ -119,7 +110,7 @@ describe("[1.7][usage.ts] — Server actions for usage API", () => {
                 "Monthly call limit has been reached. Upgrade your plan.",
             },
           }),
-      });
+      } as Response);
       const { recordUsage } = await import("@/actions/usage");
       const result = await recordUsage({
         resourceType: "call",
@@ -142,10 +133,10 @@ describe("[1.7][usage.ts] — Server actions for usage API", () => {
 
     it("[1.7-UNIT-099][P0] Given valid token, When API returns 200, Then returns threshold data", async () => {
       const checkData = { threshold: "warning", used: 850, cap: 1000 };
-      mockFetch.mockResolvedValue({
+      vi.mocked(global.fetch).mockResolvedValue({
         ok: true,
         json: () => Promise.resolve(checkData),
-      });
+      } as Response);
       const { checkUsageCap } = await import("@/actions/usage");
       const result = await checkUsageCap();
       expect(result.data).toEqual(checkData);
@@ -153,13 +144,13 @@ describe("[1.7][usage.ts] — Server actions for usage API", () => {
     });
 
     it("[1.7-UNIT-100][P1] Given API returns error, When called, Then returns error message", async () => {
-      mockFetch.mockResolvedValue({
+      vi.mocked(global.fetch).mockResolvedValue({
         ok: false,
         json: () =>
           Promise.resolve({
             detail: { message: "Failed to check usage cap" },
           }),
-      });
+      } as Response);
       const { checkUsageCap } = await import("@/actions/usage");
       const result = await checkUsageCap();
       expect(result.data).toBeNull();

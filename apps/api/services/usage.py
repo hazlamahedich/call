@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import logging
 from typing import Optional
 
 from sqlalchemy import text
@@ -9,6 +11,8 @@ from config.settings import settings
 from database.session import set_tenant_context
 from models.usage_log import UsageLog
 from services.base import TenantService
+
+logger = logging.getLogger(__name__)
 
 _usage_service = TenantService[UsageLog](UsageLog)
 
@@ -25,7 +29,22 @@ async def get_org_plan(session: AsyncSession, org_id: str) -> str:
     return "free"
 
 
-async def get_monthly_cap(org_id: str, plan: str | None = None) -> int:
+async def get_tenant_cap_override(session: AsyncSession, org_id: str) -> Optional[int]:
+    await set_tenant_context(session, org_id)
+    result = await session.execute(
+        text("SELECT monthly_call_cap FROM agencies WHERE org_id = :org_id LIMIT 1"),
+        {"org_id": org_id},
+    )
+    row = result.scalar()
+    return row if row and row > 0 else None
+
+
+async def get_monthly_cap(
+    session: AsyncSession, org_id: str, plan: str | None = None
+) -> int:
+    tenant_override = await get_tenant_cap_override(session, org_id)
+    if tenant_override is not None:
+        return tenant_override
     effective_plan = plan or "free"
     return settings.PLAN_CALL_CAPS.get(
         effective_plan, settings.DEFAULT_MONTHLY_CALL_CAP
@@ -41,12 +60,16 @@ async def record_usage(
     metadata: str = "{}",
 ) -> UsageLog:
     await set_tenant_context(session, org_id)
+    try:
+        parsed_metadata = json.loads(metadata) if metadata else {}
+    except json.JSONDecodeError:
+        parsed_metadata = {}
     log = UsageLog.model_validate(
         {
             "resourceType": resource_type,
             "resourceId": resource_id,
             "action": action,
-            "metadataJson": metadata,
+            "metadataJson": parsed_metadata,
         }
     )
     return await _usage_service.create(session, log)
@@ -73,7 +96,7 @@ async def get_usage_summary(session: AsyncSession, org_id: str) -> dict:
     await set_tenant_context(session, org_id)
     plan = await get_org_plan(session, org_id)
     used = await get_monthly_usage(session, org_id)
-    cap = await get_monthly_cap(org_id, plan=plan)
+    cap = await get_monthly_cap(session, org_id, plan=plan)
     percentage = round((used / cap) * 100, 2) if cap > 0 else 0.0
     threshold = _compute_threshold(used, cap)
     return {
@@ -104,5 +127,5 @@ async def check_usage_cap(
     await set_tenant_context(session, org_id)
     effective_plan = plan or await get_org_plan(session, org_id)
     used = await get_monthly_usage(session, org_id)
-    cap = await get_monthly_cap(org_id, plan=effective_plan)
+    cap = await get_monthly_cap(session, org_id, plan=effective_plan)
     return _compute_threshold(used, cap)

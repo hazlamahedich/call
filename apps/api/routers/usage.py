@@ -123,7 +123,7 @@ async def check(
         plan = await get_org_plan(session, org_id)
         threshold = await check_usage_cap(session, org_id, plan=plan)
         used = await get_monthly_usage(session, org_id)
-        cap = await get_monthly_cap(org_id, plan=plan)
+        cap = await get_monthly_cap(session, org_id, plan=plan)
         return {"threshold": threshold, "used": used, "cap": cap}
     except HTTPException:
         raise

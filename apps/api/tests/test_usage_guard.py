@@ -17,7 +17,9 @@ class TestCheckCallCap:
     """[1.7-UNIT-061..066] Usage guard middleware unit tests"""
 
     @pytest.mark.asyncio
-    async def test_1_7_unit_061_returns_none_when_no_org_id(self):
+    async def test_1_7_unit_061_P1_given_no_org_id_when_check_call_cap_then_returns_none(
+        self,
+    ):
         request = MagicMock()
         request.state.org_id = None
         session = AsyncMock()
@@ -26,7 +28,9 @@ class TestCheckCallCap:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_1_7_unit_062_returns_none_on_db_error(self):
+    async def test_1_7_unit_062_P1_given_db_error_when_check_call_cap_then_returns_none(
+        self,
+    ):
         request = MagicMock()
         request.state.org_id = "org_123"
         session = AsyncMock()
@@ -46,7 +50,9 @@ class TestCheckCallCap:
             assert result is None
 
     @pytest.mark.asyncio
-    async def test_1_7_unit_063_raises_403_when_exceeded(self):
+    async def test_1_7_unit_063_P0_given_exceeded_cap_when_check_call_cap_then_raises_403(
+        self,
+    ):
         request = MagicMock()
         request.state.org_id = "org_123"
         session = AsyncMock()
@@ -69,7 +75,9 @@ class TestCheckCallCap:
             assert exc_info.value.detail["code"] == "USAGE_LIMIT_EXCEEDED"
 
     @pytest.mark.asyncio
-    async def test_1_7_unit_064_returns_none_when_ok(self):
+    async def test_1_7_unit_064_P0_given_ok_status_when_check_call_cap_then_returns_none(
+        self,
+    ):
         request = MagicMock()
         request.state.org_id = "org_123"
         session = AsyncMock()
@@ -89,7 +97,9 @@ class TestCheckCallCap:
             assert result is None
 
     @pytest.mark.asyncio
-    async def test_1_7_unit_065_returns_none_when_warning(self):
+    async def test_1_7_unit_065_P1_given_warning_status_when_check_call_cap_then_returns_none(
+        self,
+    ):
         request = MagicMock()
         request.state.org_id = "org_123"
         session = AsyncMock()
@@ -109,7 +119,9 @@ class TestCheckCallCap:
             assert result is None
 
     @pytest.mark.asyncio
-    async def test_1_7_unit_066_returns_none_when_critical(self):
+    async def test_1_7_unit_066_P1_given_critical_status_when_check_call_cap_then_returns_none(
+        self,
+    ):
         request = MagicMock()
         request.state.org_id = "org_123"
         session = AsyncMock()

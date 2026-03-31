@@ -1,4 +1,5 @@
 from typing import Generic, List, Optional, TypeVar, Type
+import json
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -72,8 +73,12 @@ class TenantService(Generic[T]):
             if col_name in _BASE_FIELDS or col_name in _SQLALCHEMY_INTERNALS:
                 continue
             columns.append(col_name)
-            values.append(f":p{idx}")
-            params[f"p{idx}"] = col_value
+            if isinstance(col_value, dict):
+                values.append(f"CAST(:p{idx} AS jsonb)")
+                params[f"p{idx}"] = json.dumps(col_value)
+            else:
+                values.append(f":p{idx}")
+                params[f"p{idx}"] = col_value
 
         if not columns:
             raise TenantContextError(

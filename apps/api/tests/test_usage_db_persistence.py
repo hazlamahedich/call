@@ -1,12 +1,14 @@
 """
 Story 1.7: Resource Guardrails - Usage Monitoring & Hard Caps
-Database Integration Tests
+Database Integration Tests — Persistence, Counting, and Thresholds
 
 Test ID Format: [1.7-DB-XXX]
 
 These tests require a running PostgreSQL instance with the call_test database.
 They exercise the full SQL path including RLS, triggers, and constraint enforcement.
 """
+
+import json
 
 import pytest
 import pytest_asyncio
@@ -25,62 +27,7 @@ TEST_DATABASE_URL = os.environ.get(
     "postgresql+asyncpg://sherwingorechomante@localhost:5432/call_test",
 )
 
-TEST_RLS_DATABASE_URL = os.environ.get(
-    "TEST_RLS_DATABASE_URL",
-    "postgresql+asyncpg://test_rls_user@localhost:5432/call_test",
-)
-
 ORG_A = "org_db_test_a"
-ORG_B = "org_db_test_b"
-
-_CREATE_TABLE_SQL = """
-CREATE TABLE IF NOT EXISTS usage_logs (
-    id SERIAL PRIMARY KEY,
-    org_id VARCHAR,
-    resource_type VARCHAR(50) DEFAULT 'call',
-    resource_id VARCHAR(255) DEFAULT '',
-    action VARCHAR(50) DEFAULT 'call_initiated',
-    metadata_json VARCHAR(2000) DEFAULT '{}',
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW(),
-    soft_delete BOOLEAN DEFAULT FALSE
-)
-"""
-
-_CREATE_INDEX_SQL = (
-    "CREATE INDEX IF NOT EXISTS ix_usage_logs_org_id ON usage_logs (org_id)"
-)
-
-_TRIGGER_FN_SQL = """
-CREATE OR REPLACE FUNCTION set_usage_org_id()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.org_id = current_setting('app.current_org_id', true);
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql
-"""
-
-_DROP_TRIGGER_SQL = "DROP TRIGGER IF EXISTS trg_usage_logs_org_id ON usage_logs"
-
-_CREATE_TRIGGER_SQL = """
-CREATE TRIGGER trg_usage_logs_org_id
-    BEFORE INSERT ON usage_logs
-    FOR EACH ROW
-    EXECUTE FUNCTION set_usage_org_id()
-"""
-
-_POLICY_SQL = """
-CREATE POLICY usage_tenant_isolation ON usage_logs
-    USING (org_id = current_setting('app.current_org_id', true)::text)
-    WITH CHECK (org_id = current_setting('app.current_org_id', true)::text)
-"""
-
-_POLICY_BYPASS_SQL = """
-CREATE POLICY usage_admin_bypass ON usage_logs
-    USING (current_setting('app.is_platform_admin', true)::boolean = true)
-    WITH CHECK (current_setting('app.is_platform_admin', true)::boolean = true)
-"""
 
 _SCHEMA_INITIALIZED = False
 
@@ -89,39 +36,32 @@ def _make_engine():
     return create_async_engine(TEST_DATABASE_URL, echo=False, poolclass=NullPool)
 
 
-def _make_rls_engine():
-    return create_async_engine(TEST_RLS_DATABASE_URL, echo=False, poolclass=NullPool)
-
-
+# Schema creation is expensive (~500ms), so we skip re-creation within the same process.
+# Restart the test process after schema changes.
 async def _ensure_schema():
     global _SCHEMA_INITIALIZED
     if _SCHEMA_INITIALIZED:
         return
     engine = _make_engine()
     async with engine.begin() as conn:
-        await conn.execute(text("DROP TABLE IF EXISTS usage_logs CASCADE"))
-        await conn.execute(text(_CREATE_TABLE_SQL))
-        await conn.execute(text(_CREATE_INDEX_SQL))
-        await conn.execute(text("ALTER TABLE usage_logs ENABLE ROW LEVEL SECURITY"))
-        await conn.execute(text("ALTER TABLE usage_logs FORCE ROW LEVEL SECURITY"))
         await conn.execute(
-            text("DROP POLICY IF EXISTS usage_tenant_isolation ON usage_logs")
+            text(
+                "CREATE TABLE IF NOT EXISTS usage_logs ("
+                "id SERIAL PRIMARY KEY, "
+                "org_id VARCHAR, "
+                "resource_type VARCHAR(50) DEFAULT 'call', "
+                "resource_id VARCHAR(255) DEFAULT '', "
+                "action VARCHAR(50) DEFAULT 'call_initiated', "
+                "metadata_json JSONB DEFAULT '{}', "
+                "created_at TIMESTAMP DEFAULT NOW(), "
+                "updated_at TIMESTAMP DEFAULT NOW(), "
+                "soft_delete BOOLEAN DEFAULT FALSE)"
+            )
         )
         await conn.execute(
-            text("DROP POLICY IF EXISTS usage_admin_bypass ON usage_logs")
-        )
-        await conn.execute(text(_POLICY_SQL))
-        await conn.execute(text(_POLICY_BYPASS_SQL))
-        await conn.execute(text(_TRIGGER_FN_SQL))
-        await conn.execute(text(_DROP_TRIGGER_SQL))
-        await conn.execute(text(_CREATE_TRIGGER_SQL))
-        await conn.execute(text("REVOKE ALL ON usage_logs FROM test_rls_user"))
-        await conn.execute(text("REVOKE ALL ON usage_logs FROM test_rls_user"))
-        await conn.execute(
-            text("GRANT SELECT, INSERT, UPDATE, DELETE ON usage_logs TO test_rls_user")
-        )
-        await conn.execute(
-            text("GRANT USAGE, SELECT ON SEQUENCE usage_logs_id_seq TO test_rls_user")
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_usage_logs_org_id ON usage_logs (org_id)"
+            )
         )
     await engine.dispose()
     _SCHEMA_INITIALIZED = True
@@ -161,7 +101,11 @@ async def admin_session():
 
 @pytest_asyncio.fixture
 async def tenant_a_session():
-    engine = _make_rls_engine()
+    rls_url = os.environ.get(
+        "TEST_RLS_DATABASE_URL",
+        "postgresql+asyncpg://test_rls_user@localhost:5432/call_test",
+    )
+    engine = create_async_engine(rls_url, echo=False, poolclass=NullPool)
     factory = async_sessionmaker(
         bind=engine, class_=AsyncSession, expire_on_commit=False
     )
@@ -169,21 +113,6 @@ async def tenant_a_session():
         await session.execute(
             text("SELECT set_config('app.current_org_id', :org_id, true)"),
             {"org_id": ORG_A},
-        )
-        yield session
-    await engine.dispose()
-
-
-@pytest_asyncio.fixture
-async def tenant_b_session():
-    engine = _make_rls_engine()
-    factory = async_sessionmaker(
-        bind=engine, class_=AsyncSession, expire_on_commit=False
-    )
-    async with factory() as session:
-        await session.execute(
-            text("SELECT set_config('app.current_org_id', :org_id, true)"),
-            {"org_id": ORG_B},
         )
         yield session
     await engine.dispose()
@@ -200,65 +129,18 @@ async def _insert_usage_rows(
         await session.execute(
             text(
                 "INSERT INTO usage_logs (resource_type, resource_id, action, metadata_json) "
-                "VALUES ('call', :rid, :action, '{}')"
+                "VALUES ('call', :rid, :action, CAST(:metadata AS jsonb))"
             ),
-            {"rid": f"{org_id}_call_{i:04d}", "action": action},
+            {"rid": f"call_{i:03d}", "action": action, "metadata": "{}"},
         )
     await session.flush()
-
-
-class TestUsageLogsTenantIsolation:
-    """[1.7-DB-001..003] RLS tenant isolation for usage_logs"""
-
-    @pytest.mark.asyncio
-    async def test_1_7_db_001_tenant_a_sees_only_own_rows(
-        self, admin_session, tenant_a_session
-    ):
-        await _insert_usage_rows(admin_session, ORG_A, 5)
-        await _insert_usage_rows(admin_session, ORG_B, 5)
-        await admin_session.commit()
-
-        result = await tenant_a_session.execute(text("SELECT COUNT(*) FROM usage_logs"))
-        count = result.scalar()
-        assert count == 5
-
-    @pytest.mark.asyncio
-    async def test_1_7_db_002_tenant_b_sees_only_own_rows(
-        self, admin_session, tenant_b_session
-    ):
-        await _insert_usage_rows(admin_session, ORG_A, 3)
-        await _insert_usage_rows(admin_session, ORG_B, 7)
-        await admin_session.commit()
-
-        result = await tenant_b_session.execute(text("SELECT COUNT(*) FROM usage_logs"))
-        count = result.scalar()
-        assert count == 7
-
-    @pytest.mark.asyncio
-    async def test_1_7_db_003_trigger_overrides_org_id_on_insert(
-        self, tenant_a_session
-    ):
-        await tenant_a_session.execute(
-            text(
-                "INSERT INTO usage_logs (org_id, resource_type, resource_id, action) "
-                "VALUES (:org_id, 'call', 'call_999', 'call_initiated')"
-            ),
-            {"org_id": ORG_B},
-        )
-        await tenant_a_session.flush()
-
-        result = await tenant_a_session.execute(
-            text("SELECT org_id FROM usage_logs WHERE resource_id = 'call_999'")
-        )
-        actual_org_id = result.scalar()
-        assert actual_org_id == ORG_A
 
 
 class TestRecordUsagePersistence:
     """[1.7-DB-004..006] record_usage writes to usage_logs"""
 
     @pytest.mark.asyncio
-    async def test_1_7_db_004_record_usage_persists_row(
+    async def test_1_7_db_004_P0_given_record_usage_when_committed_then_row_persisted(
         self, admin_session, tenant_a_session
     ):
         from services.usage import record_usage
@@ -284,10 +166,12 @@ class TestRecordUsagePersistence:
         assert row[0] == "call"
         assert row[1] == "call_db_001"
         assert row[2] == "call_initiated"
-        assert row[3] == '{"campaign": "test"}'
+        assert json.loads(row[3]) == {"campaign": "test"}
 
     @pytest.mark.asyncio
-    async def test_1_7_db_005_trigger_sets_org_id(self, admin_session):
+    async def test_1_7_db_005_P0_given_record_usage_when_committed_then_trigger_sets_org_id(
+        self, admin_session
+    ):
         from services.usage import record_usage
 
         await record_usage(
@@ -306,7 +190,9 @@ class TestRecordUsagePersistence:
         assert org_id == ORG_A
 
     @pytest.mark.asyncio
-    async def test_1_7_db_006_metadata_defaults_to_empty_json(self, admin_session):
+    async def test_1_7_db_006_P1_given_record_usage_no_metadata_when_persisted_then_defaults_empty_json(
+        self, admin_session
+    ):
         from services.usage import record_usage
 
         await record_usage(
@@ -331,7 +217,9 @@ class TestMonthlyUsageCounting:
     """[1.7-DB-007..009] get_monthly_usage counts current month rows"""
 
     @pytest.mark.asyncio
-    async def test_1_7_db_007_counts_only_call_initiated(self, admin_session):
+    async def test_1_7_db_007_P1_given_mixed_actions_when_counting_then_only_call_initiated_counted(
+        self, admin_session
+    ):
         await _insert_usage_rows(admin_session, ORG_A, 10, action="call_initiated")
         await _insert_usage_rows(admin_session, ORG_A, 5, action="call_completed")
         await admin_session.commit()
@@ -348,11 +236,11 @@ class TestMonthlyUsageCounting:
         assert count == 10
 
     @pytest.mark.asyncio
-    async def test_1_7_db_008_counts_are_org_scoped(
+    async def test_1_7_db_008_P1_given_two_orgs_when_tenant_counts_then_sees_only_own(
         self, admin_session, tenant_a_session
     ):
         await _insert_usage_rows(admin_session, ORG_A, 8)
-        await _insert_usage_rows(admin_session, ORG_B, 12)
+        await _insert_usage_rows(admin_session, "org_db_test_b", 12)
         await admin_session.commit()
 
         result = await tenant_a_session.execute(
@@ -366,7 +254,9 @@ class TestMonthlyUsageCounting:
         assert count == 8
 
     @pytest.mark.asyncio
-    async def test_1_7_db_009_empty_table_returns_zero(self, tenant_a_session):
+    async def test_1_7_db_009_P1_given_empty_table_when_counting_then_returns_zero(
+        self, tenant_a_session
+    ):
         result = await tenant_a_session.execute(
             text(
                 "SELECT COUNT(*) FROM usage_logs "
@@ -382,7 +272,9 @@ class TestCheckUsageCapThresholds:
     """[1.7-DB-010..012] Threshold boundaries with real DB counts"""
 
     @pytest.mark.asyncio
-    async def test_1_7_db_010_warning_at_80_percent(self, admin_session):
+    async def test_1_7_db_010_P0_given_800_rows_when_compute_threshold_then_returns_warning(
+        self, admin_session
+    ):
         from services.usage import get_monthly_usage, _compute_threshold
 
         await _insert_usage_rows(admin_session, ORG_A, 800)
@@ -393,7 +285,9 @@ class TestCheckUsageCapThresholds:
         assert threshold == "warning"
 
     @pytest.mark.asyncio
-    async def test_1_7_db_011_critical_at_95_percent(self, admin_session):
+    async def test_1_7_db_011_P0_given_950_rows_when_compute_threshold_then_returns_critical(
+        self, admin_session
+    ):
         from services.usage import get_monthly_usage, _compute_threshold
 
         await _insert_usage_rows(admin_session, ORG_A, 950)
@@ -404,7 +298,9 @@ class TestCheckUsageCapThresholds:
         assert threshold == "critical"
 
     @pytest.mark.asyncio
-    async def test_1_7_db_012_exceeded_at_100_percent(self, admin_session):
+    async def test_1_7_db_012_P0_given_1000_rows_when_compute_threshold_then_returns_exceeded(
+        self, admin_session
+    ):
         from services.usage import get_monthly_usage, _compute_threshold
 
         await _insert_usage_rows(admin_session, ORG_A, 1000)

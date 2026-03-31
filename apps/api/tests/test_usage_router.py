@@ -76,7 +76,9 @@ VALID_RECORD_PAYLOAD = {
 class TestGetUsageSummary:
     """[1.7-INT-001..003] GET /usage/summary integration tests"""
 
-    def test_1_7_int_001_summary_happy_path(self, client):
+    def test_1_7_int_001_P0_given_mocked_summary_when_get_summary_endpoint_then_returns_200(
+        self, client
+    ):
         mock_summary = {
             "used": 500,
             "cap": 1000,
@@ -100,13 +102,17 @@ class TestGetUsageSummary:
         assert data["percentage"] == 50.0
         assert data["threshold"] == "ok"
 
-    def test_1_7_int_002_summary_missing_org(self, no_org_client):
+    def test_1_7_int_002_P0_given_no_org_id_when_get_summary_endpoint_then_returns_403(
+        self, no_org_client
+    ):
         response = no_org_client.get("/usage/summary")
         assert response.status_code == 403
         data = response.json()
         assert data["detail"]["code"] == "AUTH_FORBIDDEN"
 
-    def test_1_7_int_003_summary_service_error(self, client):
+    def test_1_7_int_003_P1_given_service_error_when_get_summary_endpoint_then_returns_500(
+        self, client
+    ):
         with patch.object(
             usage_mod,
             "get_usage_summary",
@@ -123,7 +129,9 @@ class TestGetUsageSummary:
 class TestPostUsageRecord:
     """[1.7-INT-004..008] POST /usage/record integration tests"""
 
-    def test_1_7_int_004_record_happy_path(self, client):
+    def test_1_7_int_004_P0_given_valid_record_payload_when_post_record_endpoint_then_returns_201(
+        self, client
+    ):
         from models.usage_log import UsageLog
 
         mock_log = UsageLog.model_validate(
@@ -159,11 +167,15 @@ class TestPostUsageRecord:
         data = response.json()
         assert "usageLog" in data
 
-    def test_1_7_int_005_record_missing_org(self, no_org_client):
+    def test_1_7_int_005_P0_given_no_org_id_when_post_record_endpoint_then_returns_403(
+        self, no_org_client
+    ):
         response = no_org_client.post("/usage/record", json=VALID_RECORD_PAYLOAD)
         assert response.status_code == 403
 
-    def test_1_7_int_006_record_invalid_resource_type(self, client):
+    def test_1_7_int_006_P1_given_invalid_resource_type_when_post_record_endpoint_then_returns_422(
+        self, client
+    ):
         invalid_payload = {
             **VALID_RECORD_PAYLOAD,
             "resourceType": "invalid",
@@ -171,7 +183,9 @@ class TestPostUsageRecord:
         response = client.post("/usage/record", json=invalid_payload)
         assert response.status_code == 422
 
-    def test_1_7_int_007_record_invalid_action(self, client):
+    def test_1_7_int_007_P1_given_invalid_action_when_post_record_endpoint_then_returns_422(
+        self, client
+    ):
         invalid_payload = {
             **VALID_RECORD_PAYLOAD,
             "action": "invalid_action",
@@ -179,7 +193,9 @@ class TestPostUsageRecord:
         response = client.post("/usage/record", json=invalid_payload)
         assert response.status_code == 422
 
-    def test_1_7_int_008_record_with_metadata(self, client):
+    def test_1_7_int_008_P0_given_valid_record_with_metadata_when_post_record_endpoint_then_returns_201(
+        self, client
+    ):
         from models.usage_log import UsageLog
 
         mock_log = UsageLog.model_validate(
@@ -187,7 +203,7 @@ class TestPostUsageRecord:
                 "resourceType": "call",
                 "resourceId": "call_002",
                 "action": "call_completed",
-                "metadataJson": '{"duration": 120}',
+                "metadataJson": {"duration": 120},
             }
         )
         mock_log.id = 2
@@ -217,7 +233,9 @@ class TestPostUsageRecord:
 
         assert response.status_code == 201
 
-    def test_1_7_int_012_record_blocked_when_cap_exceeded(self, client):
+    def test_1_7_int_012_P1_given_cap_exceeded_when_post_record_endpoint_then_returns_403(
+        self, client
+    ):
         with (
             patch(
                 "middleware.usage_guard.check_usage_cap",
@@ -239,7 +257,9 @@ class TestPostUsageRecord:
 class TestGetUsageCheck:
     """[1.7-INT-009..011] GET /usage/check integration tests"""
 
-    def test_1_7_int_009_check_happy_path(self, client):
+    def test_1_7_int_009_P0_given_mocked_usage_data_when_get_check_endpoint_then_returns_200(
+        self, client
+    ):
         with (
             patch.object(
                 usage_mod, "get_org_plan", new_callable=AsyncMock, return_value="free"
@@ -262,11 +282,15 @@ class TestGetUsageCheck:
         assert data["used"] == 500
         assert data["cap"] == 1000
 
-    def test_1_7_int_010_check_missing_org(self, no_org_client):
+    def test_1_7_int_010_P0_given_no_org_id_when_get_check_endpoint_then_returns_403(
+        self, no_org_client
+    ):
         response = no_org_client.get("/usage/check")
         assert response.status_code == 403
 
-    def test_1_7_int_011_check_exceeded(self, client):
+    def test_1_7_int_011_P1_given_usage_exceeded_when_get_check_endpoint_then_returns_threshold_exceeded(
+        self, client
+    ):
         with (
             patch.object(
                 usage_mod,

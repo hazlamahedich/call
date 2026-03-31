@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { createUsageSummary } from "@/test/factories/usage";
 
 vi.mock("@/actions/usage", () => ({
   getUsageSummary: vi.fn(),
@@ -13,13 +14,7 @@ const mockGetUsageSummary = vi.mocked(getUsageSummary);
 describe("[1.7][UsagePage] — Dedicated usage page", () => {
   it("[1.7-UNIT-118][P0] Given valid data, When rendered, Then shows usage summary", async () => {
     mockGetUsageSummary.mockResolvedValue({
-      data: {
-        used: 500,
-        cap: 1000,
-        percentage: 50.0,
-        plan: "free",
-        threshold: "ok",
-      },
+      data: createUsageSummary(),
       error: null,
     });
 
