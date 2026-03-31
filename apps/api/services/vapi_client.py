@@ -1,9 +1,9 @@
+import asyncio
 import logging
+import random
 from typing import Optional
 
 import httpx
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import settings
 
@@ -33,38 +33,38 @@ async def initiate_call(
         payload["metadata"] = metadata
 
     last_error = None
-    for attempt in range(_RETRY_ATTEMPTS):
-        try:
-            async with httpx.AsyncClient(
-                timeout=httpx.Timeout(_CONNECT_TIMEOUT)
-            ) as client:
+    timeout = httpx.Timeout(
+        connect=_CONNECT_TIMEOUT, read=_READ_TIMEOUT, write=5.0, pool=5.0
+    )
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        for attempt in range(_RETRY_ATTEMPTS):
+            try:
                 response = await client.post(url, json=payload, headers=headers)
                 response.raise_for_status()
                 return response.json()
-        except httpx.TimeoutException as e:
-            last_error = e
-            logger.warning(
-                f"Vapi API timeout (attempt {attempt + 1}/{_RETRY_ATTEMPTS}): {e}"
-            )
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code >= 500:
+            except httpx.TimeoutException as e:
                 last_error = e
                 logger.warning(
-                    f"Vapi API server error (attempt {attempt + 1}/{_RETRY_ATTEMPTS}): {e}"
+                    f"Vapi API timeout (attempt {attempt + 1}/{_RETRY_ATTEMPTS}): {e}"
                 )
-            else:
-                logger.error(f"Vapi API client error: {e}")
-                raise
-        except httpx.HTTPError as e:
-            last_error = e
-            logger.warning(
-                f"Vapi API HTTP error (attempt {attempt + 1}/{_RETRY_ATTEMPTS}): {e}"
-            )
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code >= 500:
+                    last_error = e
+                    logger.warning(
+                        f"Vapi API server error (attempt {attempt + 1}/{_RETRY_ATTEMPTS}): {e}"
+                    )
+                else:
+                    logger.error(f"Vapi API client error: {e}")
+                    raise
+            except httpx.HTTPError as e:
+                last_error = e
+                logger.warning(
+                    f"Vapi API HTTP error (attempt {attempt + 1}/{_RETRY_ATTEMPTS}): {e}"
+                )
 
-        if attempt < _RETRY_ATTEMPTS - 1:
-            import asyncio
-
-            await asyncio.sleep(_RETRY_BACKOFF_BASE * (2**attempt))
+            if attempt < _RETRY_ATTEMPTS - 1:
+                jitter = random.uniform(0.5, 1.5)
+                await asyncio.sleep(_RETRY_BACKOFF_BASE * (2**attempt) * jitter)
 
     raise RuntimeError(
         f"Vapi API call failed after {_RETRY_ATTEMPTS} attempts: {last_error}"

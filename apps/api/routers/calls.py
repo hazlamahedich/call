@@ -28,9 +28,9 @@ async def _resolve_assistant_id(session, org_id, agent_id):
     return agent.voice_id
 
 
-async def _compliance_pre_check(phone_number):
+def _compliance_pre_check(phone_number):
     try:
-        from packages.compliance import check_dnc_eligibility  # noqa: F401
+        from packages.compliance import check_dnc_eligibility
 
         logger.warning(
             "packages/compliance check skipped - not yet implemented for %s",
@@ -67,9 +67,7 @@ async def trigger_call(
         )
 
     try:
-        assistant_id = await _resolve_assistant_id(
-            session, org_id, payload.agent_id
-        )
+        assistant_id = await _resolve_assistant_id(session, org_id, payload.agent_id)
         await _compliance_pre_check(payload.phone_number)
 
         call = await trigger_outbound_call(

@@ -91,11 +91,12 @@ class AuthMiddleware(BaseHTTPMiddleware):
     SKIP_AUTH_PATHS = frozenset(
         ["/health", "/docs", "/openapi.json", "/webhooks/clerk", "/webhooks/vapi"]
     )
+    SKIP_AUTH_PREFIXES = ("/docs", "/openapi.json", "/webhooks/vapi")
 
     def _should_skip_auth(self, path: str) -> bool:
-        return path in self.SKIP_AUTH_PATHS or path.startswith(
-            ("/docs", "/openapi.json")
-        )
+        if path in self.SKIP_AUTH_PATHS:
+            return True
+        return path.startswith(self.SKIP_AUTH_PREFIXES)
 
     async def _verify_token(self, token: str) -> dict:
         signing_key = self.jwk_client.get_signing_key_from_jwt(token)

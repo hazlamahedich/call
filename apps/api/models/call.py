@@ -8,7 +8,7 @@ from .base import TenantModel
 class Call(TenantModel, table=True):
     __tablename__ = "calls"  # type: ignore
 
-    vapi_call_id: str = Field(default="", max_length=255, index=True)
+    vapi_call_id: Optional[str] = Field(default=None, max_length=255, index=True)
     lead_id: Optional[int] = Field(default=None, nullable=True, foreign_key="leads.id")
     agent_id: Optional[int] = Field(
         default=None, nullable=True, foreign_key="agents.id"

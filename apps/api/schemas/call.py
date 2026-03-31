@@ -1,7 +1,11 @@
+import re
+
 from typing import Optional
 
 from pydantic import BaseModel, field_validator
 from pydantic.alias_generators import to_camel
+
+_E164_PATTERN = re.compile(r"^\+?[1-9]\d{1,14}$")
 
 
 class TriggerCallPayload(BaseModel):
@@ -17,6 +21,8 @@ class TriggerCallPayload(BaseModel):
     def validate_phone_number(cls, v: str) -> str:
         if not v.strip():
             raise ValueError("phone_number must not be empty")
+        if not _E164_PATTERN.match(v.strip()):
+            raise ValueError("phone_number must be in E.164 format (e.g. +1234567890)")
         return v
 
 

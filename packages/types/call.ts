@@ -38,6 +38,6 @@ export interface TriggerCallResponse {
     campaignId: number | null;
     status: string;
     phoneNumber: string;
-    createdAt: string;
+    createdAt: string | null;
   };
 }

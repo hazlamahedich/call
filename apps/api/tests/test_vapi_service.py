@@ -38,7 +38,7 @@ class TestTriggerOutboundCall:
         session = AsyncMock()
         created_call = Call.model_validate(
             {
-                "vapiCallId": "call_vapi_123",
+                "vapiCallId": "placeholder-uuid",
                 "phoneNumber": "+1234567890",
                 "status": "pending",
             }
@@ -83,7 +83,7 @@ class TestTriggerOutboundCall:
         session = AsyncMock()
         created_call = Call.model_validate(
             {
-                "vapiCallId": "",
+                "vapiCallId": "placeholder-uuid",
                 "phoneNumber": "+1234567890",
                 "status": "pending",
             }
@@ -118,83 +118,90 @@ class TestHandleCallStarted:
     """[2.1-UNIT-110..113] handle_call_started business logic tests"""
 
     @pytest.mark.asyncio
-    async def test_2_1_unit_110_P0_given_existing_call_when_started_then_updates_status(
+    async def test_2_1_unit_110_P0_given_upsert_when_started_then_returns_call(
         self,
     ):
         from services.vapi import handle_call_started
-        from models.call import Call
 
         session = AsyncMock()
 
-        mock_select_result = MagicMock()
-        mock_select_result.first.return_value = (1,)
+        row_mapping = {
+            "id": 1,
+            "org_id": "org_abc",
+            "vapi_call_id": "vapi_123",
+            "lead_id": None,
+            "agent_id": None,
+            "campaign_id": None,
+            "status": "in_progress",
+            "duration": None,
+            "recording_url": None,
+            "phone_number": "+1234567890",
+            "transcript": None,
+            "ended_at": None,
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+            "soft_delete": False,
+        }
+        mock_row = MagicMock()
+        mock_row.__getitem__ = lambda self, key: row_mapping[key]
+        mock_row._mapping = row_mapping
 
-        mock_update_result = MagicMock()
-        mock_update_result.first.return_value = None
-
-        row = (
-            1,
-            "org_abc",
-            "vapi_123",
-            None,
-            None,
-            None,
-            "in_progress",
-            None,
-            None,
-            "+1234567890",
-            None,
-            None,
-            None,
-            None,
-            False,
-        )
-        mock_final_result = MagicMock()
-        mock_final_result.first.return_value = row
+        mock_result = MagicMock()
+        mock_result.first.return_value = mock_row
 
         with (
             patch("services.vapi.set_tenant_context", new_callable=AsyncMock),
         ):
-            session.execute = AsyncMock(
-                side_effect=[mock_select_result, mock_update_result, mock_final_result]
+            session.execute = AsyncMock(return_value=mock_result)
+            result = await handle_call_started(
+                session,
+                "vapi_123",
+                "org_abc",
+                phone_number="+1234567890",
             )
-            result = await handle_call_started(session, "vapi_123", "org_abc")
 
         assert result.status == "in_progress"
 
     @pytest.mark.asyncio
-    async def test_2_1_unit_111_P0_given_new_call_when_started_then_creates_record(
+    async def test_2_1_unit_111_P0_given_non_numeric_metadata_when_started_then_ignores_bad_values(
         self,
     ):
         from services.vapi import handle_call_started
-        from models.call import Call
 
         session = AsyncMock()
 
-        mock_empty = MagicMock()
-        mock_empty.first.return_value = None
+        row_mapping = {
+            "id": 5,
+            "org_id": "org_abc",
+            "vapi_call_id": "vapi_new",
+            "lead_id": None,
+            "agent_id": None,
+            "campaign_id": None,
+            "status": "in_progress",
+            "duration": None,
+            "recording_url": None,
+            "phone_number": "",
+            "transcript": None,
+            "ended_at": None,
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+            "soft_delete": False,
+        }
+        mock_row = MagicMock()
+        mock_row._mapping = row_mapping
 
-        created_call = Call.model_validate(
-            {
-                "vapiCallId": "vapi_new",
-                "status": "in_progress",
-                "phoneNumber": "",
-            }
-        )
-        created_call.id = 5
+        mock_result = MagicMock()
+        mock_result.first.return_value = mock_row
 
         with (
             patch("services.vapi.set_tenant_context", new_callable=AsyncMock),
-            patch("services.vapi._call_service") as mock_svc,
         ):
-            mock_svc.create = AsyncMock(return_value=created_call)
-            session.execute = AsyncMock(return_value=mock_empty)
-
+            session.execute = AsyncMock(return_value=mock_result)
             result = await handle_call_started(
                 session,
                 "vapi_new",
                 "org_abc",
-                metadata={"lead_id": "42", "agent_id": "7"},
+                metadata={"lead_id": "not_a_number", "agent_id": "abc"},
             )
 
         assert result.status == "in_progress"
@@ -211,33 +218,38 @@ class TestHandleCallEnded:
         from services.vapi import handle_call_ended
 
         session = AsyncMock()
-        row = (
-            1,
-            "org_abc",
-            "vapi_123",
-            None,
-            None,
-            None,
-            "completed",
-            120,
-            "https://recording.url",
-            "+1234567890",
-            None,
-            datetime.now(timezone.utc),
-            datetime.now(timezone.utc),
-            datetime.now(timezone.utc),
-            False,
-        )
-        mock_result = MagicMock()
-        mock_result.first.return_value = row
-        session.execute = AsyncMock(return_value=mock_result)
+        row_mapping = {
+            "id": 1,
+            "org_id": "org_abc",
+            "vapi_call_id": "vapi_123",
+            "lead_id": None,
+            "agent_id": None,
+            "campaign_id": None,
+            "status": "completed",
+            "duration": 120,
+            "recording_url": "https://recording.url",
+            "phone_number": "+1234567890",
+            "transcript": None,
+            "ended_at": datetime.now(timezone.utc),
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+            "soft_delete": False,
+        }
+        mock_row = MagicMock()
+        mock_row._mapping = row_mapping
 
-        result = await handle_call_ended(
-            session,
-            "vapi_123",
-            duration=120,
-            recording_url="https://recording.url",
-        )
+        mock_result = MagicMock()
+        mock_result.first.return_value = mock_row
+
+        with patch("services.vapi.set_tenant_context", new_callable=AsyncMock):
+            session.execute = AsyncMock(return_value=mock_result)
+            result = await handle_call_ended(
+                session,
+                "vapi_123",
+                org_id="org_abc",
+                duration=120,
+                recording_url="https://recording.url",
+            )
 
         assert result.status == "completed"
         assert result.duration == 120
@@ -253,8 +265,15 @@ class TestHandleCallEnded:
         mock_empty.first.return_value = None
         session.execute = AsyncMock(return_value=mock_empty)
 
-        with pytest.raises(ValueError, match="Call not found"):
-            await handle_call_ended(session, "nonexistent_vapi_id")
+        with (
+            patch("services.vapi.set_tenant_context", new_callable=AsyncMock),
+            pytest.raises(ValueError, match="Call not found"),
+        ):
+            await handle_call_ended(
+                session,
+                "nonexistent_vapi_id",
+                org_id="org_abc",
+            )
 
 
 class TestHandleCallFailed:
@@ -267,32 +286,37 @@ class TestHandleCallFailed:
         from services.vapi import handle_call_failed
 
         session = AsyncMock()
-        row = (
-            1,
-            "org_abc",
-            "vapi_123",
-            None,
-            None,
-            None,
-            "failed",
-            None,
-            None,
-            "+1234567890",
-            None,
-            datetime.now(timezone.utc),
-            datetime.now(timezone.utc),
-            datetime.now(timezone.utc),
-            False,
-        )
-        mock_result = MagicMock()
-        mock_result.first.return_value = row
-        session.execute = AsyncMock(return_value=mock_result)
+        row_mapping = {
+            "id": 1,
+            "org_id": "org_abc",
+            "vapi_call_id": "vapi_123",
+            "lead_id": None,
+            "agent_id": None,
+            "campaign_id": None,
+            "status": "failed",
+            "duration": None,
+            "recording_url": None,
+            "phone_number": "+1234567890",
+            "transcript": "[error] Carrier rejected",
+            "ended_at": datetime.now(timezone.utc),
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+            "soft_delete": False,
+        }
+        mock_row = MagicMock()
+        mock_row._mapping = row_mapping
 
-        result = await handle_call_failed(
-            session,
-            "vapi_123",
-            error_message="Carrier rejected",
-        )
+        mock_result = MagicMock()
+        mock_result.first.return_value = mock_row
+
+        with patch("services.vapi.set_tenant_context", new_callable=AsyncMock):
+            session.execute = AsyncMock(return_value=mock_result)
+            result = await handle_call_failed(
+                session,
+                "vapi_123",
+                org_id="org_abc",
+                error_message="Carrier rejected",
+            )
 
         assert result.status == "failed"
 
@@ -307,5 +331,12 @@ class TestHandleCallFailed:
         mock_empty.first.return_value = None
         session.execute = AsyncMock(return_value=mock_empty)
 
-        with pytest.raises(ValueError, match="Call not found"):
-            await handle_call_failed(session, "nonexistent_vapi_id")
+        with (
+            patch("services.vapi.set_tenant_context", new_callable=AsyncMock),
+            pytest.raises(ValueError, match="Call not found"),
+        ):
+            await handle_call_failed(
+                session,
+                "nonexistent_vapi_id",
+                org_id="org_abc",
+            )

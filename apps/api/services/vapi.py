@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -18,6 +19,39 @@ logger = logging.getLogger(__name__)
 _call_service = TenantService[Call](Call)
 
 
+def _row_to_call(row) -> Call:
+    if hasattr(row, "_mapping"):
+        m = row._mapping
+    else:
+        m = row
+    return Call.model_construct(
+        id=m["id"],
+        org_id=m["org_id"],
+        vapi_call_id=m["vapi_call_id"],
+        lead_id=m["lead_id"],
+        agent_id=m["agent_id"],
+        campaign_id=m["campaign_id"],
+        status=m["status"],
+        duration=m["duration"],
+        recording_url=m["recording_url"],
+        phone_number=m["phone_number"],
+        transcript=m["transcript"],
+        ended_at=m["ended_at"],
+        created_at=m["created_at"],
+        updated_at=m["updated_at"],
+        soft_delete=m["soft_delete"],
+    )
+
+
+def _safe_int(value) -> Optional[int]:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 async def trigger_outbound_call(
     session: AsyncSession,
     org_id: str,
@@ -32,9 +66,10 @@ async def trigger_outbound_call(
     if not assistant_id:
         raise ValueError("VAPI_NOT_CONFIGURED: No assistant_id provided")
 
+    placeholder_id = str(uuid.uuid4())
     call = Call.model_validate(
         {
-            "vapiCallId": "",
+            "vapiCallId": placeholder_id,
             "phoneNumber": phone_number,
             "leadId": lead_id,
             "agentId": agent_id,
@@ -66,8 +101,10 @@ async def trigger_outbound_call(
         call.vapi_call_id = vapi_call_id
     except Exception:
         await session.execute(
-            text("UPDATE calls SET status = 'failed' WHERE id = :cid"),
-            {"cid": call.id},
+            text(
+                "UPDATE calls SET status = 'failed', vapi_call_id = :fallback WHERE id = :cid"
+            ),
+            {"fallback": f"_failed_{call.id}", "cid": call.id},
         )
         call.status = "failed"
         raise
@@ -88,70 +125,44 @@ async def handle_call_started(
     vapi_call_id: str,
     org_id: str,
     metadata: Optional[dict] = None,
+    phone_number: str = "",
 ) -> Call:
     await set_tenant_context(session, org_id)
 
     metadata = metadata or {}
-    lead_id = metadata.get("lead_id")
-    agent_id = metadata.get("agent_id")
+    lead_id = _safe_int(metadata.get("lead_id"))
+    agent_id = _safe_int(metadata.get("agent_id"))
 
     result = await session.execute(
-        text("SELECT id FROM calls WHERE vapi_call_id = :vci"),
-        {"vci": vapi_call_id},
+        text(
+            "INSERT INTO calls (org_id, vapi_call_id, lead_id, agent_id, status, phone_number, created_at, updated_at) "
+            "VALUES (:org_id, :vci, :lead_id, :agent_id, 'in_progress', :phone, NOW(), NOW()) "
+            "ON CONFLICT (vapi_call_id) DO UPDATE SET status = 'in_progress', updated_at = NOW() "
+            "RETURNING id, org_id, vapi_call_id, lead_id, agent_id, campaign_id, "
+            "status, duration, recording_url, phone_number, transcript, ended_at, "
+            "created_at, updated_at, soft_delete"
+        ),
+        {
+            "org_id": org_id,
+            "vci": vapi_call_id,
+            "lead_id": lead_id,
+            "agent_id": agent_id,
+            "phone": phone_number,
+        },
     )
-    existing = result.first()
-
-    if existing:
-        await session.execute(
-            text(
-                "UPDATE calls SET status = 'in_progress', updated_at = NOW() "
-                "WHERE vapi_call_id = :vci"
-            ),
-            {"vci": vapi_call_id},
-        )
-        updated = await session.execute(
-            text("SELECT * FROM calls WHERE vapi_call_id = :vci"),
-            {"vci": vapi_call_id},
-        )
-        row = updated.first()
-        call = Call.model_construct(
-            id=row[0],
-            org_id=row[1],
-            vapi_call_id=row[2],
-            lead_id=row[3],
-            agent_id=row[4],
-            campaign_id=row[5],
-            status="in_progress",
-            duration=row[7],
-            recording_url=row[8],
-            phone_number=row[9],
-            transcript=row[10],
-            ended_at=row[11],
-            created_at=row[12],
-            updated_at=row[13],
-            soft_delete=row[14],
-        )
-    else:
-        call = Call.model_validate(
-            {
-                "vapiCallId": vapi_call_id,
-                "leadId": int(lead_id) if lead_id else None,
-                "agentId": int(agent_id) if agent_id else None,
-                "status": "in_progress",
-                "phoneNumber": "",
-            }
-        )
-        call = await _call_service.create(session, call)
-
-    return call
+    row = result.first()
+    return _row_to_call(row)
 
 
 async def handle_call_ended(
     session: AsyncSession,
     vapi_call_id: str,
+    org_id: str,
     duration: Optional[int] = None,
     recording_url: Optional[str] = None,
 ) -> Call:
+    await set_tenant_context(session, org_id)
+
     result = await session.execute(
         text(
             "UPDATE calls SET status = 'completed', duration = :dur, "
@@ -178,33 +189,21 @@ async def handle_call_ended(
         if not row:
             raise ValueError(f"Call not found for vapi_call_id: {vapi_call_id}")
 
-    return Call.model_construct(
-        id=row[0],
-        org_id=row[1],
-        vapi_call_id=row[2],
-        lead_id=row[3],
-        agent_id=row[4],
-        campaign_id=row[5],
-        status=row[6],
-        duration=row[7],
-        recording_url=row[8],
-        phone_number=row[9],
-        transcript=row[10],
-        ended_at=row[11],
-        created_at=row[12],
-        updated_at=row[13],
-        soft_delete=row[14],
-    )
+    return _row_to_call(row)
 
 
 async def handle_call_failed(
     session: AsyncSession,
     vapi_call_id: str,
+    org_id: str,
     error_message: Optional[str] = None,
 ) -> Call:
+    await set_tenant_context(session, org_id)
+
     result = await session.execute(
         text(
             "UPDATE calls SET status = 'failed', ended_at = :ended_at, "
+            "transcript = COALESCE(transcript, :err_msg), "
             "updated_at = NOW() WHERE vapi_call_id = :vci AND status != 'failed' "
             "RETURNING id, org_id, vapi_call_id, lead_id, agent_id, campaign_id, "
             "status, duration, recording_url, phone_number, transcript, ended_at, "
@@ -212,6 +211,7 @@ async def handle_call_failed(
         ),
         {
             "ended_at": datetime.now(timezone.utc),
+            "err_msg": f"[error] {error_message}" if error_message else None,
             "vci": vapi_call_id,
         },
     )
@@ -225,20 +225,4 @@ async def handle_call_failed(
         if not row:
             raise ValueError(f"Call not found for vapi_call_id: {vapi_call_id}")
 
-    return Call.model_construct(
-        id=row[0],
-        org_id=row[1],
-        vapi_call_id=row[2],
-        lead_id=row[3],
-        agent_id=row[4],
-        campaign_id=row[5],
-        status=row[6],
-        duration=row[7],
-        recording_url=row[8],
-        phone_number=row[9],
-        transcript=row[10],
-        ended_at=row[11],
-        created_at=row[12],
-        updated_at=row[13],
-        soft_delete=row[14],
-    )
+    return _row_to_call(row)
