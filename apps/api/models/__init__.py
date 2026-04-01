@@ -8,3 +8,5 @@ from models.usage_log import UsageLog
 from models.call import Call
 from models.transcript import TranscriptEntry
 from models.voice_event import VoiceEvent
+from models.tts_request import TTSRequest
+from models.tts_provider_switch import TTSProviderSwitch

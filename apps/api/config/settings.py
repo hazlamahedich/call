@@ -21,6 +21,20 @@ class Settings(BaseSettings):
     DEFAULT_MONTHLY_CALL_CAP: int = 1000
     PLAN_CALL_CAPS: dict[str, int] = {"free": 1000, "pro": 25000, "enterprise": 100000}
 
+    ELEVENLABS_API_KEY: str = ""
+    ELEVENLABS_BASE_URL: str = "https://api.elevenlabs.io/v1"
+    CARTESIA_API_KEY: str = ""
+    CARTESIA_BASE_URL: str = "https://api.cartesia.ai"
+    TTS_PRIMARY_PROVIDER: str = "elevenlabs"
+    TTS_FALLBACK_PROVIDER: str = "cartesia"
+    TTS_LATENCY_THRESHOLD_MS: int = 500
+    TTS_CONSECUTIVE_SLOW_THRESHOLD: int = 3
+    TTS_AUTO_RECOVERY_ENABLED: bool = True
+    TTS_RECOVERY_HEALTHY_COUNT: int = 5
+    TTS_RECOVERY_LATENCY_MS: int = 300
+    TTS_RECOVERY_COOLDOWN_SEC: int = 60
+    TTS_SESSION_TTL_SEC: int = 7200
+
     model_config = SettingsConfigDict(env_file=".env")
 
 

@@ -12,6 +12,7 @@ from services.transcription import (
     handle_speech_start,
     handle_speech_end,
 )
+from services.tts.factory import get_tts_orchestrator
 
 router = APIRouter(prefix="/webhooks/vapi", tags=["Vapi Webhooks"])
 logger = logging.getLogger(__name__)
@@ -104,6 +105,8 @@ async def handle_call_events(
             recording_url = (
                 call_data.get("recordingUrl") if isinstance(call_data, dict) else None
             )
+            orchestrator = get_tts_orchestrator()
+            orchestrator.reset_session(vapi_call_id)
             await handle_call_ended(
                 session,
                 vapi_call_id,

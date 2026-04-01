@@ -1,11 +1,25 @@
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Literal, Optional
 
 from sqlmodel import Field, SQLModel
 from pydantic import AliasGenerator
 
 
 from pydantic.alias_generators import to_camel
+
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+TTSProviderName = Literal["elevenlabs", "cartesia"]
+TTSRequestStatus = Literal["success", "timeout", "error", "all_failed"]
+TTSSwitchReason = Literal[
+    "latency_threshold_exceeded",
+    "provider_error",
+    "recovery_healthy",
+    "all_providers_failed",
+]
 
 
 class TenantModel(SQLModel):

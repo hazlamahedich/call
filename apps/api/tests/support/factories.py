@@ -338,3 +338,51 @@ class WebhookPayloadFactory(_AutoCounter):
                 "metadata": {"org_id": "org_test_001"},
             }
         }
+
+
+class TTSRequestFactory(_AutoCounter):
+    @classmethod
+    def build(cls, **overrides) -> dict:
+        cls._counter += 1
+        defaults = {
+            "id": cls._counter,
+            "org_id": "org_test_001",
+            "call_id": 1,
+            "vapi_call_id": f"vci_tts_{cls._counter}",
+            "provider": "elevenlabs",
+            "voice_id": "voice_123",
+            "text_length": 50,
+            "latency_ms": 250.0,
+            "status": "success",
+            "error_message": None,
+            "received_at": datetime.now(timezone.utc).isoformat(),
+            "vapi_event_timestamp": None,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "soft_delete": False,
+        }
+        defaults.update(overrides)
+        return defaults
+
+
+class TTSProviderSwitchFactory(_AutoCounter):
+    @classmethod
+    def build(cls, **overrides) -> dict:
+        cls._counter += 1
+        defaults = {
+            "id": cls._counter,
+            "org_id": "org_test_001",
+            "call_id": 1,
+            "vapi_call_id": f"vci_switch_{cls._counter}",
+            "from_provider": "elevenlabs",
+            "to_provider": "cartesia",
+            "reason": "latency_threshold_exceeded",
+            "consecutive_slow_count": 3,
+            "last_latency_ms": 600.0,
+            "switched_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "soft_delete": False,
+        }
+        defaults.update(overrides)
+        return defaults

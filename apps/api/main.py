@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers import (
@@ -9,14 +11,26 @@ from routers import (
     usage,
     calls,
     webhooks_vapi,
+    tts,
 )
 from routers.ws_transcript import router as ws_transcript_router
 from middleware.auth import AuthMiddleware
 from config.settings import settings
+from services.tts.factory import get_tts_orchestrator, shutdown_tts
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    orchestrator = get_tts_orchestrator()
+    await orchestrator.start_cleanup_task()
+    yield
+    await shutdown_tts()
+
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -38,3 +52,4 @@ app.include_router(usage.router, tags=["Usage"])
 app.include_router(calls.router, tags=["Calls"])
 app.include_router(webhooks_vapi.router, tags=["Vapi Webhooks"])
 app.include_router(ws_transcript_router, tags=["WebSocket Transcription"])
+app.include_router(tts.router, tags=["TTS"])

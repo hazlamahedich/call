@@ -8,4 +8,7 @@ export interface Agent extends TenantScoped {
   safetyLevel: string;
   integrationType?: string;
   onboardingComplete: boolean;
+  ttsProvider: "elevenlabs" | "cartesia" | "auto";
+  ttsVoiceModel: string;
+  fallbackTtsProvider?: string;
 }
