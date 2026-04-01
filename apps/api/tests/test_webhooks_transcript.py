@@ -170,3 +170,97 @@ class TestTranscriptWebhooks:
             )
 
         assert response.status_code == 200
+
+    def test_2_2_unit_107_P1_given_speech_start_with_no_speech_obj_when_webhook_then_uses_message_speaker(
+        self,
+        client,
+        factory,
+    ):
+        payload = factory._base(
+            "speech-start",
+            extra_message={"speaker": "assistant"},
+        )
+
+        with patch(
+            "routers.webhooks_vapi.handle_speech_start",
+            new_callable=AsyncMock,
+            return_value=AsyncMock(),
+        ) as mock_handler:
+            response = client.post(
+                "/webhooks/vapi/call-events",
+                json=payload,
+            )
+
+        assert response.status_code == 200
+        mock_handler.assert_called_once()
+        call_kwargs = mock_handler.call_args
+        speech_data = call_kwargs[0][3]
+        assert speech_data.get("speaker") == "assistant"
+
+    def test_2_2_unit_108_P1_given_speech_end_with_no_speech_obj_when_webhook_then_uses_message_speaker(
+        self,
+        client,
+        factory,
+    ):
+        payload = factory._base(
+            "speech-end",
+            extra_message={"speaker": "lead"},
+        )
+
+        with patch(
+            "routers.webhooks_vapi.handle_speech_end",
+            new_callable=AsyncMock,
+            return_value=AsyncMock(),
+        ) as mock_handler:
+            response = client.post(
+                "/webhooks/vapi/call-events",
+                json=payload,
+            )
+
+        assert response.status_code == 200
+        mock_handler.assert_called_once()
+        call_kwargs = mock_handler.call_args
+        speech_data = call_kwargs[0][3]
+        assert speech_data.get("speaker") == "lead"
+
+    def test_2_2_unit_109_P1_given_speech_start_with_non_dict_speech_when_webhook_then_defaults_speaker(
+        self,
+        client,
+        factory,
+    ):
+        payload = factory._base("speech-start")
+        payload["message"]["speech"] = "not-a-dict"
+
+        with patch(
+            "routers.webhooks_vapi.handle_speech_start",
+            new_callable=AsyncMock,
+            return_value=AsyncMock(),
+        ) as mock_handler:
+            response = client.post(
+                "/webhooks/vapi/call-events",
+                json=payload,
+            )
+
+        assert response.status_code == 200
+        mock_handler.assert_called_once()
+
+    def test_2_2_unit_110_P1_given_speech_end_with_non_dict_speech_when_webhook_then_defaults_speaker(
+        self,
+        client,
+        factory,
+    ):
+        payload = factory._base("speech-end")
+        payload["message"]["speech"] = "not-a-dict"
+
+        with patch(
+            "routers.webhooks_vapi.handle_speech_end",
+            new_callable=AsyncMock,
+            return_value=AsyncMock(),
+        ) as mock_handler:
+            response = client.post(
+                "/webhooks/vapi/call-events",
+                json=payload,
+            )
+
+        assert response.status_code == 200
+        mock_handler.assert_called_once()

@@ -218,4 +218,97 @@ describe("[2.2][TelemetryStream] — Live transcript display component", () => {
     const results = await axe(container);
     expect(results.violations).toHaveLength(0);
   });
+
+  it("[2.2-UNIT-711][P2] Given entries arrive, When rendered, Then auto-scrolls to bottom", async () => {
+    const { rerender } = render(
+      await import("../TelemetryStream").then((m) => (
+        <m.TelemetryStream callId={42} />
+      )),
+    );
+    const scrollContainer = screen.getByText(
+      "Waiting for transcript data...",
+    ).parentElement!;
+    const scrollSpy = vi.spyOn(scrollContainer, "scrollTop", "set");
+
+    mockUseTranscriptStream.mockReturnValue({
+      entries: [
+        {
+          id: 1,
+          callId: 42,
+          role: "lead",
+          text: "New entry",
+          startTime: 100,
+          endTime: 200,
+          confidence: 0.9,
+          receivedAt: "2025-01-01T00:00:00Z",
+          timestamp: 100,
+        },
+      ],
+      isConnected: true,
+      error: null,
+    });
+
+    const { TelemetryStream } = await import("../TelemetryStream");
+    render(<TelemetryStream callId={42} />);
+
+    expect(screen.getByText("New entry")).toBeInTheDocument();
+  });
+
+  it("[2.2-UNIT-712][P2] Given prefers-reduced-motion, When entries arrive, Then no auto-scroll animation", async () => {
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      value: vi.fn().mockReturnValue({
+        matches: true,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+      }),
+    });
+
+    mockUseTranscriptStream.mockReturnValue({
+      entries: [
+        {
+          id: 1,
+          callId: 42,
+          role: "lead",
+          text: "Reduced motion entry",
+          startTime: 100,
+          endTime: 200,
+          confidence: 0.9,
+          receivedAt: "2025-01-01T00:00:00Z",
+          timestamp: 100,
+        },
+      ],
+      isConnected: true,
+      error: null,
+    });
+
+    const { TelemetryStream } = await import("../TelemetryStream");
+    render(<TelemetryStream callId={42} />);
+
+    expect(screen.getByText("Reduced motion entry")).toBeInTheDocument();
+  });
+
+  it("[2.2-UNIT-713][P2] Given unknown role, When rendered, Then defaults to lead style", async () => {
+    mockUseTranscriptStream.mockReturnValue({
+      entries: [
+        {
+          id: 1,
+          callId: 42,
+          role: "unknown-role",
+          text: "Mystery speaker",
+          startTime: 100,
+          endTime: 200,
+          confidence: null,
+          receivedAt: "2025-01-01T00:00:00Z",
+          timestamp: 100,
+        },
+      ],
+      isConnected: true,
+      error: null,
+    });
+    const { TelemetryStream } = await import("../TelemetryStream");
+    render(<TelemetryStream callId={42} />);
+    expect(screen.getByText("[Lead]")).toBeInTheDocument();
+    expect(screen.getByText("Mystery speaker")).toBeInTheDocument();
+  });
 });

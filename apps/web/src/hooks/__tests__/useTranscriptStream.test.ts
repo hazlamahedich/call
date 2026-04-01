@@ -285,4 +285,74 @@ describe("[2.2][useTranscriptStream] — WebSocket hook for live transcript entr
 
     expect(result.current.entries).toHaveLength(0);
   });
+
+  it("[2.2-UNIT-611][P1] Given max reconnect attempts exceeded, When onclose fires repeatedly, Then no more reconnects after 10 attempts", async () => {
+    const { useTranscriptStream } = await import("../useTranscriptStream");
+    const { result } = renderHook(() => useTranscriptStream(42));
+
+    await waitFor(() =>
+      expect(MockWebSocket.instances.length).toBeGreaterThanOrEqual(1),
+    );
+    let ws = getWs();
+
+    act(() => {
+      ws.onopen!();
+    });
+    await waitFor(() => expect(result.current.isConnected).toBe(true));
+
+    for (let i = 0; i < 11; i++) {
+      act(() => {
+        ws.onclose!({ code: 1006 });
+      });
+      await waitFor(() => expect(result.current.isConnected).toBe(false));
+
+      const nextWs = getWs();
+      if (nextWs !== ws) {
+        ws = nextWs;
+        act(() => {
+          ws.onopen!();
+        });
+      }
+    }
+
+    expect(MockWebSocket.instances.length).toBeLessThanOrEqual(11);
+  });
+
+  it("[2.2-UNIT-612][P1] Given callId changes, When new hook renders, Then new WebSocket connects to new callId", async () => {
+    const { useTranscriptStream } = await import("../useTranscriptStream");
+    const { result, rerender } = renderHook(
+      ({ callId }) => useTranscriptStream(callId),
+      { initialProps: { callId: 42 } },
+    );
+
+    await waitFor(() =>
+      expect(MockWebSocket.instances.length).toBeGreaterThanOrEqual(1),
+    );
+    const ws1 = getWs();
+    expect(ws1.url).toContain("/ws/calls/42/transcript");
+
+    rerender({ callId: 99 });
+
+    await waitFor(() =>
+      expect(MockWebSocket.instances.length).toBeGreaterThanOrEqual(2),
+    );
+    const ws2 = MockWebSocket.instances[MockWebSocket.instances.length - 1];
+    expect(ws2.url).toContain("/ws/calls/99/transcript");
+  });
+
+  it("[2.2-UNIT-613][P1] Given https API URL, When WebSocket connects, Then uses wss protocol", async () => {
+    const originalEnv = process.env.NEXT_PUBLIC_API_URL;
+    process.env.NEXT_PUBLIC_API_URL = "https://api.example.com";
+
+    const { useTranscriptStream } = await import("../useTranscriptStream");
+    renderHook(() => useTranscriptStream(42));
+
+    await waitFor(() =>
+      expect(MockWebSocket.instances.length).toBeGreaterThanOrEqual(1),
+    );
+    const ws = getWs();
+    expect(ws.url).toContain("wss://api.example.com/ws/calls/42/transcript");
+
+    process.env.NEXT_PUBLIC_API_URL = originalEnv;
+  });
 });
