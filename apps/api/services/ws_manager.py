@@ -29,14 +29,12 @@ class ConnectionManager:
                     del self._channels[call_id]
 
     async def broadcast_to_call(self, call_id: int, message: dict) -> None:
-        async with self._lock:
-            connections = list(self._channels.get(call_id, set()))
-
+        connections = self._channels.get(call_id, set())
         if not connections:
             return
 
         disconnected = []
-        for ws in connections:
+        for ws in list(connections):
             try:
                 await ws.send_json(message)
             except Exception as e:

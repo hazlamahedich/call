@@ -4,6 +4,12 @@ Latency Benchmark Test
 
 Simulates 100 transcript events and verifies p95 processing < 200ms.
 
+NOTE: This test mocks the database layer (session.execute), so the measured
+latency reflects in-process overhead only (JSON parsing, role mapping, SQL
+construction) — NOT actual I/O latency (DB writes, WebSocket broadcasts).
+The 200ms SLA assertion validates that the service logic itself is lightweight;
+real end-to-end latency should be benchmarked separately with a live DB.
+
 Test ID Format: [2.2-UNIT-XXX]
 """
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from datetime import datetime, timezone
@@ -97,6 +98,24 @@ async def _resolve_call_id(
     return None
 
 
+async def _get_speech_state(
+    session: AsyncSession, vapi_call_id: str, org_id: str
+) -> Optional[dict]:
+    result = await session.execute(
+        text(
+            "SELECT speaker, received_at FROM voice_events "
+            "WHERE vapi_call_id = :vci AND org_id = :org_id "
+            "AND event_type = 'speech_start' "
+            "ORDER BY received_at DESC LIMIT 1"
+        ),
+        {"vci": vapi_call_id, "org_id": org_id},
+    )
+    row = result.first()
+    if row:
+        return {"speaker": row[0], "speech_started_at": row[1]}
+    return None
+
+
 async def _detect_interruption(
     session: AsyncSession,
     vapi_call_id: str,
@@ -105,19 +124,68 @@ async def _detect_interruption(
 ) -> bool:
     if current_speaker != "lead":
         return False
+
+    ai_state = await _get_speech_state(session, vapi_call_id, org_id)
+    if not ai_state or ai_state["speaker"] != "ai":
+        return False
+
     result = await session.execute(
         text(
-            "SELECT event_type, speaker FROM voice_events "
+            "SELECT received_at FROM voice_events "
             "WHERE vapi_call_id = :vci AND org_id = :org_id "
-            "AND event_type IN ('speech_start', 'speech_end') "
+            "AND event_type = 'speech_end' AND speaker = 'ai' "
+            "AND received_at > :ai_start "
             "ORDER BY received_at DESC LIMIT 1"
         ),
-        {"vci": vapi_call_id, "org_id": org_id},
+        {
+            "vci": vapi_call_id,
+            "org_id": org_id,
+            "ai_start": ai_state["speech_started_at"],
+        },
     )
-    last_event = result.first()
-    if last_event and last_event[0] == "speech_start" and last_event[1] == "ai":
-        return True
-    return False
+    ended = result.first()
+    if ended:
+        return False
+
+    return True
+
+
+def _validate_transcript_obj(data: dict) -> dict:
+    transcript_obj = data.get("transcript", data)
+    if not isinstance(transcript_obj, dict):
+        transcript_obj = {}
+    role = transcript_obj.get("role", "user")
+    text_val = transcript_obj.get("text", "")
+    words = transcript_obj.get("words", [])
+    if not isinstance(words, list):
+        words = []
+    return {"role": role, "text": text_val, "words": words}
+
+
+async def _broadcast_speech_state(
+    call_id: Optional[int],
+    speaker: str,
+    event_type: str,
+) -> None:
+    if not call_id:
+        return
+    try:
+        state_msg = {
+            "type": "speech_state",
+            "state": {
+                "currentSpeaker": speaker,
+                "eventType": event_type,
+            },
+        }
+        task = asyncio.create_task(ws_manager.broadcast_to_call(call_id, state_msg))
+        task.add_done_callback(
+            lambda t: t.exception() if not t.cancelled() and t.exception() else None
+        )
+    except Exception:
+        logger.debug(
+            "Speech state broadcast failed",
+            extra={"code": "WS_BROADCAST_ERROR", "call_id": call_id},
+        )
 
 
 async def handle_transcript_event(
@@ -131,18 +199,18 @@ async def handle_transcript_event(
     call_id = await _resolve_call_id(session, vapi_call_id, org_id)
     if call_id is None:
         logger.warning(
-            "Transcript event received but call not found",
+            "Transcript event received but call not found — skipping",
             extra={
                 "code": "TRANSCRIPT_PROCESSING_ERROR",
                 "vapi_call_id": vapi_call_id,
             },
         )
+        raise ValueError(f"No call found for vapi_call_id: {vapi_call_id}")
 
-    transcript_obj = transcript_data.get("transcript", transcript_data)
-    vapi_role = transcript_obj.get("role", "user")
-    role = _map_role(vapi_role)
-    entry_text = transcript_obj.get("text", "")
-    words = transcript_obj.get("words", [])
+    parsed = _validate_transcript_obj(transcript_data)
+    role = _map_role(parsed["role"])
+    entry_text = parsed["text"]
+    words = parsed["words"]
     words_json = json.dumps(words) if words else None
 
     start_time = None
@@ -190,6 +258,8 @@ async def handle_transcript_event(
         },
     )
     row = result.first()
+    if row is None:
+        raise RuntimeError("INSERT RETURNING yielded no row for transcript entry")
     entry = _row_to_transcript_entry(row)
 
     latency_ms = _compute_latency(received_at, vapi_event_timestamp)
@@ -213,8 +283,6 @@ async def handle_transcript_event(
 
     if entry.call_id:
         try:
-            import asyncio
-
             entry_dict = {
                 "id": entry.id,
                 "callId": entry.call_id,
@@ -227,14 +295,20 @@ async def handle_transcript_event(
                 if entry.received_at
                 else None,
             }
-            asyncio.create_task(
+            task = asyncio.create_task(
                 ws_manager.broadcast_to_call(
                     entry.call_id,
                     {"type": "transcript", "entry": entry_dict},
                 )
             )
+            task.add_done_callback(
+                lambda t: t.exception() if not t.cancelled() and t.exception() else None
+            )
         except Exception:
-            pass
+            logger.debug(
+                "Transcript broadcast failed",
+                extra={"code": "WS_BROADCAST_ERROR", "call_id": entry.call_id},
+            )
 
     return entry
 
@@ -258,12 +332,20 @@ async def handle_speech_start(
 
     is_interruption = await _detect_interruption(session, vapi_call_id, org_id, speaker)
     if is_interruption:
+        interruption_metadata = json.dumps(
+            {
+                "interrupted_speaker": "ai",
+                "interrupting_speaker": speaker,
+                "detected_at": received_at.isoformat(),
+                "vapi_call_id": vapi_call_id,
+            }
+        )
         await session.execute(
             text(
                 "INSERT INTO voice_events "
-                "(org_id, call_id, vapi_call_id, event_type, speaker, received_at, "
+                "(org_id, call_id, vapi_call_id, event_type, speaker, event_metadata, received_at, "
                 "vapi_event_timestamp, created_at, updated_at) "
-                "VALUES (:org_id, :call_id, :vci, 'interruption', :speaker, :received_at, "
+                "VALUES (:org_id, :call_id, :vci, 'interruption', :speaker, :metadata, :received_at, "
                 ":vapi_ts, NOW(), NOW())"
             ),
             {
@@ -271,6 +353,7 @@ async def handle_speech_start(
                 "call_id": call_id,
                 "vci": vapi_call_id,
                 "speaker": speaker,
+                "metadata": interruption_metadata,
                 "received_at": received_at,
                 "vapi_ts": vapi_event_timestamp,
             },
@@ -305,6 +388,8 @@ async def handle_speech_start(
         },
     )
     row = result.first()
+    if row is None:
+        raise RuntimeError("INSERT RETURNING yielded no row for speech_start")
     event = _row_to_voice_event(row)
 
     logger.info(
@@ -315,6 +400,8 @@ async def handle_speech_start(
             "speaker": speaker,
         },
     )
+
+    await _broadcast_speech_state(call_id, speaker, "speech_start")
 
     return event
 
@@ -357,6 +444,8 @@ async def handle_speech_end(
         },
     )
     row = result.first()
+    if row is None:
+        raise RuntimeError("INSERT RETURNING yielded no row for speech_end")
     event = _row_to_voice_event(row)
 
     logger.info(
@@ -367,5 +456,7 @@ async def handle_speech_end(
             "speaker": speaker,
         },
     )
+
+    await _broadcast_speech_state(call_id, speaker, "speech_end")
 
     return event

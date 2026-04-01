@@ -196,9 +196,10 @@ async def handle_call_ended(
             te_result = await session.execute(
                 text(
                     "SELECT role, text FROM transcript_entries "
-                    "WHERE call_id = :cid ORDER BY start_time ASC, id ASC"
+                    "WHERE call_id = :cid AND org_id = :org_id "
+                    "ORDER BY start_time ASC, id ASC"
                 ),
-                {"cid": call.id},
+                {"cid": call.id, "org_id": call.org_id},
             )
             entries = te_result.fetchall()
             if entries:

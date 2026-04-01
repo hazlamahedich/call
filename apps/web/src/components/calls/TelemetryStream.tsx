@@ -9,9 +9,9 @@ interface TelemetryStreamProps {
 }
 
 const ROLE_STYLES: Record<string, { color: string; prefix: string }> = {
-  "assistant-ai": { color: "color: #10b981", prefix: "[AI]" },
-  "assistant-human": { color: "color: #3b82f6", prefix: "[Human]" },
-  lead: { color: "color: #a1a1aa", prefix: "[Lead]" },
+  "assistant-ai": { color: "#10b981", prefix: "[AI]" },
+  "assistant-human": { color: "#3b82f6", prefix: "[Human]" },
+  lead: { color: "#a1a1aa", prefix: "[Lead]" },
 };
 
 export function TelemetryStream({ callId }: TelemetryStreamProps) {
@@ -109,9 +109,7 @@ export function TelemetryStream({ callId }: TelemetryStreamProps) {
               <span style={{ color: "#71717a", marginRight: "6px" }}>
                 {style.prefix}
               </span>
-              <span style={{ color: style.color.replace("color: ", "") }}>
-                {entry.text}
-              </span>
+              <span style={{ color: style.color }}>{entry.text}</span>
             </div>
           );
         })}

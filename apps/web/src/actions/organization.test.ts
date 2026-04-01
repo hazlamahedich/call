@@ -6,15 +6,15 @@
  * Priority: P0 (Critical) | P1 (High) | P2 (Medium) | P3 (Low)
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import {
-  createOrganization,
-  updateOrganization,
-  getOrganization,
-} from "./organization";
 import { OrgType, PlanType } from "@call/types";
 
+const mockGetToken = vi.fn();
+
+vi.mock("@clerk/nextjs/server", () => ({
+  auth: () => ({ getToken: mockGetToken }),
+}));
+
 const mockFetch = vi.fn();
-global.fetch = mockFetch;
 
 const ORG_IDS = {
   validOrgId: "org_2QWXJC123456",
@@ -23,7 +23,9 @@ const ORG_IDS = {
 
 describe("[P0] Organization Server Actions - AC1", () => {
   beforeEach(() => {
+    vi.stubGlobal("fetch", mockFetch);
     mockFetch.mockReset();
+    mockGetToken.mockResolvedValue("test-token");
   });
 
   afterEach(() => {
@@ -46,6 +48,7 @@ describe("[P0] Organization Server Actions - AC1", () => {
         json: async () => mockOrg,
       });
 
+      const { createOrganization } = await import("./organization");
       const result = await createOrganization(orgData);
 
       expect(result.organization).toEqual(mockOrg);
@@ -73,6 +76,7 @@ describe("[P0] Organization Server Actions - AC1", () => {
         json: async () => ({ message: "Organization already exists" }),
       });
 
+      const { createOrganization } = await import("./organization");
       const result = await createOrganization(orgData);
 
       expect(result.organization).toBeNull();
@@ -88,6 +92,7 @@ describe("[P0] Organization Server Actions - AC1", () => {
 
       mockFetch.mockRejectedValueOnce(new Error("Network error"));
 
+      const { createOrganization } = await import("./organization");
       const result = await createOrganization(orgData);
 
       expect(result.organization).toBeNull();
@@ -109,6 +114,7 @@ describe("[P0] Organization Server Actions - AC1", () => {
         json: async () => mockOrg,
       });
 
+      const { updateOrganization } = await import("./organization");
       const result = await updateOrganization(ORG_IDS.validOrgId, updates);
 
       expect(result.organization).toEqual(mockOrg);
@@ -129,6 +135,7 @@ describe("[P0] Organization Server Actions - AC1", () => {
         json: async () => ({ message: "Organization not found" }),
       });
 
+      const { updateOrganization } = await import("./organization");
       const result = await updateOrganization(ORG_IDS.testOrgId, updates);
 
       expect(result.organization).toBeNull();
@@ -150,12 +157,18 @@ describe("[P0] Organization Server Actions - AC1", () => {
         json: async () => mockOrg,
       });
 
+      const { getOrganization } = await import("./organization");
       const result = await getOrganization(ORG_IDS.validOrgId);
 
       expect(result.organization).toEqual(mockOrg);
       expect(result.error).toBeNull();
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining(`/api/organizations/${ORG_IDS.validOrgId}`),
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: "Bearer test-token",
+          }),
+        }),
       );
     });
 
@@ -165,6 +178,7 @@ describe("[P0] Organization Server Actions - AC1", () => {
         json: async () => ({ message: "Not found" }),
       });
 
+      const { getOrganization } = await import("./organization");
       const result = await getOrganization(ORG_IDS.testOrgId);
 
       expect(result.organization).toBeNull();
@@ -174,6 +188,7 @@ describe("[P0] Organization Server Actions - AC1", () => {
     it("[1.2-UNIT-ORG-008][P2] should handle fetch errors", async () => {
       mockFetch.mockRejectedValueOnce(new Error("Connection failed"));
 
+      const { getOrganization } = await import("./organization");
       const result = await getOrganization(ORG_IDS.validOrgId);
 
       expect(result.organization).toBeNull();

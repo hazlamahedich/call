@@ -46,7 +46,7 @@ describe("[2.2][useTranscriptStream] — WebSocket hook for live transcript entr
     expect(MockWebSocket.instances).toHaveLength(0);
   });
 
-  it("[2.2-UNIT-601][P0] Given valid callId, When hook mounts, Then WebSocket connects with JWT token", async () => {
+  it("[2.2-UNIT-601][P0] Given valid callId, When hook mounts, Then WebSocket connects and sends JWT token as first message", async () => {
     const { useTranscriptStream } = await import("../useTranscriptStream");
     renderHook(() => useTranscriptStream(42));
 
@@ -55,7 +55,18 @@ describe("[2.2][useTranscriptStream] — WebSocket hook for live transcript entr
     });
 
     const ws = getWs();
-    expect(ws.url).toContain("/ws/calls/42/transcript?token=test-jwt");
+    expect(ws.url).toContain("/ws/calls/42/transcript");
+    expect(ws.url).not.toContain("token=");
+
+    act(() => {
+      ws.onopen!();
+    });
+
+    await waitFor(() => {
+      expect(ws.send).toHaveBeenCalledWith(
+        JSON.stringify({ token: "test-jwt" }),
+      );
+    });
   });
 
   it("[2.2-UNIT-602][P0] Given no auth token, When hook mounts, Then error is set and no WebSocket created", async () => {

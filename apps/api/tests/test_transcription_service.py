@@ -220,43 +220,23 @@ class TestHandleTranscriptEvent:
         assert abs(entry.confidence - 0.965) < 0.01
 
     @pytest.mark.asyncio
-    async def test_2_2_unit_012_given_no_call_found_when_handle_then_still_persists(
+    async def test_2_2_unit_012_given_no_call_found_when_handle_then_raises_value_error(
         self,
     ):
-        now = datetime.now(timezone.utc)
-        row = _make_row(
-            id=3,
-            org_id="org_1",
-            call_id=None,
-            vapi_call_id="vci_3",
-            role="lead",
-            text="orphan text",
-            start_time=None,
-            end_time=None,
-            confidence=None,
-            words_json=None,
-            received_at=now,
-            vapi_event_timestamp=None,
-            created_at=now,
-            updated_at=now,
-            soft_delete=False,
-        )
         mock_session = AsyncMock()
-        mock_session.execute.return_value = _make_result(row=row)
 
         with patch(
             "services.transcription._resolve_call_id",
             new_callable=AsyncMock,
             return_value=None,
         ):
-            entry = await handle_transcript_event(
-                mock_session,
-                "vci_3",
-                "org_1",
-                {"transcript": {"role": "user", "text": "orphan text"}},
-            )
-
-        assert entry is not None
+            with pytest.raises(ValueError, match="No call found for vapi_call_id"):
+                await handle_transcript_event(
+                    mock_session,
+                    "vci_3",
+                    "org_1",
+                    {"transcript": {"role": "user", "text": "orphan text"}},
+                )
 
     @pytest.mark.asyncio
     async def test_2_2_unit_013_given_timestamp_in_data_when_handle_then_computes_latency(
@@ -469,8 +449,12 @@ class TestDetectInterruption:
     async def test_2_2_unit_021_given_lead_speaking_while_ai_active_when_detect_then_returns_true(
         self,
     ):
+        now = datetime.now(timezone.utc)
         mock_session = AsyncMock()
-        mock_session.execute.return_value = _make_result(row=("speech_start", "ai"))
+        mock_session.execute.side_effect = [
+            _make_result(row=("ai", now)),
+            _make_result(row=None),
+        ]
 
         result = await _detect_interruption(mock_session, "vci_int", "org_1", "lead")
         assert result is True

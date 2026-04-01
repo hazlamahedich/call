@@ -1,18 +1,24 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@clerk/nextjs";
 import type { TranscriptEntry } from "@call/types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const WS_URL = API_URL.replace(/^http/, "ws");
-const RECONNECT_BASE_DELAY = 1000;
-const MAX_RECONNECT_DELAY = 30000;
+const MAX_RECONNECT_ATTEMPTS = 10;
+const BASE_RECONNECT_DELAY_MS = 1000;
+const MAX_RECONNECT_DELAY_MS = 30000;
 
 interface UseTranscriptStreamResult {
   entries: TranscriptEntry[];
   isConnected: boolean;
   error: string | null;
+}
+
+function buildWsUrl(callId: number): string {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const wsProtocol = apiUrl.startsWith("https") ? "wss" : "ws";
+  const base = apiUrl.replace(/^https?/, wsProtocol);
+  return `${base}/ws/calls/${callId}/transcript`;
 }
 
 export function useTranscriptStream(
@@ -21,93 +27,131 @@ export function useTranscriptStream(
   const [entries, setEntries] = useState<TranscriptEntry[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectAttempts = useRef(0);
-  const entriesBuffer = useRef<TranscriptEntry[]>([]);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+  const entriesBufferRef = useRef<TranscriptEntry[]>([]);
+  const currentCallIdRef = useRef<number | null>(null);
+
   const { getToken } = useAuth();
 
-  const connect = useCallback(async () => {
-    if (!callId) return;
+  const flushBuffer = useCallback(() => {
+    if (entriesBufferRef.current.length > 0) {
+      const buffered = entriesBufferRef.current;
+      entriesBufferRef.current = [];
+      setEntries((prev) => [...prev, ...buffered]);
+    }
+  }, []);
 
-    try {
+  const clearReconnectTimer = useCallback(() => {
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (currentCallIdRef.current !== callId) {
+      clearReconnectTimer();
+      reconnectAttemptsRef.current = 0;
+      currentCallIdRef.current = callId;
+    }
+  }, [callId, clearReconnectTimer]);
+
+  useEffect(() => {
+    if (!callId) {
+      setIsConnected(false);
+      setError(null);
+      setEntries([]);
+      entriesBufferRef.current = [];
+      return;
+    }
+
+    let cancelled = false;
+
+    const activeCallId = callId;
+
+    async function connect() {
       const token = await getToken();
-      if (!token) {
-        setError("Not authenticated");
+      if (!token || cancelled) {
+        if (!cancelled) {
+          setError("Not authenticated");
+        }
         return;
       }
 
-      const url = `${WS_URL}/ws/calls/${callId}/transcript?token=${token}`;
+      const url = buildWsUrl(activeCallId);
       const ws = new WebSocket(url);
       wsRef.current = ws;
 
       ws.onopen = () => {
+        if (cancelled) {
+          ws.close();
+          return;
+        }
+        ws.send(JSON.stringify({ token }));
         setIsConnected(true);
         setError(null);
-        reconnectAttempts.current = 0;
+        reconnectAttemptsRef.current = 0;
       };
 
       ws.onmessage = (event) => {
+        if (cancelled) return;
         try {
           const data = JSON.parse(event.data);
           if (data.type === "transcript" && data.entry) {
-            const entry: TranscriptEntry = {
-              id: data.entry.id,
-              callId: data.entry.callId,
-              role: data.entry.role,
-              text: data.entry.text,
-              startTime: data.entry.startTime,
-              endTime: data.entry.endTime,
-              confidence: data.entry.confidence ?? null,
-              receivedAt: data.entry.receivedAt ?? new Date().toISOString(),
-              timestamp: data.entry.startTime ?? Date.now() / 1000,
-            };
-            entriesBuffer.current = [...entriesBuffer.current, entry];
-            setEntries([...entriesBuffer.current]);
+            entriesBufferRef.current.push(data.entry);
+            flushBuffer();
           }
         } catch {
-          // ignore malformed messages
+          // ignore malformed JSON
         }
       };
 
       ws.onerror = () => {
-        setError("WebSocket connection error");
+        if (!cancelled) {
+          setError("WebSocket connection error");
+        }
       };
 
       ws.onclose = (event) => {
+        if (cancelled) return;
         setIsConnected(false);
         wsRef.current = null;
 
-        if (event.code !== 1008 && callId) {
+        if (event.code === 1008) {
+          setError("Authentication failed");
+          return;
+        }
+
+        if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
+          const attempt = reconnectAttemptsRef.current;
           const delay = Math.min(
-            RECONNECT_BASE_DELAY * Math.pow(2, reconnectAttempts.current),
-            MAX_RECONNECT_DELAY,
+            BASE_RECONNECT_DELAY_MS * Math.pow(2, attempt),
+            MAX_RECONNECT_DELAY_MS,
           );
-          reconnectAttempts.current += 1;
-          setTimeout(() => connect(), delay);
+          reconnectAttemptsRef.current += 1;
+          reconnectTimerRef.current = setTimeout(() => {
+            if (!cancelled && currentCallIdRef.current === callId) {
+              connect();
+            }
+          }, delay);
         }
       };
-    } catch (e) {
-      setError((e as Error).message);
     }
-  }, [callId, getToken]);
-
-  useEffect(() => {
-    entriesBuffer.current = [];
-    setEntries([]);
-    setError(null);
-    setIsConnected(false);
-    reconnectAttempts.current = 0;
 
     connect();
 
     return () => {
+      cancelled = true;
       if (wsRef.current) {
-        wsRef.current.onclose = null;
         wsRef.current.close();
         wsRef.current = null;
       }
+      clearReconnectTimer();
     };
-  }, [connect]);
+  }, [callId, getToken, flushBuffer, clearReconnectTimer]);
 
   return { entries, isConnected, error };
 }

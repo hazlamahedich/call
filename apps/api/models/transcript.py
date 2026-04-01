@@ -1,9 +1,13 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlmodel import Field
 
 from .base import TenantModel
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class TranscriptEntry(TenantModel, table=True):
@@ -17,5 +21,5 @@ class TranscriptEntry(TenantModel, table=True):
     end_time: Optional[float] = Field(default=None)
     confidence: Optional[float] = Field(default=None)
     words_json: Optional[str] = Field(default=None)
-    received_at: datetime = Field(default_factory=datetime.now)
+    received_at: datetime = Field(default_factory=_utc_now)
     vapi_event_timestamp: Optional[float] = Field(default=None)
