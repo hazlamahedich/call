@@ -26,7 +26,8 @@ def _make_settings(**overrides):
         "TTS_RECOVERY_HEALTHY_COUNT": 5,
         "TTS_RECOVERY_LATENCY_MS": 300,
         "TTS_RECOVERY_COOLDOWN_SEC": 60,
-        "TTS_SESSION_TTL_SEC": 7200,
+        "TTS_SESSION_TTL_SEC": 3600,
+        "TTS_CIRCUIT_OPEN_SEC": 30,
     }
     defaults.update(overrides)
     for k, v in defaults.items():

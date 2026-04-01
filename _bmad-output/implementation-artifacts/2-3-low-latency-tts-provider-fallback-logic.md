@@ -148,18 +148,30 @@ so that call quality is maintained even during provider latency spikes.
   - [x] `test_tts_api.py` — 4 tests: providers health, session status, 404 for missing call, null vapi_call_id
   - [x] `test_tts_recovery_boundary.py` — 6 tests: N-1 healthy no recovery, agent override primary/fallback, factory data shapes for TTSRequest + TTSProviderSwitch
   - [x] `test_tts_factory.py` — 7 tests: orchestrator creation with both/single/no API keys, singleton caching, shutdown lifecycle with provider aclose, shutdown no-op
-  - [x] `test_tts_orchestrator_edges.py` — 13 tests: provider resolution edge cases (invalid override, no providers, primary None swap), voice model override, mid-range latency resets healthy count, no-fallback provider, voice event exception resilience, session accessor edge cases, `_get_or_create_session` fallback, `stop_cleanup_task` None
-  - [x] `test_tts_provider_edges.py` — 9 tests: Cartesia 401/403 auth errors, ElevenLabs no-key health check, content-type default when header missing, provider aclose lifecycle, empty audio (0 bytes) treated as success
-  - [x] `test_tts_api_edges.py` — 2 tests: P95 calculation with single latency entry (idx=0), P95 with 10 entries
-  - [x] `test_tts_record_edges.py` — 4 tests: `_record_all_failed` per-provider insert exception, flush exception, `_perform_switch` continues to emit voice event after DB error, `TTSAllProvidersFailedError` message includes both provider errors
-  - [x] All tests use `[2.3-UNIT-XXX]` traceability IDs + `_P0`/`_P1`/`_P2` priority markers
-  - [x] Uses `app.dependency_overrides` for FastAPI dependency injection in API tests
-  - [x] Uses camelCase keys in `model_validate()` for AliasGenerator compatibility
-  - [x] Uses `str(c[0][0])` for TextClause content assertions (not `str(c)` which uses `repr()`)
+   - [x] `test_tts_orchestrator_resolution.py` — 10 tests: provider resolution edge cases (invalid override, no providers, primary None swap), voice model override, mid-range latency resets healthy count, no-fallback provider, voice event exception resilience
+   - [x] `test_tts_orchestrator_session_edges.py` — 3 tests: session accessor edge cases, `_get_or_create_session` fallback, `stop_cleanup_task` None
+   - [x] `test_tts_provider_edges.py` — 9 tests: Cartesia 401/403 auth errors, ElevenLabs no-key health check, content-type default when header missing, provider aclose lifecycle, empty audio (0 bytes) treated as success
+   - [x] `test_tts_api_edges.py` — 2 tests: P95 calculation with single latency entry (idx=0), P95 with 10 entries
+   - [x] `test_tts_record_edges.py` — 4 tests: `_record_all_failed` per-provider insert exception, flush exception, `_perform_switch` continues to emit voice event after DB error, `TTSAllProvidersFailedError` message includes both provider errors
+   - [x] All tests use `[2.3-UNIT-XXX]` traceability IDs + `_P0_`/`_P1_`/`_P2_` priority markers in function names
+   - [x] `test_tts_factory.py` uses `@pytest.fixture(autouse=True)` `_reset_factory` for guaranteed cleanup
+   - [x] Uses `app.dependency_overrides` for FastAPI dependency injection in API tests
+   - [x] Uses camelCase keys in `model_validate()` for AliasGenerator compatibility
+   - [x] Uses `str(c[0][0])` for TextClause content assertions (not `str(c)` which uses `repr()`)
 
 - [x] Frontend types validation — types added to `packages/types/tts.ts` with barrel export
 
 - [x] **Adversarial Code Review**: 31 patch findings + 2 bad_spec findings addressed
+  - [x] GROUP 1 (Models): Composite indexes, FK cascades, shared `utc_now()`, Literal type documentation
+  - [x] GROUP 2 (Services): Self-fallback guard, recovery fix (no re-synthesis), `_record_all_failed` logging, warning-level factory logs, unused param removal, `RETURNING id`, public `get_providers_health()`, session validation
+  - [x] GROUP 3 (Router): Auth via `get_current_org_id`, HTTP 404, P95 fix, null vapi_call_id, public method access
+  - [x] GROUP 5 (Tests): Flaky assertion fix, boundary tests, API tests, config resolution tests, factory usage tests
+
+- [x] **Test Quality Review**: Score 97/100 (A+ — Excellent), all 3 findings resolved
+  - [x] P1: Split `test_tts_orchestrator_edges.py` (365 lines) → `test_tts_orchestrator_resolution.py` (240) + `test_tts_orchestrator_session_edges.py` (120)
+  - [x] P2: Replaced manual `factory_module._orchestrator = None` with `@pytest.fixture(autouse=True)` `_reset_factory`
+  - [x] P2: Embedded `_P0_`/`_P1_`/`_P2_` in all 35 test function names for `pytest -k` filtering
+  - [x] Review artifact: `_bmad-output/test-artifacts/story-2-3-test-quality-review.md` (v2.0 post-fix)
   - [x] GROUP 1 (Models): Composite indexes, FK cascades, shared `utc_now()`, Literal type documentation
   - [x] GROUP 2 (Services): Self-fallback guard, recovery fix (no re-synthesis), `_record_all_failed` logging, warning-level factory logs, unused param removal, `RETURNING id`, public `get_providers_health()`, session validation
   - [x] GROUP 3 (Router): Auth via `get_current_org_id`, HTTP 404, P95 fix, null vapi_call_id, public method access
@@ -263,6 +275,7 @@ Claude (Sonnet 4) via Kilo CLI
 ### Debug Log References
 
 - Commit: `cd8791e` — feat(story-2.3): low-latency TTS with provider fallback, recovery, and adversarial review fixes
+- Commit: `027dd01` — refactor(story-2.3): address test review findings — split oversized file, add autouse fixture, embed priority markers
 - All 110 tests passing: `PYTHONPATH=. apps/api/.venv/bin/pytest apps/api/tests/test_tts_*.py`
 
 ### Completion Notes List
@@ -318,8 +331,9 @@ Claude (Sonnet 4) via Kilo CLI
 | `apps/api/tests/test_tts_models.py` | **NEW** — 7 model validation tests |
 | `apps/api/tests/test_tts_api.py` | **NEW** — 4 API endpoint tests |
 | `apps/api/tests/test_tts_recovery_boundary.py` | **NEW** — 7 boundary + factory tests |
-| `apps/api/tests/test_tts_factory.py` | **NEW** — 7 factory lifecycle tests |
-| `apps/api/tests/test_tts_orchestrator_edges.py` | **NEW** — 13 orchestrator edge case tests |
+| `apps/api/tests/test_tts_factory.py` | **NEW** — 7 factory lifecycle tests (autouse cleanup fixture) |
+| `apps/api/tests/test_tts_orchestrator_resolution.py` | **NEW** — 10 orchestrator provider resolution + switching tests (split from edges) |
+| `apps/api/tests/test_tts_orchestrator_session_edges.py` | **NEW** — 3 session accessor edge case tests (split from edges) |
 | `apps/api/tests/test_tts_provider_edges.py` | **NEW** — 9 provider edge case tests |
 | `apps/api/tests/test_tts_api_edges.py` | **NEW** — 2 API edge case tests |
 | `apps/api/tests/test_tts_record_edges.py` | **NEW** — 4 recording edge case tests |

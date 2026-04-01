@@ -33,7 +33,8 @@ class Settings(BaseSettings):
     TTS_RECOVERY_HEALTHY_COUNT: int = 5
     TTS_RECOVERY_LATENCY_MS: int = 300
     TTS_RECOVERY_COOLDOWN_SEC: int = 60
-    TTS_SESSION_TTL_SEC: int = 7200
+    TTS_SESSION_TTL_SEC: int = 3600
+    TTS_CIRCUIT_OPEN_SEC: int = 30
 
     model_config = SettingsConfigDict(env_file=".env")
 

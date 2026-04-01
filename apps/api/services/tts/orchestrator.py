@@ -18,6 +18,53 @@ from .base import TTSProviderBase, TTSResponse
 logger = logging.getLogger(__name__)
 
 
+class ProviderCircuitBreaker:
+    """Tracks per-provider failure state for circuit breaker pattern.
+
+    After a provider accumulates enough session-level fallbacks (trip_threshold),
+    the circuit opens for open_duration_sec. While open, new sessions skip the
+    provider and start on a healthy fallback. The circuit auto-closes after the
+    cooldown, allowing one new session to retry.
+    """
+
+    def __init__(
+        self, open_duration_sec: float = 30.0, trip_threshold: int = 3
+    ) -> None:
+        self._open_duration = open_duration_sec
+        self._trip_threshold = trip_threshold
+        self._global_fallback_count: dict[str, int] = {}
+        self._open_until: dict[str, float] = {}
+
+    def record_fallback(self, provider_name: str) -> None:
+        count = self._global_fallback_count.get(provider_name, 0) + 1
+        self._global_fallback_count[provider_name] = count
+        if count >= self._trip_threshold:
+            self._open_until[provider_name] = time.monotonic() + self._open_duration
+            logger.warning(
+                "TTS provider circuit breaker tripped",
+                extra={
+                    "code": "TTS_CIRCUIT_TRIPPED",
+                    "provider": provider_name,
+                    "fallback_count": count,
+                    "open_duration_sec": self._open_duration,
+                },
+            )
+
+    def is_open(self, provider_name: str) -> bool:
+        deadline = self._open_until.get(provider_name)
+        if deadline is None:
+            return False
+        if time.monotonic() >= deadline:
+            del self._open_until[provider_name]
+            self._global_fallback_count.pop(provider_name, None)
+            return False
+        return True
+
+    def record_success(self, provider_name: str) -> None:
+        self._global_fallback_count.pop(provider_name, None)
+        self._open_until.pop(provider_name, None)
+
+
 class TTSAllProvidersFailedError(Exception):
     def __init__(self, message: str = "All TTS providers failed"):
         self.error_code = "TTS_ALL_PROVIDERS_FAILED"
@@ -49,6 +96,10 @@ class TTSOrchestrator:
         self._settings = app_settings or settings
         self._session_state: dict[str, SessionTTSState] = {}
         self._cleanup_task: asyncio.Task | None = None
+        self._circuit_breaker = ProviderCircuitBreaker(
+            open_duration_sec=getattr(self._settings, "TTS_CIRCUIT_OPEN_SEC", 30),
+            trip_threshold=self._settings.TTS_CONSECUTIVE_SLOW_THRESHOLD,
+        )
 
     async def synthesize_for_call(
         self,
@@ -90,8 +141,9 @@ class TTSOrchestrator:
             primary_name, fallback_name = fallback_name, primary_name
 
         if primary_name == fallback_name:
-            fallback_name = (pn for pn in self._providers if pn != primary_name)
-            fallback_name = next(fallback_name, primary_name)
+            fallback_name = next(
+                (pn for pn in self._providers if pn != primary_name), primary_name
+            )
 
         tts_model = agent_config.get("tts_voice_model") or None
         response = await provider.synthesize(text, voice_id, model=tts_model)
@@ -135,6 +187,7 @@ class TTSOrchestrator:
         if not response.error and self._check_fallback_condition(vapi_call_id):
             to_provider = fallback_name
             if to_provider != primary_name:
+                self._circuit_breaker.record_fallback(primary_name)
                 await self._perform_switch(
                     session,
                     call_id,
@@ -184,6 +237,7 @@ class TTSOrchestrator:
         elif response.error:
             fallback_provider = self._providers.get(fallback_name)
             if fallback_provider:
+                self._circuit_breaker.record_fallback(primary_name)
                 fb_response = await fallback_provider.synthesize(
                     text, voice_id, model=tts_model
                 )
@@ -213,6 +267,7 @@ class TTSOrchestrator:
                 state.latency_history.append(fb_response.latency_ms)
 
                 if fb_response.error:
+                    self._circuit_breaker.record_fallback(fallback_name)
                     await self._record_all_failed(
                         session, call_id, vapi_call_id, org_id
                     )
@@ -231,6 +286,7 @@ class TTSOrchestrator:
                         f"{fallback_name} ({fb_response.error_message})"
                     )
                 else:
+                    self._circuit_breaker.record_success(fallback_name)
                     state.active_provider = fallback_name
                     state.consecutive_slow = 0
                     state.recovery_healthy_count = 0
@@ -248,6 +304,7 @@ class TTSOrchestrator:
                     )
                     response = fb_response
             else:
+                self._circuit_breaker.record_fallback(primary_name)
                 await self._record_all_failed(session, call_id, vapi_call_id, org_id)
                 await self._emit_voice_event(
                     session,
@@ -262,6 +319,7 @@ class TTSOrchestrator:
                     f"Primary failed and no fallback: {response.error_message}"
                 )
         else:
+            self._circuit_breaker.record_success(primary_name)
             if (
                 self._settings.TTS_AUTO_RECOVERY_ENABLED
                 and state.active_provider != self._settings.TTS_PRIMARY_PROVIDER
@@ -319,6 +377,19 @@ class TTSOrchestrator:
             primary = self._settings.TTS_PRIMARY_PROVIDER
             if primary not in self._providers and self._providers:
                 primary = next(iter(self._providers))
+            if self._circuit_breaker.is_open(primary):
+                for alt in self._providers:
+                    if alt != primary and not self._circuit_breaker.is_open(alt):
+                        primary = alt
+                        break
+                else:
+                    logger.warning(
+                        "All TTS providers have open circuit breakers for new session",
+                        extra={
+                            "code": "TTS_ALL_CIRCUITS_OPEN",
+                            "vapi_call_id": vapi_call_id,
+                        },
+                    )
             self._session_state[vapi_call_id] = SessionTTSState(
                 active_provider=primary,
             )

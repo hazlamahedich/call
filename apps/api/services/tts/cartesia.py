@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class CartesiaProvider(TTSProviderBase):
     def __init__(self) -> None:
         self._client = httpx.AsyncClient(
-            timeout=httpx.Timeout(connect=1.0, read=1.0, write=2.0, pool=2.0),
+            timeout=httpx.Timeout(connect=2.0, read=3.0, write=2.0, pool=2.0),
         )
 
     @property

@@ -23,7 +23,8 @@ def _make_settings(elevenlabs_key="test-key", cartesia_key="test-key"):
     s.TTS_RECOVERY_HEALTHY_COUNT = 5
     s.TTS_RECOVERY_LATENCY_MS = 300
     s.TTS_RECOVERY_COOLDOWN_SEC = 60
-    s.TTS_SESSION_TTL_SEC = 7200
+    s.TTS_SESSION_TTL_SEC = 3600
+    s.TTS_CIRCUIT_OPEN_SEC = 30
     return s
 
 
