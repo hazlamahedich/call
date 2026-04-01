@@ -1,10 +1,11 @@
 """
 Story 2.2: Real-time Audio Stream & Transcription Pipeline
-Latency Benchmark Test
+Latency Computation & Benchmark Tests
 
-Simulates 100 transcript events and verifies p95 processing < 200ms.
+Part 1: _compute_latency helper unit tests
+Part 2: p95 benchmark (100 events, <200ms SLA)
 
-NOTE: This test mocks the database layer (session.execute), so the measured
+NOTE: The benchmark mocks the database layer (session.execute), so the measured
 latency reflects in-process overhead only (JSON parsing, role mapping, SQL
 construction) — NOT actual I/O latency (DB writes, WebSocket broadcasts).
 The 200ms SLA assertion validates that the service logic itself is lightweight;
@@ -19,7 +20,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from services.transcription import handle_transcript_event
+from services.transcription import _compute_latency, handle_transcript_event
 
 
 def _make_latency_row(counter):
@@ -49,6 +50,36 @@ def _make_latency_result(counter):
     result = MagicMock()
     result.first.return_value = _make_latency_row(counter)
     return result
+
+
+class TestComputeLatency:
+    """[2.2-UNIT-005..008] Latency computation tests"""
+
+    def test_2_2_unit_005_P2_given_none_timestamp_when_compute_then_returns_none(self):
+        result = _compute_latency(datetime.now(timezone.utc), None)
+        assert result is None
+
+    def test_2_2_unit_006_P2_given_valid_timestamp_when_compute_then_returns_ms(self):
+        now = datetime.now(timezone.utc)
+        ts = now.timestamp() - 0.1
+        result = _compute_latency(now, ts)
+        assert result is not None
+        assert 90 <= result <= 120
+
+    def test_2_2_unit_007_P2_given_future_timestamp_when_compute_then_returns_negative(
+        self,
+    ):
+        now = datetime.now(timezone.utc)
+        ts = now.timestamp() + 1.0
+        result = _compute_latency(now, ts)
+        assert result is not None
+        assert result < 0
+
+    def test_2_2_unit_008_P2_given_invalid_timestamp_when_compute_then_returns_none(
+        self,
+    ):
+        result = _compute_latency(datetime.now(timezone.utc), float("inf"))
+        assert result is None
 
 
 class TestTranscriptionLatency:

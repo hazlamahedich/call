@@ -17,7 +17,9 @@ class TestConnectionManager:
     """[2.2-UNIT-400..406] ConnectionManager unit tests"""
 
     @pytest.mark.asyncio
-    async def test_2_2_unit_400_given_connect_when_called_then_tracks_websocket(self):
+    async def test_2_2_unit_400_P1_given_connect_when_called_then_tracks_websocket(
+        self,
+    ):
         manager = ConnectionManager()
         mock_ws = AsyncMock()
         mock_ws.accept = AsyncMock()
@@ -26,7 +28,7 @@ class TestConnectionManager:
         assert manager.get_connection_count(1) == 1
 
     @pytest.mark.asyncio
-    async def test_2_2_unit_401_given_multiple_connect_when_same_call_then_tracks_all(
+    async def test_2_2_unit_401_P1_given_multiple_connect_when_same_call_then_tracks_all(
         self,
     ):
         manager = ConnectionManager()
@@ -40,7 +42,7 @@ class TestConnectionManager:
         assert manager.get_connection_count(1) == 2
 
     @pytest.mark.asyncio
-    async def test_2_2_unit_402_given_disconnect_when_called_then_removes_websocket(
+    async def test_2_2_unit_402_P1_given_disconnect_when_called_then_removes_websocket(
         self,
     ):
         manager = ConnectionManager()
@@ -52,7 +54,7 @@ class TestConnectionManager:
         assert manager.get_connection_count(1) == 0
 
     @pytest.mark.asyncio
-    async def test_2_2_unit_403_given_disconnect_last_when_called_then_removes_channel(
+    async def test_2_2_unit_403_P2_given_disconnect_last_when_called_then_removes_channel(
         self,
     ):
         manager = ConnectionManager()
@@ -64,7 +66,9 @@ class TestConnectionManager:
         assert 1 not in manager._channels
 
     @pytest.mark.asyncio
-    async def test_2_2_unit_404_given_broadcast_when_subscribers_then_all_receive(self):
+    async def test_2_2_unit_404_P0_given_broadcast_when_subscribers_then_all_receive(
+        self,
+    ):
         manager = ConnectionManager()
         ws1 = AsyncMock()
         ws2 = AsyncMock()
@@ -83,14 +87,16 @@ class TestConnectionManager:
         ws2.send_json.assert_called_once_with(msg)
 
     @pytest.mark.asyncio
-    async def test_2_2_unit_405_given_broadcast_when_no_subscribers_then_no_error(self):
+    async def test_2_2_unit_405_P2_given_broadcast_when_no_subscribers_then_no_error(
+        self,
+    ):
         manager = ConnectionManager()
         msg = {"type": "transcript", "entry": {"id": 1}}
 
         await manager.broadcast_to_call(999, msg)
 
     @pytest.mark.asyncio
-    async def test_2_2_unit_406_given_broadcast_when_send_fails_then_removes_connection(
+    async def test_2_2_unit_406_P1_given_broadcast_when_send_fails_then_removes_connection(
         self,
     ):
         manager = ConnectionManager()

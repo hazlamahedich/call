@@ -52,19 +52,15 @@ class TestTranscriptAggregation:
     """[2.2-UNIT-500..502] Call-end transcript aggregation tests"""
 
     @pytest.mark.asyncio
-    async def test_2_2_unit_500_given_entries_exist_when_call_ends_then_transcript_aggregated(
+    async def test_2_2_unit_500_P0_given_entries_exist_when_call_ends_then_transcript_aggregated(
         self,
     ):
         mock_session = AsyncMock()
-
         call_row = _make_call_row(id=42, vapi_call_id="vci_agg")
         update_result = _make_result(row=call_row)
-
         entries = [("assistant-ai", "Hello there"), ("lead", "I am interested")]
         entries_result = _make_result(fetchall=entries)
-
         transcript_update_result = _make_result()
-
         mock_session.execute.side_effect = [
             _any_result(),
             update_result,
@@ -87,16 +83,13 @@ class TestTranscriptAggregation:
         assert "[Lead]: I am interested" in call.transcript
 
     @pytest.mark.asyncio
-    async def test_2_2_unit_501_given_no_entries_when_call_ends_then_transcript_stays_null(
+    async def test_2_2_unit_501_P1_given_no_entries_when_call_ends_then_transcript_stays_null(
         self,
     ):
         mock_session = AsyncMock()
-
         call_row = _make_call_row(id=43, vapi_call_id="vci_empty", transcript=None)
         update_result = _make_result(row=call_row)
-
         entries_result = _make_result(fetchall=[])
-
         mock_session.execute.side_effect = [
             _any_result(),
             update_result,
@@ -116,14 +109,12 @@ class TestTranscriptAggregation:
         assert call.transcript is None
 
     @pytest.mark.asyncio
-    async def test_2_2_unit_502_given_aggregation_error_when_call_ends_then_graceful(
+    async def test_2_2_unit_502_P1_given_aggregation_error_when_call_ends_then_graceful(
         self,
     ):
         mock_session = AsyncMock()
-
         call_row = _make_call_row(id=44, vapi_call_id="vci_err", transcript=None)
         update_result = _make_result(row=call_row)
-
         mock_session.execute.side_effect = [
             _any_result(),
             update_result,
