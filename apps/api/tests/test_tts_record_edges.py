@@ -58,7 +58,7 @@ class TestRecordAllFailedExceptions:
     """
 
     @pytest.mark.asyncio
-    async def test_per_provider_insert_exception_handled(self):
+    async def test_P1_per_provider_insert_exception_handled(self):
         settings = _make_settings()
         primary = _mock_provider("elevenlabs", error=True, error_message="Timeout")
         fallback = _mock_provider("cartesia", error=True, error_message="Timeout")
@@ -90,7 +90,7 @@ class TestRecordAllFailedExceptions:
             )
 
     @pytest.mark.asyncio
-    async def test_flush_exception_handled(self):
+    async def test_P1_flush_exception_handled(self):
         settings = _make_settings()
         primary = _mock_provider("elevenlabs", error=True, error_message="Timeout")
         fallback = _mock_provider("cartesia", error=True, error_message="Timeout")
@@ -130,7 +130,7 @@ class TestPerformSwitchContinuesAfterDBError:
     """
 
     @pytest.mark.asyncio
-    async def test_voice_event_emitted_after_switch_insert_failure(self):
+    async def test_P1_voice_event_emitted_after_switch_insert_failure(self):
         settings = _make_settings()
         primary = _mock_provider("elevenlabs", latency_ms=600)
         fallback = _mock_provider("cartesia", latency_ms=100)
@@ -177,7 +177,7 @@ class TestAllFailedErrorMessages:
     """
 
     @pytest.mark.asyncio
-    async def test_both_providers_failed_error_contains_details(self):
+    async def test_P2_both_providers_failed_error_contains_details(self):
         settings = _make_settings()
         primary = _mock_provider(
             "elevenlabs", error=True, error_message="Connection refused"

@@ -8,6 +8,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from services.tts.base import TTSProviderBase
 from services.tts.orchestrator import TTSOrchestrator
 
+import services.tts.factory as factory_module
+
 
 def _make_settings(elevenlabs_key="test-key", cartesia_key="test-key"):
     s = MagicMock()
@@ -25,6 +27,13 @@ def _make_settings(elevenlabs_key="test-key", cartesia_key="test-key"):
     return s
 
 
+@pytest.fixture(autouse=True)
+def _reset_factory():
+    factory_module._orchestrator = None
+    yield
+    factory_module._orchestrator = None
+
+
 class TestGetTTSOrchestrator:
     """
     [2.3-UNIT-012_P0] Given factory function, when called,
@@ -32,10 +41,7 @@ class TestGetTTSOrchestrator:
     """
 
     @pytest.mark.asyncio
-    async def test_creates_orchestrator_with_both_keys(self):
-        import services.tts.factory as factory_module
-
-        factory_module._orchestrator = None
+    async def test_P0_creates_orchestrator_with_both_keys(self):
         mock_settings = _make_settings(elevenlabs_key="key-el", cartesia_key="key-ca")
 
         with patch("services.tts.factory.settings", mock_settings):
@@ -54,14 +60,8 @@ class TestGetTTSOrchestrator:
                 assert "elevenlabs" in orch._providers
                 assert "cartesia" in orch._providers
 
-        factory_module._orchestrator = None
-
     @pytest.mark.asyncio
-    async def test_returns_cached_orchestrator_on_second_call(self):
-        import services.tts.factory as factory_module
-
-        factory_module._orchestrator = None
-
+    async def test_P0_returns_cached_orchestrator_on_second_call(self):
         with patch("services.tts.factory.settings", _make_settings()):
             with (
                 patch("services.tts.factory.ElevenLabsProvider"),
@@ -72,14 +72,8 @@ class TestGetTTSOrchestrator:
 
                 assert orch1 is orch2
 
-        factory_module._orchestrator = None
-
     @pytest.mark.asyncio
-    async def test_creates_only_elevenlabs_when_cartesia_missing(self):
-        import services.tts.factory as factory_module
-
-        factory_module._orchestrator = None
-
+    async def test_P0_creates_only_elevenlabs_when_cartesia_missing(self):
         with patch(
             "services.tts.factory.settings",
             _make_settings(cartesia_key=""),
@@ -91,14 +85,8 @@ class TestGetTTSOrchestrator:
                 assert "elevenlabs" in orch._providers
                 assert "cartesia" not in orch._providers
 
-        factory_module._orchestrator = None
-
     @pytest.mark.asyncio
-    async def test_creates_only_cartesia_when_elevenlabs_missing(self):
-        import services.tts.factory as factory_module
-
-        factory_module._orchestrator = None
-
+    async def test_P0_creates_only_cartesia_when_elevenlabs_missing(self):
         with patch(
             "services.tts.factory.settings",
             _make_settings(elevenlabs_key=""),
@@ -110,14 +98,8 @@ class TestGetTTSOrchestrator:
                 assert "cartesia" in orch._providers
                 assert "elevenlabs" not in orch._providers
 
-        factory_module._orchestrator = None
-
     @pytest.mark.asyncio
-    async def test_creates_empty_orchestrator_when_no_keys(self):
-        import services.tts.factory as factory_module
-
-        factory_module._orchestrator = None
-
+    async def test_P0_creates_empty_orchestrator_when_no_keys(self):
         with patch(
             "services.tts.factory.settings",
             _make_settings(elevenlabs_key="", cartesia_key=""),
@@ -127,8 +109,6 @@ class TestGetTTSOrchestrator:
             assert isinstance(orch, TTSOrchestrator)
             assert len(orch._providers) == 0
 
-        factory_module._orchestrator = None
-
 
 class TestShutdownTTS:
     """
@@ -137,9 +117,7 @@ class TestShutdownTTS:
     """
 
     @pytest.mark.asyncio
-    async def test_shutdown_with_active_orchestrator(self):
-        import services.tts.factory as factory_module
-
+    async def test_P0_shutdown_with_active_orchestrator(self):
         mock_orch = MagicMock(spec=TTSOrchestrator)
         mock_orch.stop_cleanup_task = AsyncMock()
         mock_provider_1 = MagicMock(spec=TTSProviderBase)
@@ -161,9 +139,7 @@ class TestShutdownTTS:
         assert factory_module._orchestrator is None
 
     @pytest.mark.asyncio
-    async def test_shutdown_when_none_is_noop(self):
-        import services.tts.factory as factory_module
-
+    async def test_P0_shutdown_when_none_is_noop(self):
         factory_module._orchestrator = None
 
         await factory_module.shutdown_tts()

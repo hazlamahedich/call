@@ -1,5 +1,5 @@
 """
-[2.3-UNIT-013] Test TTS orchestrator edge cases — provider resolution,
+[2.3-UNIT-013] Test TTS orchestrator provider resolution — fallback logic,
 voice model override, mid-range latency, no-fallback provider, emit event error.
 """
 
@@ -71,7 +71,7 @@ class TestProviderResolution:
     """
 
     @pytest.mark.asyncio
-    async def test_primary_override_not_in_providers_falls_back_to_settings(self):
+    async def test_P0_primary_override_not_in_providers_falls_back_to_settings(self):
         settings = _make_settings()
         primary = _mock_provider("elevenlabs", latency_ms=100)
         orchestrator = TTSOrchestrator(
@@ -94,7 +94,7 @@ class TestProviderResolution:
         assert response.error is False
 
     @pytest.mark.asyncio
-    async def test_no_providers_raises_all_failed(self):
+    async def test_P0_no_providers_raises_all_failed(self):
         settings = _make_settings()
         orchestrator = TTSOrchestrator(
             providers={},
@@ -115,7 +115,7 @@ class TestProviderResolution:
         assert exc_info.value.error_code == "TTS_ALL_PROVIDERS_FAILED"
 
     @pytest.mark.asyncio
-    async def test_primary_none_swaps_with_fallback(self):
+    async def test_P0_primary_none_swaps_with_fallback(self):
         settings = _make_settings(
             TTS_PRIMARY_PROVIDER="nonexistent",
             TTS_FALLBACK_PROVIDER="cartesia",
@@ -146,7 +146,7 @@ class TestVoiceModelOverride:
     """
 
     @pytest.mark.asyncio
-    async def test_voice_model_override_passed_to_synthesize(self):
+    async def test_P1_voice_model_override_passed_to_synthesize(self):
         settings = _make_settings()
         primary = _mock_provider("elevenlabs", latency_ms=100)
         orchestrator = TTSOrchestrator(
@@ -176,7 +176,7 @@ class TestMidRangeLatency:
     """
 
     @pytest.mark.asyncio
-    async def test_mid_range_latency_resets_recovery_healthy_count(self):
+    async def test_P1_mid_range_latency_resets_recovery_healthy_count(self):
         settings = _make_settings(
             TTS_RECOVERY_LATENCY_MS=300,
             TTS_RECOVERY_COOLDOWN_SEC=0,
@@ -218,7 +218,7 @@ class TestNoFallbackProvider:
     """
 
     @pytest.mark.asyncio
-    async def test_primary_error_no_fallback_raises_all_failed(self):
+    async def test_P0_primary_error_no_fallback_raises_all_failed(self):
         settings = _make_settings()
         primary = _mock_provider(
             "elevenlabs", error=True, error_message="Connection refused"
@@ -251,7 +251,7 @@ class TestEmitVoiceEventException:
     """
 
     @pytest.mark.asyncio
-    async def test_voice_event_exception_does_not_crash_orchestrator(self):
+    async def test_P1_voice_event_exception_does_not_crash_orchestrator(self):
         settings = _make_settings()
         primary = _mock_provider("elevenlabs", latency_ms=600)
         fallback = _mock_provider("cartesia", latency_ms=100)
@@ -283,83 +283,3 @@ class TestEmitVoiceEventException:
             )
 
         assert orchestrator.get_session_provider("vci-emiterr") == "cartesia"
-
-
-class TestGetSessionEdgeCases:
-    """
-    [2.3-UNIT-013_P2] Edge cases for session accessor methods.
-    """
-
-    def test_latency_history_returns_empty_for_unknown_session(self):
-        settings = _make_settings()
-        orchestrator = TTSOrchestrator(
-            providers={"elevenlabs": _mock_provider("elevenlabs")},
-            app_settings=settings,
-        )
-
-        result = orchestrator.get_session_latency_history("nonexistent-vci")
-        assert result == []
-
-    def test_reset_session_idempotent_for_nonexistent_key(self):
-        settings = _make_settings()
-        orchestrator = TTSOrchestrator(
-            providers={"elevenlabs": _mock_provider("elevenlabs")},
-            app_settings=settings,
-        )
-
-        orchestrator.reset_session("nonexistent-vci")
-        assert "nonexistent-vci" not in orchestrator._session_state
-
-    def test_check_fallback_condition_returns_false_for_missing_state(self):
-        settings = _make_settings()
-        orchestrator = TTSOrchestrator(
-            providers={"elevenlabs": _mock_provider("elevenlabs")},
-            app_settings=settings,
-        )
-
-        assert orchestrator._check_fallback_condition("nonexistent") is False
-
-    def test_check_recovery_condition_returns_false_for_missing_state(self):
-        settings = _make_settings()
-        orchestrator = TTSOrchestrator(
-            providers={"elevenlabs": _mock_provider("elevenlabs")},
-            app_settings=settings,
-        )
-
-        assert orchestrator._check_recovery_condition("nonexistent") is False
-
-
-class TestGetOrCreateSessionFallback:
-    """
-    [2.3-UNIT-013_P1] _get_or_create_session falls back when primary not in providers.
-    """
-
-    def test_falls_back_to_first_available_when_primary_missing(self):
-        settings = _make_settings(TTS_PRIMARY_PROVIDER="nonexistent")
-        provider = _mock_provider("cartesia")
-        orchestrator = TTSOrchestrator(
-            providers={"cartesia": provider},
-            app_settings=settings,
-        )
-
-        state = orchestrator._get_or_create_session("vci-new")
-
-        assert state.active_provider == "cartesia"
-
-
-class TestStopCleanupTaskNone:
-    """
-    [2.3-UNIT-013_P2] stop_cleanup_task handles None task.
-    """
-
-    @pytest.mark.asyncio
-    async def test_stop_cleanup_task_when_none_is_noop(self):
-        settings = _make_settings()
-        orchestrator = TTSOrchestrator(
-            providers={"elevenlabs": _mock_provider("elevenlabs")},
-            app_settings=settings,
-        )
-
-        assert orchestrator._cleanup_task is None
-        await orchestrator.stop_cleanup_task()
-        assert orchestrator._cleanup_task is None

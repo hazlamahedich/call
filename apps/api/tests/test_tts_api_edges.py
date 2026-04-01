@@ -2,7 +2,6 @@
 [2.3-UNIT-015] Test TTS API edge cases — single-element p95, latency history eviction.
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
 from fastapi import FastAPI
@@ -35,7 +34,7 @@ class TestSessionStatusP95Single:
     [2.3-UNIT-015_P1] P95 calculation with single latency entry uses idx=0.
     """
 
-    def test_single_latency_entry_uses_first_element(self):
+    def test_P1_single_latency_entry_uses_first_element(self):
         mock_db = AsyncMock()
         mock_result = MagicMock()
         mock_result.first.return_value = ("vci-p95",)
@@ -54,7 +53,7 @@ class TestSessionStatusP95Single:
         assert data["p95LatencyMs"] == 250.0
         assert data["requestCount"] == 1
 
-    def test_many_latency_entries_computes_p95(self):
+    def test_P1_many_latency_entries_computes_p95(self):
         mock_db = AsyncMock()
         mock_result = MagicMock()
         mock_result.first.return_value = ("vci-p95-many",)

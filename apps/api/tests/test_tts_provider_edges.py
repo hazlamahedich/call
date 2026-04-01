@@ -6,9 +6,6 @@ ElevenLabs health_check no key, content-type defaults, aclose lifecycle.
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
-
-from services.tts.base import TTSResponse
 from services.tts.elevenlabs import ElevenLabsProvider
 from services.tts.cartesia import CartesiaProvider
 
@@ -42,7 +39,7 @@ class TestCartesiaAuthErrors:
     """
 
     @pytest.mark.asyncio
-    async def test_auth_error_401_returns_error(self, cartesia_provider):
+    async def test_P1_auth_error_401_returns_error(self, cartesia_provider):
         with patch.object(
             cartesia_provider._client, "post", new_callable=AsyncMock
         ) as mock_post:
@@ -54,7 +51,7 @@ class TestCartesiaAuthErrors:
             assert "401" in response.error_message
 
     @pytest.mark.asyncio
-    async def test_auth_error_403_returns_error(self, cartesia_provider):
+    async def test_P1_auth_error_403_returns_error(self, cartesia_provider):
         with patch.object(
             cartesia_provider._client, "post", new_callable=AsyncMock
         ) as mock_post:
@@ -72,7 +69,7 @@ class TestElevenLabsHealthCheckNoKey:
     """
 
     @pytest.mark.asyncio
-    async def test_health_check_returns_false_when_no_api_key(
+    async def test_P1_health_check_returns_false_when_no_api_key(
         self, elevenlabs_provider
     ):
         with patch("services.tts.elevenlabs.settings.ELEVENLABS_API_KEY", ""):
@@ -86,7 +83,7 @@ class TestContentTypeDefault:
     """
 
     @pytest.mark.asyncio
-    async def test_elevenlabs_uses_default_content_type_when_missing(
+    async def test_P2_elevenlabs_uses_default_content_type_when_missing(
         self, elevenlabs_provider
     ):
         with patch.object(
@@ -99,7 +96,7 @@ class TestContentTypeDefault:
             assert response.content_type == "audio/mpeg"
 
     @pytest.mark.asyncio
-    async def test_cartesia_uses_default_content_type_when_missing(
+    async def test_P2_cartesia_uses_default_content_type_when_missing(
         self, cartesia_provider
     ):
         with patch.object(
@@ -118,7 +115,7 @@ class TestProviderAclose:
     """
 
     @pytest.mark.asyncio
-    async def test_elevenlabs_aclose_closes_client(self, elevenlabs_provider):
+    async def test_P1_elevenlabs_aclose_closes_client(self, elevenlabs_provider):
         with patch.object(
             elevenlabs_provider._client, "aclose", new_callable=AsyncMock
         ) as mock_aclose:
@@ -126,7 +123,7 @@ class TestProviderAclose:
             mock_aclose.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_cartesia_aclose_closes_client(self, cartesia_provider):
+    async def test_P1_cartesia_aclose_closes_client(self, cartesia_provider):
         with patch.object(
             cartesia_provider._client, "aclose", new_callable=AsyncMock
         ) as mock_aclose:
@@ -140,7 +137,9 @@ class TestProviderEmptyAudioResponse:
     """
 
     @pytest.mark.asyncio
-    async def test_elevenlabs_empty_audio_treated_as_success(self, elevenlabs_provider):
+    async def test_P2_elevenlabs_empty_audio_treated_as_success(
+        self, elevenlabs_provider
+    ):
         with patch.object(
             elevenlabs_provider._client, "post", new_callable=AsyncMock
         ) as mock_post:
@@ -152,7 +151,7 @@ class TestProviderEmptyAudioResponse:
             assert response.audio_bytes == b""
 
     @pytest.mark.asyncio
-    async def test_cartesia_empty_audio_treated_as_success(self, cartesia_provider):
+    async def test_P2_cartesia_empty_audio_treated_as_success(self, cartesia_provider):
         with patch.object(
             cartesia_provider._client, "post", new_callable=AsyncMock
         ) as mock_post:
