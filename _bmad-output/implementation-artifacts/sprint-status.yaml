@@ -56,6 +56,7 @@ development_status:
   2-2-real-time-audio-stream-transcription-pipeline: done
   2-3-low-latency-tts-provider-fallback-logic: done
   2-4-asynchronous-telemetry-sidecars-for-voice-events: backlog
+  2-4-epic-2-cross-story-integration-tests: review
   2-5-pulse-maker-visual-visualizer-component: review
   2-6-pre-flight-calibration-dashboard: backlog
   epic-2-retrospective: optional
