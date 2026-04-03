@@ -10,3 +10,4 @@ from models.transcript import TranscriptEntry
 from models.voice_event import VoiceEvent
 from models.tts_request import TTSRequest
 from models.tts_provider_switch import TTSProviderSwitch
+from models.voice_telemetry import VoiceTelemetry

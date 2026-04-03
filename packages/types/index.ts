@@ -11,3 +11,4 @@ export * from "./usage";
 export * from "./vapi";
 export * from "./tts";
 export * from "./ui";
+export * from "./telemetry";

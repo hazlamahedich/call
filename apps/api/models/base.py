@@ -21,6 +21,10 @@ TTSSwitchReason = Literal[
     "all_providers_failed",
 ]
 
+# Voice Telemetry Types (Story 2.4)
+VoiceEventType = Literal["silence", "noise", "interruption", "talkover"]
+TelemetryProvider = Literal["vapi", "deepgram", "cartesia"]
+
 
 class TenantModel(SQLModel):
     """

@@ -13,6 +13,7 @@ from database.session import set_tenant_context
 from models.transcript import TranscriptEntry
 from models.voice_event import VoiceEvent
 from services.ws_manager import manager as ws_manager
+from services.telemetry.hooks import VoiceEventHooks
 
 logger = logging.getLogger(__name__)
 
@@ -366,6 +367,14 @@ async def handle_speech_start(
                 "speaker": speaker,
             },
         )
+
+        # AC: 5 - Call telemetry hook for interruption detection
+        if call_id:
+            await VoiceEventHooks.on_interruption_detected(
+                tenant_id=org_id,
+                call_id=call_id,
+                confidence_score=0.8,
+            )
 
     result = await session.execute(
         text(

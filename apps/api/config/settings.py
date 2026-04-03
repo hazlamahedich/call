@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     TTS_SESSION_TTL_SEC: int = 3600
     TTS_CIRCUIT_OPEN_SEC: int = 30
 
+    # Telemetry Queue Settings (Story 2.4)
+    TELEMETRY_QUEUE_MAX_SIZE: int = 10000
+    TELEMETRY_BATCH_SIZE: int = 100
+    TELEMETRY_PUSH_TIMEOUT_MS: int = 2
+    TELEMETRY_WORKER_ENABLED: bool = True
+
     model_config = SettingsConfigDict(env_file=".env")
 
 

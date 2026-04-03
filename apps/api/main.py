@@ -12,19 +12,36 @@ from routers import (
     calls,
     webhooks_vapi,
     tts,
+    telemetry,
 )
 from routers.ws_transcript import router as ws_transcript_router
 from middleware.auth import AuthMiddleware
 from config.settings import settings
 from services.tts.factory import get_tts_orchestrator, shutdown_tts
+from services.telemetry.worker import TelemetryWorker
+from services.telemetry import telemetry_queue
+from database.session import AsyncSessionLocal
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Startup
     orchestrator = get_tts_orchestrator()
     await orchestrator.start_cleanup_task()
+
+    # Start telemetry worker (Story 2.4)
+    if settings.TELEMETRY_WORKER_ENABLED:
+        telemetry_worker = TelemetryWorker(AsyncSessionLocal)
+        await telemetry_queue.start_worker(telemetry_worker.process_batch)
+
     yield
+
+    # Shutdown
     await shutdown_tts()
+
+    # Stop telemetry worker
+    if settings.TELEMETRY_WORKER_ENABLED:
+        await telemetry_queue.stop()
 
 
 app = FastAPI(
@@ -53,3 +70,4 @@ app.include_router(calls.router, tags=["Calls"])
 app.include_router(webhooks_vapi.router, tags=["Vapi Webhooks"])
 app.include_router(ws_transcript_router, tags=["WebSocket Transcription"])
 app.include_router(tts.router, tags=["TTS"])
+app.include_router(telemetry.router, tags=["Telemetry"])
