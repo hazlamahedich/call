@@ -1,3 +1,5 @@
+export type VoiceEventType = "speech-start" | "speech-end" | "interruption";
+
 export interface TranscriptEntry {
   id: number;
   callId: number;
@@ -9,4 +11,5 @@ export interface TranscriptEntry {
   receivedAt: string;
   timestamp: number;
   sentiment?: "positive" | "neutral" | "hostile";
+  event_type?: VoiceEventType;
 }

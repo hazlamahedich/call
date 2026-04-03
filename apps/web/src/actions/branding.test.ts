@@ -17,7 +17,7 @@ vi.mock("@clerk/nextjs/server", () => ({
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 const MOCK_BRANDING: AgencyBranding = {
   id: 1,

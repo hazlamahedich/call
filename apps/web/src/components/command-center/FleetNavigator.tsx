@@ -2,6 +2,7 @@ import { cn } from "@/lib/utils";
 import { Users, Phone, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { PulseMaker } from "@/components/obsidian/PulseMaker";
 
 interface FleetNavigatorProps {
   className?: string;
@@ -33,8 +34,16 @@ export function FleetNavigator({ className }: FleetNavigatorProps) {
             <Button
               key={agent.id}
               variant="ghost"
-              className="w-full flex flex-col items-start p-sm h-auto"
+              className="w-full flex flex-col items-start p-sm h-auto relative"
             >
+              {/* Pulse-Maker Integration */}
+              <div className="absolute top-3 right-3 z-10">
+                <PulseMaker
+                  agentId={agent.id}
+                  motionEnabled={true}
+                />
+              </div>
+
               <div className="flex items-center justify-between w-full">
                 <span className="text-sm font-mono font-bold tracking-tight">
                   {agent.name}

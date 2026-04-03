@@ -126,36 +126,40 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    getBranding(organization.id).then(({ data }) => {
-      if (controller.signal.aborted) return;
-      if (data) {
-        const fullData: Omit<BrandingContextType, "refreshBranding"> = {
-          primaryColor: data.primaryColor,
-          primaryColorRgb: hexToRgb(data.primaryColor),
-          logoUrl: data.logoUrl,
-          brandName: data.brandName,
-          loaded: true,
-        };
-        applyBranding(fullData);
-        try {
-          sessionStorage.setItem(
-            cacheKey,
-            JSON.stringify({
-              data: {
-                primaryColor: data.primaryColor,
-                logoUrl: data.logoUrl,
-                brandName: data.brandName,
-              },
-              timestamp: Date.now(),
-            }),
-          );
-        } catch {
-          // quota exceeded or storage unavailable
+    getBranding(organization.id)
+      .then(({ data }) => {
+        if (controller.signal.aborted) return;
+        if (data) {
+          const fullData: Omit<BrandingContextType, "refreshBranding"> = {
+            primaryColor: data.primaryColor,
+            primaryColorRgb: hexToRgb(data.primaryColor),
+            logoUrl: data.logoUrl,
+            brandName: data.brandName,
+            loaded: true,
+          };
+          applyBranding(fullData);
+          try {
+            sessionStorage.setItem(
+              cacheKey,
+              JSON.stringify({
+                data: {
+                  primaryColor: data.primaryColor,
+                  logoUrl: data.logoUrl,
+                  brandName: data.brandName,
+                },
+                timestamp: Date.now(),
+              }),
+            );
+          } catch {
+            // quota exceeded or storage unavailable
+          }
+        } else {
+          setBranding((prev) => ({ ...prev, loaded: true }));
         }
-      } else {
+      })
+      .catch(() => {
         setBranding((prev) => ({ ...prev, loaded: true }));
-      }
-    });
+      });
 
     return () => {
       controller.abort();

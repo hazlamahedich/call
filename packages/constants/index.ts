@@ -85,3 +85,24 @@ export const TTS_ERROR_CODES = {
 
 export type TTSErrorCode =
   (typeof TTS_ERROR_CODES)[keyof typeof TTS_ERROR_CODES];
+
+// Pulse-Maker Component Constants
+export const PULSE_SCALE_MIN = 1.0;
+export const PULSE_SCALE_MAX = 1.3;
+export const PULSE_DURATION_MIN_MS = 500;
+export const PULSE_DURATION_MAX_MS = 2000;
+export const PULSE_COLOR_DEFAULT = "#3B82F6"; // Electric Blue
+export const RIPPLE_DURATION_MS = 300;
+export const RIPPLE_SCALE_MAX = 2.0;
+export const VOLUME_SPEAKING = 0.8;
+export const VOLUME_IDLE = 0.0;
+export const VOLUME_DECAY_RATE = 0.95;
+export const VOLUME_THRESHOLD = 0.8; // Binary state threshold for MVP
+export const RIPPLE_DELAY_1_MS = 50;
+export const RIPPLE_DELAY_2_MS = 100;
+export const RIPPLE_SIZE_1_PX = 72;
+export const RIPPLE_SIZE_2_PX = 60;
+export const RIPPLE_SIZE_3_PX = 54;
+export const RIPPLE_SPACING_PX = 6;
+export const INTERRUPTION_RESET_MS = 500;
+export const DECAY_INTERVAL_MS = 100;

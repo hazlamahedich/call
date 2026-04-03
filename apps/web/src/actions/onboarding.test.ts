@@ -16,7 +16,7 @@ vi.mock("@clerk/nextjs/server", () => ({
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 describe("[P0] Onboarding Server Actions", () => {
   beforeEach(() => {

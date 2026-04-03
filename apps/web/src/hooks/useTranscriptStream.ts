@@ -12,10 +12,11 @@ interface UseTranscriptStreamResult {
   entries: TranscriptEntry[];
   isConnected: boolean;
   error: string | null;
+  voiceEvents: TranscriptEntry[];
 }
 
 function buildWsUrl(callId: number): string {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
   const wsProtocol = apiUrl.startsWith("https") ? "wss" : "ws";
   const base = apiUrl.replace(/^https?/, wsProtocol);
   return `${base}/ws/calls/${callId}/transcript`;
@@ -25,6 +26,7 @@ export function useTranscriptStream(
   callId: number | null,
 ): UseTranscriptStreamResult {
   const [entries, setEntries] = useState<TranscriptEntry[]>([]);
+  const [voiceEvents, setVoiceEvents] = useState<TranscriptEntry[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,6 +34,7 @@ export function useTranscriptStream(
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const entriesBufferRef = useRef<TranscriptEntry[]>([]);
+  const voiceEventsBufferRef = useRef<TranscriptEntry[]>([]);
   const currentCallIdRef = useRef<number | null>(null);
 
   const { getToken } = useAuth();
@@ -41,6 +44,11 @@ export function useTranscriptStream(
       const buffered = entriesBufferRef.current;
       entriesBufferRef.current = [];
       setEntries((prev) => [...prev, ...buffered]);
+    }
+    if (voiceEventsBufferRef.current.length > 0) {
+      const buffered = voiceEventsBufferRef.current;
+      voiceEventsBufferRef.current = [];
+      setVoiceEvents((prev) => [...prev, ...buffered]);
     }
   }, []);
 
@@ -64,7 +72,9 @@ export function useTranscriptStream(
       setIsConnected(false);
       setError(null);
       setEntries([]);
+      setVoiceEvents([]);
       entriesBufferRef.current = [];
+      voiceEventsBufferRef.current = [];
       return;
     }
 
@@ -100,12 +110,34 @@ export function useTranscriptStream(
         if (cancelled) return;
         try {
           const data = JSON.parse(event.data);
+
+          // Handle transcript entries
           if (data.type === "transcript" && data.entry) {
             entriesBufferRef.current.push(data.entry);
             flushBuffer();
           }
-        } catch {
-          // ignore malformed JSON
+
+          // Handle voice state events from backend
+          if (data.type === "speech_state" && data.state) {
+            // Create a synthetic entry for voice events
+            const voiceEntry: TranscriptEntry = {
+              id: Date.now(),
+              callId: activeCallId,
+              role: "lead", // Voice events are always from lead perspective
+              text: "",
+              startTime: 0,
+              endTime: 0,
+              confidence: null,
+              receivedAt: new Date().toISOString(),
+              timestamp: Date.now(),
+              event_type: data.state.event_type,
+            };
+            voiceEventsBufferRef.current.push(voiceEntry);
+            flushBuffer();
+          }
+        } catch (error) {
+          // Log malformed JSON but don't crash
+          console.warn("[useTranscriptStream] Failed to parse WebSocket message:", error);
         }
       };
 
@@ -153,5 +185,5 @@ export function useTranscriptStream(
     };
   }, [callId, getToken, flushBuffer, clearReconnectTimer]);
 
-  return { entries, isConnected, error };
+  return { entries, isConnected, error, voiceEvents };
 }
