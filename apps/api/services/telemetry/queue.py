@@ -35,6 +35,7 @@ class VoiceEvent:
     sentiment_score: Optional[float] = None
     provider: TelemetryProvider = "vapi"
     metadata: Optional[dict] = None
+    queue_depth_at_capture: Optional[int] = None  # AC: 6 - Track queue depth for monitoring
 
 
 class TelemetryQueue:
@@ -109,8 +110,12 @@ class TelemetryQueue:
                     extra={"code": "TELEMETRY_PUSH_SLOW"},
                 )
 
-            # Track queue depth
-            self._queue_depth_gauge.append(self._queue.qsize())
+            # Track queue depth and store it in the event
+            current_depth = self._queue.qsize()
+            self._queue_depth_gauge.append(current_depth)
+
+            # Store queue depth in event for AC: 6
+            event.queue_depth_at_capture = current_depth
 
             return True
 

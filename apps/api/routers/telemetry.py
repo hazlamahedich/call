@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from database.session import get_session
+from dependencies.org_context import get_current_org_id
 from models.voice_telemetry import VoiceTelemetry
 from schemas.telemetry import (
     TelemetryMetricsResponse,
@@ -54,16 +55,18 @@ async def get_events(
     end_time: str = Query(None, description="End timestamp (ISO format)"),
     limit: int = Query(1000, ge=1, le=10000, description="Max results"),
     session: AsyncSession = Depends(get_session),
-    # Auth dependency would be injected here in production
-    # current_org_id: str = Depends(get_current_org_id),
+    current_org_id: str = Depends(get_current_org_id),
 ) -> TelemetryEventListResponse:
     """
     Query telemetry events with filters.
 
     AC: 7 - Tenant-isolated querying with filters and pagination
     """
+    # Set tenant context for RLS enforcement
+    from database.session import set_tenant_context
+    await set_tenant_context(session, current_org_id)
+
     # Build base query with RLS enforced
-    # In production: session.info["current_org_id"] would be set via set_tenant_context()
     query = select(VoiceTelemetry)
 
     # Apply filters

@@ -11,6 +11,7 @@ from typing import List
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from database.session import set_tenant_context
 from models.base import utc_now
 from models.voice_telemetry import VoiceTelemetry
 from .queue import VoiceEvent
@@ -45,6 +46,9 @@ class TelemetryWorker:
         AC: 3 - Track processing latency (<100ms P95 target)
         AC: 8 - Graceful degradation on DB errors
 
+        SECURITY (P0): Groups events by tenant_id and sets tenant context
+        before each tenant's batch to prevent bleed-through between tenants.
+
         Args:
             events: List of voice events to persist
         """
@@ -54,38 +58,53 @@ class TelemetryWorker:
         batch_start = time.perf_counter()
 
         try:
-            async with self.session_factory() as session:
-                # Convert VoiceEvent dataclass to VoiceTelemetry SQLModel
-                telemetry_records = []
-                for event in events:
-                    # Use model_validate pattern (AC: 4)
-                    record_data = {
-                        "callId": event.call_id,
-                        "eventType": event.event_type,
-                        "timestamp": event.timestamp,
-                        "durationMs": event.duration_ms,
-                        "audioLevel": event.audio_level,
-                        "confidenceScore": event.confidence_score,
-                        "sentimentScore": event.sentiment_score,
-                        "provider": event.provider,
-                        "sessionMetadata": event.metadata,
-                    }
+            # Group events by tenant_id to prevent cross-tenant contamination
+            # [2.4-SECURITY-TENANT-RACE-001] P0: Must set_tenant_context per tenant
+            from collections import defaultdict
 
-                    # Create VoiceTelemetry record
-                    record = VoiceTelemetry.model_validate(record_data)
-                    telemetry_records.append(record)
+            events_by_tenant = defaultdict(list)
+            for event in events:
+                events_by_tenant[event.tenant_id].append(event)
 
-                # Set computed fields
-                processing_latency_ms = (time.perf_counter() - batch_start) * 1000
+            # Process each tenant's events separately
+            for tenant_id, tenant_events in events_by_tenant.items():
+                async with self.session_factory() as session:
+                    # CRITICAL: Set tenant context BEFORE any DB operations
+                    # This prevents P0 tenant bleed-through vulnerability
+                    await set_tenant_context(session, tenant_id)
 
-                for record in telemetry_records:
-                    record.processing_latency_ms = processing_latency_ms
-                    # Note: queue_depth_at_capture would be set by queue if needed
-                    # For now, we don't track this at the record level
+                    # Convert VoiceEvent dataclass to VoiceTelemetry SQLModel
+                    telemetry_records = []
+                    for event in tenant_events:
+                        # Use model_validate pattern (AC: 4)
+                        record_data = {
+                            "callId": event.call_id,
+                            "eventType": event.event_type,
+                            "timestamp": event.timestamp,
+                            "durationMs": event.duration_ms,
+                            "audioLevel": event.audio_level,
+                            "confidenceScore": event.confidence_score,
+                            "sentimentScore": event.sentiment_score,
+                            "provider": event.provider,
+                            "sessionMetadata": event.metadata,
+                            "queueDepthAtCapture": event.queue_depth_at_capture,  # AC: 6
+                        }
 
-                # Bulk insert all records
-                session.add_all(telemetry_records)
-                await session.commit()
+                        # Create VoiceTelemetry record
+                        record = VoiceTelemetry.model_validate(record_data)
+                        telemetry_records.append(record)
+
+                    # Set computed fields
+                    processing_latency_ms = (time.perf_counter() - batch_start) * 1000
+
+                    for record in telemetry_records:
+                        record.processing_latency_ms = processing_latency_ms
+                        # Note: queue_depth_at_capture would be set by queue if needed
+                        # For now, we don't track this at the record level
+
+                    # Bulk insert all records for this tenant
+                    session.add_all(telemetry_records)
+                    await session.commit()
 
         except Exception as e:
             # DB error - log and continue (graceful degradation)

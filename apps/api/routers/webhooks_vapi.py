@@ -12,6 +12,7 @@ from services.transcription import (
     handle_speech_start,
     handle_speech_end,
 )
+from services.telemetry.hooks import VoiceEventHooks
 from services.tts.factory import get_tts_orchestrator
 
 router = APIRouter(prefix="/webhooks/vapi", tags=["Vapi Webhooks"])
@@ -139,6 +140,21 @@ async def handle_call_events(
                 speech_data = {}
             speech_data.setdefault("speaker", message.get("speaker", "lead"))
             await handle_speech_start(session, vapi_call_id, org_id, speech_data)
+
+            # AC: 5 - Call telemetry hook for speech start
+            # Note: Vapi doesn't send silence/noise events directly
+            # These would need to be detected from audio analysis
+            # Placeholder for silence detection integration
+            # if speech_data.get("silence_detected"):
+            #     call_id = await _resolve_call_id(session, vapi_call_id, org_id)
+            #     if call_id:
+            #         await VoiceEventHooks.on_silence_detected(
+            #             tenant_id=org_id,
+            #             call_id=call_id,
+            #             duration_ms=speech_data.get("silence_duration_ms", 0),
+            #             audio_level=speech_data.get("audio_level", -60.0),
+            #         )
+
         elif event_type == "speech-end":
             speech_data = message.get("speech", {})
             if not isinstance(speech_data, dict):

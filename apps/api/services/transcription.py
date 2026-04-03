@@ -376,6 +376,15 @@ async def handle_speech_start(
                 confidence_score=0.8,
             )
 
+        # AC: 5 - Call telemetry hook for talkover (overlap) detection
+        # Talkover occurs when interruption happens during AI speech
+        if call_id and is_interruption:
+            await VoiceEventHooks.on_talkover_detected(
+                tenant_id=org_id,
+                call_id=call_id,
+                duration_ms=100.0,  # Placeholder - actual duration would be calculated
+            )
+
     result = await session.execute(
         text(
             "INSERT INTO voice_events "
