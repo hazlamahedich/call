@@ -1,0 +1,91 @@
+/* Pulse-Maker Component Styles */
+
+.pulse-maker {
+  --pulse-scale: 1;
+  --pulse-duration: 2s;
+  --pulse-color: #3b82f6; /* Electric Blue, MVP default */
+}
+
+/* Core heartbeat circle */
+.pulse-core {
+  will-change: transform, opacity;
+  animation: pulse-heartbeat var(--pulse-duration) ease-in-out infinite;
+}
+
+.pulse-core.static {
+  animation: none;
+  opacity: 0.6;
+}
+
+@keyframes pulse-heartbeat {
+  0% {
+    transform: scale(var(--pulse-scale));
+  }
+  50% {
+    transform: scale(calc(var(--pulse-scale) * 1.05));
+  }
+  100% {
+    transform: scale(var(--pulse-scale));
+  }
+}
+
+/* Ripple rings */
+.pulse-ripple {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  will-change: transform, opacity;
+  animation: none;
+  border-color: var(--pulse-color); /* Use CSS variable */
+  opacity: 0.3;
+}
+
+/* Continuous subtle animation when speaking */
+.pulse-ripple.speaking {
+  animation: ripple-pulse var(--pulse-duration) ease-in-out infinite;
+}
+
+@keyframes ripple-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.3;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.5;
+  }
+}
+
+/* Interruption ripple - rapid outward expansion */
+.pulse-ripple.active {
+  animation: ripple-expand 300ms ease-out forwards;
+}
+
+@keyframes ripple-expand {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+/* Interruption ripple color override */
+.pulse-ripple.interruption {
+  border-color: #f43f5e; /* Crimson */
+}
+
+/* Motion reduction support */
+@media (prefers-reduced-motion: reduce) {
+  .pulse-core {
+    animation: none !important;
+    opacity: 0.6;
+  }
+
+  .pulse-ripple {
+    animation: none !important;
+  }
+}
