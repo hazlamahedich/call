@@ -4,7 +4,7 @@ import {
   webhookHeaders,
 } from "../../support/webhook-helpers";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
 test.describe("[P0] Webhook Signature Verification — AC5", () => {
   test("[2.1-E2E-060][P0] Given webhook without vapi-signature header, When posted, Then returns 401", async ({

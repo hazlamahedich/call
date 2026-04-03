@@ -4,7 +4,7 @@ import {
   webhookHeaders,
 } from "../../support/webhook-helpers";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
 test.describe("[P0] Call Trigger — AC1", () => {
   test("[2.1-E2E-001][P0] Given authenticated user, When clicking start call with valid number, Then trigger endpoint is called", async ({

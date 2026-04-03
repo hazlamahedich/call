@@ -3,7 +3,7 @@
 import { auth } from "@clerk/nextjs/server";
 import type { UsageSummary, UsageThreshold } from "@call/types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 export interface UsageCheckResult {
   threshold: UsageThreshold;

@@ -4,7 +4,7 @@ import {
   webhookHeaders,
 } from "../../support/webhook-helpers";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
 test.describe("[P1] Webhook Edge Cases — AC6", () => {
   test("[2.1-E2E-070][P1] Given webhook with missing call ID, When posted, Then returns 200 (idempotent ignore)", async ({

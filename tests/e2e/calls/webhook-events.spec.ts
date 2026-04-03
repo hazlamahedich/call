@@ -4,7 +4,7 @@ import {
   webhookHeaders,
 } from "../../support/webhook-helpers";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
 test.describe("[P0] Webhook: call-start Event — AC4", () => {
   test("[2.1-E2E-030][P0] Given valid call-start webhook, When posted with correct signature, Then returns 200 received", async ({

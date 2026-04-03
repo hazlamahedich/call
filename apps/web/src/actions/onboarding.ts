@@ -8,7 +8,7 @@ import type {
   DbScript,
 } from "@call/types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 export async function getOnboardingStatus(): Promise<{
   data: OnboardingStatus | null;
@@ -41,9 +41,7 @@ export async function getOnboardingStatus(): Promise<{
   }
 }
 
-export async function completeOnboarding(
-  payload: OnboardingPayload,
-): Promise<{
+export async function completeOnboarding(payload: OnboardingPayload): Promise<{
   agent: (Agent & { script?: DbScript }) | null;
   error: string | null;
 }> {

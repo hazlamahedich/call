@@ -1,6 +1,6 @@
 import { test, expect } from "../../support/merged-fixtures";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
 test.describe("[P0] Phone Number Validation — AC3", () => {
   test("[2.1-E2E-020][P0] Given invalid phone number format, When trigger is called, Then 422 validation error is returned", async ({
