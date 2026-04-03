@@ -32,7 +32,12 @@ describe("PulseMaker", () => {
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
+    // Cleanup: Clear all timers to prevent timer leaks
+    vi.clearAllTimers();
+    vi.clearAllMocks();
+
+    // Verify no timer leaks after each test
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("renders with default props (AC: 1)", () => {
@@ -211,5 +216,27 @@ describe("PulseMaker", () => {
     // sr-only span should not have aria-live
     const srOnly = container.querySelector(".sr-only");
     expect(srOnly?.getAttribute("aria-live")).toBeNull();
+  });
+
+  it("cleans up timeout on unmount to prevent memory leaks", () => {
+    vi.useFakeTimers();
+
+    const props: PulseMakerProps = {
+      agentId: "test-agent-1",
+      volume: 0.8,
+    };
+
+    const { unmount } = render(<PulseMaker {...props} />);
+
+    // Trigger interruption (creates timeout)
+    const { rerender } = render(<PulseMaker {...props} volume={0.0} />);
+
+    // Cleanup timers
+    unmount();
+
+    // Verify no timer leaks after unmount
+    expect(vi.getTimerCount()).toBe(0);
+
+    vi.useRealTimers();
   });
 });

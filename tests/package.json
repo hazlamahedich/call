@@ -6,6 +6,7 @@
     "test:ui": "playwright test --ui"
   },
   "devDependencies": {
+    "@faker-js/faker": "^10.4.0",
     "@playwright/test": "latest",
     "@seontechnologies/playwright-utils": "latest",
     "@types/node": "latest",

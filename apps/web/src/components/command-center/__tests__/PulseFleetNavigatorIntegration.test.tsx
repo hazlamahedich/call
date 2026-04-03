@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { FleetNavigator } from "../FleetNavigator";
 import { PulseMaker } from "../../obsidian/PulseMaker";
@@ -13,6 +13,17 @@ vi.mock("../../obsidian/PulseMaker", () => ({
 }));
 
 describe("PulseMaker Fleet Navigator Integration", () => {
+  beforeEach(() => {
+    // Clear mocks before each test
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    // Cleanup: Verify no mock leaks
+    expect(vi.getTimerCount()).toBe(0);
+    vi.clearAllMocks();
+  });
+
   it("renders Pulse Maker for each active agent", () => {
     render(<FleetNavigator />);
 
