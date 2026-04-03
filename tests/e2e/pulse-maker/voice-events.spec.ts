@@ -3,16 +3,21 @@ import { createAgent, createVoiceEvent, createSpeakingEvent, createIdleEvent } f
 
 /**
  * Pulse-Maker Voice Events Tests
- * Story: 2.5 - Pulse-Maker Visual Visualizer Component
+ * Story: 2.4 - Asynchronous Telemetry Sidecars for Voice Events
  * Epic: 2 - Real-Time AI Voice Pipeline
  *
- * Test ID Format: 2.5-E2E-XXX
+ * Test ID Format: 2.4-E2E-XXX (Fixed from 2.5-E2E-XXX)
  * Priority Tags: @smoke @p0 @p1 @p2
  */
 
-test.describe('Pulse-Maker Voice Event Response', () => {
+test.describe('[2.4-E2E] Pulse-Maker Voice Event Response', () => {
+  // ✅ P1 FIX: Clean up mocked routes after each test to prevent state leakage
+  test.afterEach(async ({ page }) => {
+    await page.unroute('**/api/v1/calls/voice-events');
+    await page.unroute('**/api/v1/voice-events');
+  });
   /**
-   * Test ID: 2.5-E2E-002
+   * Test ID: 2.4-E2E-019
    * Priority: P0
    * Tags: @smoke @p0
    * AC: AC2, AC3
@@ -50,7 +55,7 @@ test.describe('Pulse-Maker Voice Event Response', () => {
   });
 
   /**
-   * Test ID: 2.5-E2E-003
+   * Test ID: 2.4-E2E-020
    * Priority: P1
    * Tags: @p1
    * AC: AC3
@@ -108,7 +113,7 @@ test.describe('Pulse-Maker Voice Event Response', () => {
   });
 
   /**
-   * Test ID: 2.5-E2E-004
+   * Test ID: 2.4-E2E-021
    * Priority: P2
    * Tags: @p2
    * AC: AC4
@@ -134,7 +139,7 @@ test.describe('Pulse-Maker Voice Event Response', () => {
   });
 
   /**
-   * Test ID: 2.5-E2E-005
+   * Test ID: 2.4-E2E-022
    * Priority: P1
    * Tags: @p1
    * AC: AC5

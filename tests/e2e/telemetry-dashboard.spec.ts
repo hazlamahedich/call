@@ -8,6 +8,11 @@ import { createAgent, createVoiceEvent } from '../factories/agent-factory';
  */
 
 test.describe('[2.4-E2E] Telemetry Dashboard', () => {
+  // ✅ P1 FIX: Clean up mocked routes after each test to prevent state leakage
+  test.afterEach(async ({ page }) => {
+    await page.unroute('**/api/v1/telemetry/metrics');
+    await page.unroute('**/api/v1/telemetry/events*');
+  });
   /**
    * Test ID: 2.4-E2E-001
    * Priority: P1

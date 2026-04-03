@@ -1,4 +1,11 @@
 import { test, expect } from '@playwright/test';
+import {
+  createTelemetryEvent,
+  createCallId,
+  createOrgId,
+  createSilenceEvent,
+  createNoiseEvent,
+} from '../factories/telemetry-factory';
 
 /**
  * Story 2.4: Telemetry API Tests
@@ -117,14 +124,15 @@ test.describe('[2.4-API] Telemetry Events Query Endpoint', () => {
    * AC: AC7
    */
   test('[P1] @p1 should query events with call_id filter', async ({ request }) => {
-    const response = await request.get('/api/v1/telemetry/events?call_id=123');
+    const testCallId = createCallId(); // ✅ Unique ID per test
+    const response = await request.get(`/api/v1/telemetry/events?call_id=${testCallId}`);
 
     expect(response.status()).toBe(200);
 
     const events = await response.json();
     expect(Array.isArray(events)).toBe(true);
     events.forEach(event => {
-      expect(event.call_id).toBe(123);
+      expect(event.call_id).toBe(testCallId);
     });
   });
 
@@ -135,6 +143,7 @@ test.describe('[2.4-API] Telemetry Events Query Endpoint', () => {
    * AC: AC7
    */
   test('[P1] @p1 should query events with event_type filter', async ({ request }) => {
+    const testEvent = createSilenceEvent(); // ✅ Unique event data
     const response = await request.get('/api/v1/telemetry/events?event_type=silence');
 
     expect(response.status()).toBe(200);
@@ -222,6 +231,7 @@ test.describe('[2.4-API] Telemetry Events Query Endpoint', () => {
   test('[P0] @p0 should enforce tenant isolation', async ({ request }) => {
     // This test requires authenticated context with tenant_id
     // Events query should only return events for the authenticated tenant
+    const testOrgId = createOrgId(); // ✅ Unique org ID per test
     const response = await request.get('/api/v1/telemetry/events');
 
     expect(response.status()).toBe(200);
@@ -240,6 +250,7 @@ test.describe('[2.4-API] Telemetry Events Query Endpoint', () => {
    * AC: AC7
    */
   test('[P0] @p0 should require authentication for events query', async ({ request }) => {
+    const testOrgId = createOrgId(); // ✅ Unique org ID per test
     const response = await request.get('/api/v1/telemetry/events', {
       headers: {
         // No auth header
