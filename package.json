@@ -10,8 +10,9 @@
     "test:e2e": "pnpm --filter tests test"
   },
   "devDependencies": {
-    "turbo": "latest",
-    "prettier": "latest"
+    "@faker-js/faker": "^10.4.0",
+    "prettier": "latest",
+    "turbo": "latest"
   },
   "packageManager": "pnpm@10.26.1"
 }
