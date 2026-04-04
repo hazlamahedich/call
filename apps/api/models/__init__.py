@@ -11,3 +11,4 @@ from models.voice_event import VoiceEvent
 from models.tts_request import TTSRequest
 from models.tts_provider_switch import TTSProviderSwitch
 from models.voice_telemetry import VoiceTelemetry
+from models.voice_preset import VoicePreset

@@ -1,0 +1,135 @@
+/* VoicePresetSelector Styles - Obsidian Design System */
+
+.voicePresetSelector {
+  --obsidian-bg: #09090B;
+  --obsidian-card: #0A0A0B;
+  --obsidian-border: #27272A;
+  --emerald-primary: #10B981;
+  --emerald-hover: #059669;
+  --text-primary: #FAFAFA;
+  --text-secondary: #A1A1AA;
+  --text-muted: #71717A;
+}
+
+.presetCard {
+  background: var(--obsidian-card);
+  border: 1px solid var(--obsidian-border);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.presetCard:hover {
+  border-color: rgba(16, 185, 129, 0.5);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  transform: translateY(-1px);
+}
+
+.presetCard.selected {
+  border-color: var(--emerald-primary);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.presetCard .checkmark {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--emerald-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 0.75rem;
+}
+
+.playButton {
+  background: #27272A;
+  color: var(--text-primary);
+  border: none;
+  border-radius: 0.375rem;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.playButton:hover {
+  background: #3F3F46;
+}
+
+.playButton.playing {
+  background: var(--emerald-primary);
+}
+
+.playButton.playing:hover {
+  background: var(--emerald-hover);
+}
+
+.selectButton {
+  background: var(--emerald-primary);
+  color: white;
+  border: none;
+  border-radius: 0.375rem;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.selectButton:hover {
+  background: var(--emerald-hover);
+}
+
+.selectButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.useCaseButton {
+  background: var(--obsidian-card);
+  border: 1px solid var(--obsidian-border);
+  color: var(--text-secondary);
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.useCaseButton:hover {
+  border-color: rgba(16, 185, 129, 0.5);
+  background: rgba(39, 39, 42, 0.5);
+}
+
+.useCaseButton.active {
+  border-color: var(--emerald-primary);
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--text-primary);
+}
+
+.advancedModeWarning {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  color: #F59E0B;
+}
+
+@media (max-width: 768px) {
+  .presetGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  .presetGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .presetGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

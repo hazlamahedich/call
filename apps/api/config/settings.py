@@ -36,6 +36,15 @@ class Settings(BaseSettings):
     TTS_SESSION_TTL_SEC: int = 3600
     TTS_CIRCUIT_OPEN_SEC: int = 30
 
+    # Preset Sample Settings (Story 2.6)
+    PRESET_SAMPLE_TEXTS: dict[str, str] = {
+        "sales": "Hi, this is Alex from TechCorp. I'm calling to show you how our platform can increase your sales by 30% in just 30 days.",
+        "support": "Thank you for calling TechCorp support. I'm here to help you resolve any issues you're experiencing.",
+        "marketing": "Hey there! I'm excited to tell you about our amazing new product that's changing the industry.",
+    }
+    SAMPLE_CACHE_TTL_SECONDS: int = 86400  # 24 hours
+    REDIS_URL: str = "redis://localhost:6379/0"
+
     # Telemetry Queue Settings (Story 2.4)
     TELEMETRY_QUEUE_MAX_SIZE: int = 10000
     TELEMETRY_BATCH_SIZE: int = 100

@@ -640,6 +640,63 @@ class TTSOrchestrator:
 
         self._cleanup_task = asyncio.create_task(_run())
 
+    async def synthesize_for_test(
+        self,
+        text: str,
+        voice_id: str,
+        provider: str | None = None,
+        speech_speed: float = 1.0,
+        stability: float = 0.8,
+        temperature: float = 0.7,
+    ) -> TTSResponse:
+        """Synthesize short audio for preset samples (non-session context).
+
+        Bypasses session state tracking but respects circuit breaker state.
+        Used by PresetSampleService to generate preset audio samples.
+
+        Args:
+            text: Text to synthesize
+            voice_id: Voice ID to use
+            provider: Specific provider to use (or None for primary)
+            speech_speed: Speech rate multiplier
+            stability: Voice stability
+            temperature: Voice expressiveness
+
+        Returns:
+            TTSResponse with audio_bytes
+
+        Raises:
+            TTSAllProvidersFailedError: If provider is not available or synthesis fails
+        """
+        target_provider = provider or self._get_primary_provider()
+
+        if self._circuit_breaker.is_open(target_provider):
+            raise TTSAllProvidersFailedError(
+                f"Provider {target_provider} circuit is open"
+            )
+
+        tts_impl = self._providers.get(target_provider)
+        if not tts_impl:
+            raise TTSAllProvidersFailedError(
+                f"Provider {target_provider} not found"
+            )
+
+        try:
+            response = await tts_impl.synthesize(
+                text=text,
+                voice_id=voice_id,
+                model=None,  # Use default model for samples
+            )
+            self._circuit_breaker.record_success(target_provider)
+            return response
+        except Exception as e:
+            self._circuit_breaker.record_fallback(target_provider)
+            raise TTSAllProvidersFailedError(f"TTS synthesis failed: {str(e)}")
+
+    def _get_primary_provider(self) -> str:
+        """Get the primary TTS provider from settings."""
+        return self._settings.TTS_PRIMARY_PROVIDER
+
     async def stop_cleanup_task(self) -> None:
         if self._cleanup_task is not None:
             self._cleanup_task.cancel()
