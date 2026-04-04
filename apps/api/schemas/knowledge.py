@@ -40,8 +40,8 @@ class KnowledgeBaseResponse(BaseModel):
     status: KnowledgeStatus
     errorMessage: Optional[str] = Field(None, alias="error_message")
     metadata: Optional[dict] = None
-    createdAt: datetime = Field(alias="created_at")
-    updatedAt: datetime = Field(alias="updated_at")
+    createdAt: Optional[datetime] = Field(None, alias="created_at")
+    updatedAt: Optional[datetime] = Field(None, alias="updated_at")
 
     class Config:
         alias_generator = AliasGenerator(to_camel)
@@ -70,7 +70,9 @@ class KnowledgeSearchRequest(BaseModel):
     """Request schema for knowledge base search."""
 
     query: str = Field(..., min_length=1, description="Search query")
-    topK: int = Field(default=5, ge=1, le=20, alias="top_k", description="Number of results")
+    topK: int = Field(
+        default=5, ge=1, le=20, alias="top_k", description="Number of results"
+    )
 
     class Config:
         alias_generator = AliasGenerator(to_camel)

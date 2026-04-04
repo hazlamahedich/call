@@ -38,7 +38,7 @@ def upgrade() -> None:
             id SERIAL PRIMARY KEY,
             org_id VARCHAR(255) NOT NULL,
             title VARCHAR(200) NOT NULL,
-            source_type VARCHAR(10) NOT NULL CHECK (source_type IN ('pdf', 'url', 'text')),
+            source_type VARCHAR(10) NOT NULL CHECK (source_type IN ('pdf', 'url', 'text', 'markdown')),
             source_url VARCHAR(2048),
             file_path VARCHAR(512),
             file_storage_url VARCHAR(512),
@@ -124,12 +124,13 @@ def upgrade() -> None:
         ON knowledge_chunks
         USING hnsw (embedding vector_cosine_ops)
         WITH (m = 16, ef_construction = 256)
+        WHERE soft_delete = false AND embedding IS NOT NULL
     """)
     )
 
     # Enable Row Level Security on both tables
-    conn.execute(sa.text("ALTER TABLE knowledge_bases ENABLE ROW LEVEL SECURITY"))
-    conn.execute(sa.text("ALTER TABLE knowledge_chunks ENABLE ROW LEVEL SECURITY"))
+    conn.execute(sa.text("ALTER TABLE knowledge_bases FORCE ROW LEVEL SECURITY"))
+    conn.execute(sa.text("ALTER TABLE knowledge_chunks FORCE ROW LEVEL SECURITY"))
 
     # Create RLS policies for knowledge_bases
     # SELECT policy - tenant isolation
@@ -179,6 +180,20 @@ def upgrade() -> None:
     """)
     )
 
+    conn.execute(
+        sa.text("""
+        CREATE POLICY kb_platform_admin_bypass_update ON knowledge_bases
+        FOR UPDATE USING (current_setting('app.is_platform_admin', true)::boolean = true)
+    """)
+    )
+
+    conn.execute(
+        sa.text("""
+        CREATE POLICY kb_platform_admin_bypass_delete ON knowledge_bases
+        FOR DELETE USING (current_setting('app.is_platform_admin', true)::boolean = true)
+    """)
+    )
+
     # Create RLS policies for knowledge_chunks
     # SELECT policy - tenant isolation
     conn.execute(
@@ -212,7 +227,7 @@ def upgrade() -> None:
     """)
     )
 
-    # Platform admin bypass policies
+    # Platform admin bypass policies for chunks
     conn.execute(
         sa.text("""
         CREATE POLICY kc_platform_admin_bypass ON knowledge_chunks
@@ -224,6 +239,20 @@ def upgrade() -> None:
         sa.text("""
         CREATE POLICY kc_platform_admin_bypass_insert ON knowledge_chunks
         FOR INSERT WITH CHECK (current_setting('app.is_platform_admin', true)::boolean = true)
+    """)
+    )
+
+    conn.execute(
+        sa.text("""
+        CREATE POLICY kc_platform_admin_bypass_update ON knowledge_chunks
+        FOR UPDATE USING (current_setting('app.is_platform_admin', true)::boolean = true)
+    """)
+    )
+
+    conn.execute(
+        sa.text("""
+        CREATE POLICY kc_platform_admin_bypass_delete ON knowledge_chunks
+        FOR DELETE USING (current_setting('app.is_platform_admin', true)::boolean = true)
     """)
     )
 
@@ -244,7 +273,7 @@ def upgrade() -> None:
     # Trigger function to update updated_at timestamp
     conn.execute(
         sa.text("""
-        CREATE OR REPLACE FUNCTION update_timestamp()
+        CREATE OR REPLACE FUNCTION kb_update_timestamp()
         RETURNS TRIGGER AS $$
         BEGIN
             NEW.updated_at := CURRENT_TIMESTAMP;
@@ -270,7 +299,7 @@ def upgrade() -> None:
         CREATE TRIGGER kb_update_timestamp
         BEFORE UPDATE ON knowledge_bases
         FOR EACH ROW
-        EXECUTE FUNCTION update_timestamp()
+        EXECUTE FUNCTION kb_update_timestamp()
     """)
     )
 
@@ -291,28 +320,66 @@ def downgrade() -> None:
 
     # Drop triggers
     conn.execute(sa.text("DROP TRIGGER IF EXISTS kc_set_org_id ON knowledge_chunks"))
-    conn.execute(sa.text("DROP TRIGGER IF EXISTS kb_update_timestamp ON knowledge_bases"))
+    conn.execute(
+        sa.text("DROP TRIGGER IF EXISTS kb_update_timestamp ON knowledge_bases")
+    )
     conn.execute(sa.text("DROP TRIGGER IF EXISTS kb_set_org_id ON knowledge_bases"))
 
     # Drop trigger functions
-    conn.execute(sa.text("DROP FUNCTION IF EXISTS update_timestamp()"))
+    conn.execute(sa.text("DROP FUNCTION IF EXISTS kb_update_timestamp()"))
     conn.execute(sa.text("DROP FUNCTION IF EXISTS set_org_id_from_context()"))
 
     # Drop RLS policies for knowledge_chunks
-    conn.execute(sa.text("DROP POLICY IF EXISTS kc_platform_admin_bypass_insert ON knowledge_chunks"))
-    conn.execute(sa.text("DROP POLICY IF EXISTS kc_platform_admin_bypass ON knowledge_chunks"))
+    conn.execute(
+        sa.text(
+            "DROP POLICY IF EXISTS kc_platform_admin_bypass_delete ON knowledge_chunks"
+        )
+    )
+    conn.execute(
+        sa.text(
+            "DROP POLICY IF EXISTS kc_platform_admin_bypass_update ON knowledge_chunks"
+        )
+    )
+    conn.execute(
+        sa.text(
+            "DROP POLICY IF EXISTS kc_platform_admin_bypass_insert ON knowledge_chunks"
+        )
+    )
+    conn.execute(
+        sa.text("DROP POLICY IF EXISTS kc_platform_admin_bypass ON knowledge_chunks")
+    )
     conn.execute(sa.text("DROP POLICY IF EXISTS kc_tenant_delete ON knowledge_chunks"))
     conn.execute(sa.text("DROP POLICY IF EXISTS kc_tenant_update ON knowledge_chunks"))
     conn.execute(sa.text("DROP POLICY IF EXISTS kc_tenant_insert ON knowledge_chunks"))
-    conn.execute(sa.text("DROP POLICY IF EXISTS kc_tenant_isolation_select ON knowledge_chunks"))
+    conn.execute(
+        sa.text("DROP POLICY IF EXISTS kc_tenant_isolation_select ON knowledge_chunks")
+    )
 
     # Drop RLS policies for knowledge_bases
-    conn.execute(sa.text("DROP POLICY IF EXISTS kb_platform_admin_bypass_insert ON knowledge_bases"))
-    conn.execute(sa.text("DROP POLICY IF EXISTS kb_platform_admin_bypass ON knowledge_bases"))
+    conn.execute(
+        sa.text(
+            "DROP POLICY IF EXISTS kb_platform_admin_bypass_delete ON knowledge_bases"
+        )
+    )
+    conn.execute(
+        sa.text(
+            "DROP POLICY IF EXISTS kb_platform_admin_bypass_update ON knowledge_bases"
+        )
+    )
+    conn.execute(
+        sa.text(
+            "DROP POLICY IF EXISTS kb_platform_admin_bypass_insert ON knowledge_bases"
+        )
+    )
+    conn.execute(
+        sa.text("DROP POLICY IF EXISTS kb_platform_admin_bypass ON knowledge_bases")
+    )
     conn.execute(sa.text("DROP POLICY IF EXISTS kb_tenant_delete ON knowledge_bases"))
     conn.execute(sa.text("DROP POLICY IF EXISTS kb_tenant_update ON knowledge_bases"))
     conn.execute(sa.text("DROP POLICY IF EXISTS kb_tenant_insert ON knowledge_bases"))
-    conn.execute(sa.text("DROP POLICY IF EXISTS kb_tenant_isolation_select ON knowledge_bases"))
+    conn.execute(
+        sa.text("DROP POLICY IF EXISTS kb_tenant_isolation_select ON knowledge_bases")
+    )
 
     # Disable RLS
     conn.execute(sa.text("ALTER TABLE knowledge_chunks DISABLE ROW LEVEL SECURITY"))

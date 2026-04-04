@@ -76,12 +76,10 @@ class RateLimiter:
 
             # Add current request
             # Group requests by second to reduce memory
-            if org_requests and org_requests[-1][0] == int(now):
-                # Same second, increment count
+            if org_requests and org_requests[-1][0] == now:
                 org_requests[-1] = (org_requests[-1][0], org_requests[-1][1] + 1)
             else:
-                # New second, add new entry
-                org_requests.append((int(now), 1))
+                org_requests.append((now, 1))
 
             return True
 
@@ -112,6 +110,7 @@ class RateLimiter:
 # Global rate limiter instances
 # Preset sample generation: 10 requests per minute per tenant
 preset_sample_limiter = RateLimiter(max_requests=10, window_seconds=60)
+knowledge_upload_limiter = RateLimiter(max_requests=20, window_seconds=60)
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):

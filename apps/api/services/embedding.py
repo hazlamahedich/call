@@ -5,6 +5,7 @@ Generates OpenAI embeddings for text chunks with Redis caching.
 
 import hashlib
 import logging
+import random
 from typing import List, Optional
 
 import httpx
@@ -17,7 +18,8 @@ EMBEDDING_MODEL = "text-embedding-3-small"
 EMBEDDING_DIMENSIONS = 1536
 MAX_BATCH_SIZE = 100
 MAX_RETRIES = 3
-RETRY_DELAY = 1.0  # seconds
+INITIAL_RETRY_DELAY = 1.0
+MAX_RETRY_DELAY = 30.0
 
 # Cache configuration
 CACHE_TTL = 7 * 24 * 60 * 60  # 7 days in seconds
@@ -32,11 +34,7 @@ class EmbeddingService:
     - Retry logic for API failures
     """
 
-    def __init__(
-        self,
-        api_key: str,
-        redis_client: Optional[any] = None
-    ):
+    def __init__(self, api_key: str, redis_client: Optional[any] = None):
         """Initialize embedding service.
 
         Args:
@@ -61,8 +59,7 @@ class EmbeddingService:
         for attempt in range(MAX_RETRIES):
             try:
                 response = await self.client.embeddings.create(
-                    model=EMBEDDING_MODEL,
-                    input=text
+                    model=EMBEDDING_MODEL, input=text
                 )
                 embedding = response.data[0].embedding
                 logger.debug(f"Generated embedding for {len(text)} chars")
@@ -70,20 +67,22 @@ class EmbeddingService:
 
             except Exception as e:
                 if attempt < MAX_RETRIES - 1:
+                    delay = min(
+                        INITIAL_RETRY_DELAY * (2**attempt) + random.uniform(0, 1),
+                        MAX_RETRY_DELAY,
+                    )
                     logger.warning(
                         f"Embedding attempt {attempt + 1} failed: {e}, "
-                        f"retrying in {RETRY_DELAY}s..."
+                        f"retrying in {delay:.1f}s..."
                     )
                     import asyncio
-                    await asyncio.sleep(RETRY_DELAY)
+
+                    await asyncio.sleep(delay)
                 else:
                     logger.error(f"Embedding failed after {MAX_RETRIES} attempts: {e}")
                     raise
 
-    async def generate_embeddings_batch(
-        self,
-        texts: List[str]
-    ) -> List[List[float]]:
+    async def generate_embeddings_batch(self, texts: List[str]) -> List[List[float]]:
         """Generate embeddings for multiple texts in one API call.
 
         Args:
@@ -104,8 +103,7 @@ class EmbeddingService:
         for attempt in range(MAX_RETRIES):
             try:
                 response = await self.client.embeddings.create(
-                    model=EMBEDDING_MODEL,
-                    input=texts
+                    model=EMBEDDING_MODEL, input=texts
                 )
                 embeddings = [item.embedding for item in response.data]
                 logger.info(f"Generated {len(embeddings)} embeddings")
@@ -113,12 +111,17 @@ class EmbeddingService:
 
             except Exception as e:
                 if attempt < MAX_RETRIES - 1:
+                    delay = min(
+                        INITIAL_RETRY_DELAY * (2**attempt) + random.uniform(0, 1),
+                        MAX_RETRY_DELAY,
+                    )
                     logger.warning(
                         f"Batch embedding attempt {attempt + 1} failed: {e}, "
-                        f"retrying in {RETRY_DELAY}s..."
+                        f"retrying in {delay:.1f}s..."
                     )
                     import asyncio
-                    await asyncio.sleep(RETRY_DELAY)
+
+                    await asyncio.sleep(delay)
                 else:
                     logger.error(
                         f"Batch embedding failed after {MAX_RETRIES} attempts: {e}"
@@ -126,9 +129,7 @@ class EmbeddingService:
                     raise
 
     async def get_cached_embedding(
-        self,
-        text_hash: str,
-        org_id: str
+        self, text_hash: str, org_id: str
     ) -> Optional[List[float]]:
         """Check Redis cache for existing embedding.
 
@@ -161,10 +162,7 @@ class EmbeddingService:
         return None
 
     async def cache_embedding(
-        self,
-        text_hash: str,
-        org_id: str,
-        embedding: List[float]
+        self, text_hash: str, org_id: str, embedding: List[float]
     ) -> bool:
         """Cache embedding in Redis.
 
@@ -187,11 +185,7 @@ class EmbeddingService:
         try:
             # Store embedding as comma-separated string
             embedding_str = ",".join(str(x) for x in embedding)
-            await self.redis_client.setex(
-                cache_key,
-                CACHE_TTL,
-                embedding_str
-            )
+            await self.redis_client.setex(cache_key, CACHE_TTL, embedding_str)
             logger.debug(f"Cached embedding for {cache_key}")
             return True
         except Exception as e:
@@ -223,11 +217,7 @@ class EmbeddingService:
         """
         return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
-    async def generate_with_cache(
-        self,
-        text: str,
-        org_id: str
-    ) -> List[float]:
+    async def generate_with_cache(self, text: str, org_id: str) -> List[float]:
         """Generate embedding with Redis caching.
 
         Checks cache first, generates if not found, then caches result.

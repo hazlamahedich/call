@@ -1,16 +1,14 @@
 """Request and response schemas for agent management API endpoints."""
 
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 
 class CreateAgentRequest(BaseModel):
-    """Request schema for creating a new agent."""
-
     name: str
     email: Optional[str] = None
     phone: Optional[str] = None
-    role: Optional[str] = "agent"
+    role: Literal["admin", "agent", "supervisor"] = "agent"
     preset_id: Optional[int] = None
 
     class Config:
@@ -18,13 +16,11 @@ class CreateAgentRequest(BaseModel):
 
 
 class UpdateAgentRequest(BaseModel):
-    """Request schema for updating an agent."""
-
     name: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
-    role: Optional[str] = None
-    status: Optional[str] = None
+    role: Optional[Literal["admin", "agent", "supervisor"]] = None
+    status: Optional[Literal["active", "inactive", "suspended"]] = None
     preset_id: Optional[int] = None
 
     class Config:
@@ -32,8 +28,6 @@ class UpdateAgentRequest(BaseModel):
 
 
 class BulkUpdateAgentsRequest(BaseModel):
-    """Request schema for bulk updating agents."""
-
     agent_ids: List[int]
     preset_id: int
 
@@ -42,8 +36,6 @@ class BulkUpdateAgentsRequest(BaseModel):
 
 
 class AgentProfileResponse(BaseModel):
-    """Response schema for a single agent profile."""
-
     agent_id: int
     name: str
     email: Optional[str] = None
@@ -63,7 +55,5 @@ class AgentProfileResponse(BaseModel):
 
 
 class AgentProfileListResponse(BaseModel):
-    """Response schema for listing agents."""
-
     agents: List[AgentProfileResponse]
     count: int

@@ -53,36 +53,42 @@ async def list_agents(
     result = await session.execute(query)
     agents = result.scalars().all()
 
-    # Enrich with preset names
-    agent_profiles = []
-    for agent in agents:
-        preset_name = None
-        if agent.preset_id:
-            preset_result = await session.execute(
-                select(VoicePreset.name).where(
-                    and_(
-                        VoicePreset.id == agent.preset_id,
-                        VoicePreset.org_id == org_id,
-                    )
+    agent_ids = [a.id for a in agents if a.preset_id]
+    preset_map = {}
+    if agent_ids:
+        preset_result = await session.execute(
+            select(VoicePreset.id, VoicePreset.name).where(
+                and_(
+                    VoicePreset.id.in_([a.preset_id for a in agents if a.preset_id]),
+                    VoicePreset.org_id == org_id,
                 )
             )
-            preset_name = preset_result.scalar_one_or_none()
+        )
+        preset_map = {row.id: row.name for row in preset_result.fetchall()}
 
-        agent_profiles.append({
-            "agent_id": agent.id,
-            "name": agent.name or f"Agent {agent.id}",
-            "email": agent.email,
-            "phone": agent.phone,
-            "role": agent.role,
-            "status": agent.status,
-            "preset_id": agent.preset_id,
-            "preset_name": preset_name,
-            "use_advanced_mode": agent.use_advanced_mode or False,
-            "speech_speed": agent.speech_speed or 1.0,
-            "stability": agent.stability or 0.8,
-            "temperature": agent.temperature or 0.7,
-            "created_at": agent.created_at.isoformat() if agent.created_at else None,
-        })
+    agent_profiles = []
+    for agent in agents:
+        preset_name = preset_map.get(agent.preset_id) if agent.preset_id else None
+
+        agent_profiles.append(
+            {
+                "agent_id": agent.id,
+                "name": agent.name or f"Agent {agent.id}",
+                "email": agent.email,
+                "phone": agent.phone,
+                "role": agent.role,
+                "status": agent.status,
+                "preset_id": agent.preset_id,
+                "preset_name": preset_name,
+                "use_advanced_mode": agent.use_advanced_mode or False,
+                "speech_speed": agent.speech_speed or 1.0,
+                "stability": agent.stability or 0.8,
+                "temperature": agent.temperature or 0.7,
+                "created_at": agent.created_at.isoformat()
+                if agent.created_at
+                else None,
+            }
+        )
 
     return {
         "agents": agent_profiles,
@@ -418,8 +424,7 @@ async def delete_agent(
             },
         )
 
-    # Soft delete by setting status
-    agent.status = "deleted"
+    agent.soft_delete = True
     await session.commit()
 
     logger.info(

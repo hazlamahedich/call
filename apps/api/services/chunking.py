@@ -64,9 +64,7 @@ class SemanticChunkingService:
                 # Start new chunk with overlap
                 overlap_sentences = self._get_overlap_sentences(current_chunk)
                 current_chunk = overlap_sentences + [sentence]
-                current_tokens = sum(
-                    self._estimate_tokens(s) for s in current_chunk
-                )
+                current_tokens = sum(self._estimate_tokens(s) for s in current_chunk)
             else:
                 # Add sentence to current chunk
                 current_chunk.append(sentence)
@@ -75,6 +73,13 @@ class SemanticChunkingService:
         # Don't forget the last chunk
         if current_chunk:
             chunks.append(" ".join(current_chunk))
+
+        # Merge final chunk if too small
+        if len(chunks) > 1:
+            last_chunk = chunks[-1]
+            if not self.validate_chunk(last_chunk):
+                chunks[-2] = chunks[-2] + " " + last_chunk
+                chunks.pop()
 
         logger.info(f"Split text into {len(chunks)} chunks")
         return chunks
@@ -86,27 +91,50 @@ class SemanticChunkingService:
         """
         # Common abbreviations that should NOT end a sentence
         abbreviations = {
-            "Mr", "Mrs", "Ms", "Dr", "Prof", "Sr", "Jr",
-            "vs", "etc", "eg", "ie", "i.e", "e.g",
-            "US", "UK", "USA", "U.S.A", "U.S.",
-            "ft", "in", "cm", "mm", "km",
-            "lb", "kg", "oz", "g",
-            "AM", "PM", "a.m", "p.m", "A.M", "P.M"
+            "Mr",
+            "Mrs",
+            "Ms",
+            "Dr",
+            "Prof",
+            "Sr",
+            "Jr",
+            "vs",
+            "etc",
+            "eg",
+            "ie",
+            "i.e",
+            "e.g",
+            "US",
+            "UK",
+            "USA",
+            "U.S.A",
+            "U.S.",
+            "ft",
+            "in",
+            "cm",
+            "mm",
+            "km",
+            "lb",
+            "kg",
+            "oz",
+            "g",
+            "AM",
+            "PM",
+            "a.m",
+            "p.m",
+            "A.M",
+            "P.M",
         }
 
         # Build pattern to match sentence boundaries
         # Look for period, question mark, or exclamation point followed by space and capital letter
-        pattern = r'(?<=[.!?])\s+(?=[A-Z])'
+        pattern = r"(?<=[.!?])\s+(?=[A-Z])"
 
         # First, protect abbreviations by temporarily replacing them
         protected_text = text
         for abbr in abbreviations:
             # Match abbreviations with periods (e.g., "Mr.", "U.S.")
-            protected_text = re.sub(
-                rf'\b{abbr}\.',
-                f'__ABBR_{abbr}__',
-                protected_text
-            )
+            protected_text = re.sub(rf"\b{abbr}\.", f"__ABBR_{abbr}__", protected_text)
 
         # Split on sentence boundaries
         sentences = re.split(pattern, protected_text)
@@ -115,7 +143,7 @@ class SemanticChunkingService:
         restored_sentences = []
         for sentence in sentences:
             for abbr in abbreviations:
-                sentence = sentence.replace(f'__ABBR_{abbr}__', f'{abbr}.')
+                sentence = sentence.replace(f"__ABBR_{abbr}__", f"{abbr}.")
             restored_sentences.append(sentence.strip())
 
         # Filter out empty sentences
@@ -143,12 +171,7 @@ class SemanticChunkingService:
         # Return the last N sentences from the chunk
         return chunk[-overlap_count:]
 
-    def enrich_chunk_metadata(
-        self,
-        chunk: str,
-        index: int,
-        metadata: dict
-    ) -> dict:
+    def enrich_chunk_metadata(self, chunk: str, index: int, metadata: dict) -> dict:
         """Add metadata to each chunk.
 
         Args:
@@ -165,7 +188,6 @@ class SemanticChunkingService:
             "chunk_char_count": len(chunk),
         }
 
-        # Copy over document metadata
         if metadata:
             if "page_count" in metadata:
                 chunk_metadata["page_count"] = metadata["page_count"]
@@ -175,6 +197,12 @@ class SemanticChunkingService:
                 chunk_metadata["document_title"] = metadata["title"]
             if "extraction_method" in metadata:
                 chunk_metadata["extraction_method"] = metadata["extraction_method"]
+            if "source" in metadata:
+                chunk_metadata["source"] = metadata["source"]
+            if "page" in metadata:
+                chunk_metadata["page"] = metadata["page"]
+            if "embedding_model" in metadata:
+                chunk_metadata["embedding_model"] = metadata["embedding_model"]
 
         return chunk_metadata
 

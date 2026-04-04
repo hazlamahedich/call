@@ -24,7 +24,7 @@ class KnowledgeBaseService(TenantService[KnowledgeBase]):
         super().__init__(KnowledgeBase)
 
     async def get_by_content_hash(
-        self, session: AsyncSession, content_hash: str
+        self, session: AsyncSession, content_hash: str, org_id: str
     ) -> Optional[KnowledgeBase]:
         """Get a knowledge base document by content hash.
 
@@ -33,6 +33,7 @@ class KnowledgeBaseService(TenantService[KnowledgeBase]):
         Args:
             session: Database session
             content_hash: SHA-256 hash to look up
+            org_id: Tenant organization ID for scope
 
         Returns:
             KnowledgeBase if found, None otherwise
@@ -40,9 +41,15 @@ class KnowledgeBaseService(TenantService[KnowledgeBase]):
         stmt = text(
             f"SELECT {self._select_cols} FROM {self.table_name} "
             "WHERE content_hash = :content_hash "
+            "AND org_id = :org_id "
             "AND soft_delete = false"
         )
-        result = await session.execute(stmt.bindparams(content_hash=content_hash))
+        result = await session.execute(
+            stmt.bindparams(content_hash=content_hash, org_id=org_id)
+        )
+        result = await session.execute(
+            stmt.bindparams(content_hash=content_hash, org_id=org_id)
+        )
         row = result.first()
         if row is None:
             return None

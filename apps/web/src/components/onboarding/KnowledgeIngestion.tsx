@@ -23,7 +23,9 @@ export function KnowledgeIngestion({ onComplete }: KnowledgeIngestionProps) {
   const [loading, setLoading] = React.useState(true);
   const [uploading, setUploading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = React.useState<string | null>(
+    null,
+  );
 
   // Form states
   const [url, setUrl] = React.useState("");
@@ -44,10 +46,15 @@ export function KnowledgeIngestion({ onComplete }: KnowledgeIngestionProps) {
         clearInterval(pollingIntervalRef.current);
       }
     };
-  }, []);
+  }, [documents]);
 
   function startPolling() {
-    // Poll every 3 seconds for document status updates
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+    }
+    const hasProcessing = documents.some((d) => d.status === "processing");
+    if (!hasProcessing) return;
+
     pollingIntervalRef.current = setInterval(() => {
       loadDocuments(true);
     }, 3000);
@@ -178,7 +185,7 @@ export function KnowledgeIngestion({ onComplete }: KnowledgeIngestionProps) {
       <span
         className={cn(
           "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium",
-          variants[status]
+          variants[status],
         )}
       >
         {labels[status]}
@@ -224,7 +231,7 @@ export function KnowledgeIngestion({ onComplete }: KnowledgeIngestionProps) {
                 "whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium",
                 activeTab === tab.key
                   ? "border-orange-500 text-orange-600"
-                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
+                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700",
               )}
             >
               {tab.label}
@@ -272,9 +279,13 @@ export function KnowledgeIngestion({ onComplete }: KnowledgeIngestionProps) {
                     </label>
                     <p className="pl-1">or drag and drop</p>
                   </div>
-                  <p className="text-xs text-gray-500">PDF, TXT, MD up to 50MB</p>
+                  <p className="text-xs text-gray-500">
+                    PDF, TXT, MD up to 50MB
+                  </p>
                   {file && (
-                    <p className="text-sm text-gray-900 mt-2">Selected: {file.name}</p>
+                    <p className="text-sm text-gray-900 mt-2">
+                      Selected: {file.name}
+                    </p>
                   )}
                 </div>
               </div>
@@ -406,7 +417,7 @@ export function KnowledgeIngestion({ onComplete }: KnowledgeIngestionProps) {
                       "ml-4 text-sm font-medium",
                       doc.status === "processing"
                         ? "text-gray-400 cursor-not-allowed"
-                        : "text-red-600 hover:text-red-900"
+                        : "text-red-600 hover:text-red-900",
                     )}
                   >
                     Delete
