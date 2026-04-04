@@ -1,5 +1,5 @@
 # generated: 2026-03-17T17:46:51+08:00
-# last_updated: 2026-04-03T10:45:00+08:00
+# last_updated: 2026-04-04T00:00:00+08:00
 # project: call
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-03-17T17:46:51+08:00
-last_updated: 2026-04-03T10:45:00+08:00
+last_updated: 2026-04-04T22:00:00+08:00
 project: call
 project_key: NOKEY
 tracking_system: file-system
@@ -51,15 +51,15 @@ development_status:
   1-6-10-minute-launch-onboarding-wizard: done
   1-7-resource-guardrails-usage-monitoring-hard-caps: done
   epic-1-retrospective: done
-  epic-2: in-progress
-  2-1-vapi-telephony-bridge-webhook-integration: review
+  epic-2: done
+  2-1-vapi-telephony-bridge-webhook-integration: done
   2-2-real-time-audio-stream-transcription-pipeline: done
   2-3-low-latency-tts-provider-fallback-logic: done
-  2-4-asynchronous-telemetry-sidecars-for-voice-events: review
-  2-4-epic-2-cross-story-integration-tests: review
-  2-5-pulse-maker-visual-visualizer-component: review
-  2-6-pre-flight-calibration-dashboard: backlog
-  epic-2-retrospective: optional
+  2-4-asynchronous-telemetry-sidecars-for-voice-events: done
+  2-4-epic-2-cross-story-integration-tests: done
+  2-5-pulse-maker-visual-visualizer-component: done
+  2-6-voice-presets: done
+  epic-2-retrospective: done
   epic-3: backlog
   3-1-multi-format-knowledge-ingestion-validation: backlog
   3-2-per-tenant-rag-namespacing-with-namespace-guard: backlog
