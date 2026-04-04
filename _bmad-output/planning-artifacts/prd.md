@@ -29,10 +29,12 @@ classification:
     - 'Real-time voice pipeline with sub-500ms latency requirements'
     - 'Multi-layer tenancy (agency > client > lead)'
     - 'Compliance automation (TCPA, FCC 2024, DNC lists, consent recording)'
-lastEdited: '2026-03-16'
+lastEdited: '2026-04-04'
 editHistory:
   - date: '2026-03-16'
     changes: 'Enhanced traceability with UJ4 (White-label) and FR13/14 (Integrations). Removed implementation leakage (RAG/CNAME). Added Governance and Compliance matrices. Refined requirement measurability.'
+  - date: '2026-04-04'
+    changes: 'Adversarial code review amendments for Story 3.1: FR7 expanded with file storage, format validation, size limits. NFR.P2 clarified measurement scope. NFR.Sec1 added validation method. Tenant hierarchy clarified for KB management across 3 levels.'
 ---
 
 # Product Requirements Document: Call
@@ -163,7 +165,7 @@ Marcus closes a new client. He enters their brand colors and logo into his Call 
 - **FR6:** **Handoff Latency:** System shall allow a live human to join an active session in <2 seconds.
 
 ### 3. Knowledge Base & Personalization
-- **FR7:** Users can ingest context via PDF, URL, and TXT files into isolated knowledge retrieval namespaces.
+- **FR7:** Users can ingest context via PDF, URL, TXT, and Markdown files into isolated knowledge retrieval namespaces. Supported formats: PDF (max 50MB, text-extractable), URL (HTTP/HTTPS only, HTML text content), TXT, and Markdown. System shall validate file type by content signature (not extension alone), enforce per-tenant upload limits, and store uploaded files in tenant-isolated object storage. Unsupported formats, encrypted files, and scanned-image-only PDFs shall be rejected with specific error messages.
 - **FR8:** System shall generate dynamic call icebreakers based on lead public signals (LinkedIn/News).
 - **FR9:** System shall generate objection responses using knowledge base context with >95% factual accuracy.
 
@@ -182,7 +184,7 @@ Marcus closes a new client. He enters their brand colors and logo into his Call 
 
 ### 1. Performance
 - **NFR.P1:** Voice Latency: <500ms end-to-end for 95% of calls as measured by edge-node telemetry.
-- **NFR.P2:** Retrieval Latency: Knowledge base search and context injection in <200ms for 95th percentile.
+- **NFR.P2:** Retrieval Latency: Semantic similarity search and context injection in <200ms for 95th percentile, measured at the database query layer excluding network transit and embedding generation time.
 - **NFR.P3:** Sync Speed: CRM outcome posting in <2s post-call.
 
 ### 2. Reliability & Scalability
@@ -191,7 +193,7 @@ Marcus closes a new client. He enters their brand colors and logo into his Call 
 - **NFR.S1:** Concurrency: Support 1,000+ simultaneous AI voice sessions per tenant namespace.
 
 ### 3. Security & Legal
-- **NFR.Sec1:** Data Isolation: Mandatory tenant-level logical separation of all database objects and files; validated by cross-tenant query audits.
+- **NFR.Sec1:** Data Isolation: Mandatory tenant-level logical separation of all database objects and files; validated by automated cross-tenant query audits and row-level security policy enforcement on every tenant-scoped table,
 - **NFR.Sec2:** Immutable Auditing: Call recordings and consent records stored for a minimum of 7 years with tamper-evident logs.
 - **NFR.Sec3:** Encryption: AES-256 for recordings at rest; TLS 1.3 for all data in transit.
 
