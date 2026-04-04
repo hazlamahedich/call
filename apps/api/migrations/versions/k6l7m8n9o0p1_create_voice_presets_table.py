@@ -20,6 +20,12 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     conn = op.get_bind()
 
+    # SECURITY NOTE: This migration uses raw SQL with hardcoded literal values.
+    # All values in this migration are constants and safe from SQL injection.
+    # DO NOT modify this code to include dynamic values without proper parameterization.
+    # For future migrations requiring dynamic values, use op.execute() with bind parameters
+    # or SQLAlchemy's migration API instead of raw SQL strings.
+
     # Create voice_presets table
     conn.execute(
         sa.text("""
@@ -56,6 +62,11 @@ def upgrade() -> None:
     conn.execute(
         sa.text(
             "CREATE INDEX IF NOT EXISTS idx_voice_presets_composite ON voice_presets(org_id, use_case, sort_order)"
+        )
+    )
+    conn.execute(
+        sa.text(
+            "CREATE INDEX IF NOT EXISTS idx_voice_presets_soft_delete ON voice_presets(soft_delete)"
         )
     )
 

@@ -1,18 +1,25 @@
-"use client";
+/**
+ * Transcript Stream Hook (Refactored to use generic WebSocket hook)
+ *
+ * Domain-specific hook for transcript streaming that composes
+ * the generic useWebSocketEvents hook with transcript-specific parsers.
+ *
+ * Handles:
+ * - Transcript entries (text from calls)
+ * - Voice state events (speaking, silence, interruption)
+ *
+ * This is now a thin wrapper around useWebSocketEvents with
+ * domain-specific parsing logic.
+ */
 
-import { useState, useEffect, useRef, useCallback } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useWebSocketEvents, createEventParser } from "./useWebSocketEvents";
 import type { TranscriptEntry } from "@call/types";
-
-const MAX_RECONNECT_ATTEMPTS = 10;
-const BASE_RECONNECT_DELAY_MS = 1000;
-const MAX_RECONNECT_DELAY_MS = 30000;
 
 interface UseTranscriptStreamResult {
   entries: TranscriptEntry[];
+  voiceEvents: TranscriptEntry[];
   isConnected: boolean;
   error: string | null;
-  voiceEvents: TranscriptEntry[];
 }
 
 function buildWsUrl(callId: number): string {
@@ -22,168 +29,93 @@ function buildWsUrl(callId: number): string {
   return `${base}/ws/calls/${callId}/transcript`;
 }
 
+/**
+ * Parse transcript entry events
+ */
+const parseTranscriptEntry = createEventParser<TranscriptEntry>((data: any) => {
+  if (data.type === "transcript" && data.entry) {
+    return data.entry as TranscriptEntry;
+  }
+  return null;
+});
+
+/**
+ * Parse voice state events (speech_start, speech_end, interruption)
+ * Creates synthetic TranscriptEntry objects for voice events
+ */
+const parseVoiceEvent = createEventParser<TranscriptEntry>((data: any, callId?: number) => {
+  if (data.type === "speech_state" && data.state) {
+    const voiceEntry: TranscriptEntry = {
+      id: Date.now(),
+      callId: callId || 0,
+      role: "lead", // Voice events are always from lead perspective
+      text: "",
+      startTime: 0,
+      endTime: 0,
+      confidence: null,
+      receivedAt: new Date().toISOString(),
+      timestamp: Date.now(),
+      event_type: data.state.event_type,
+    };
+    return voiceEntry;
+  }
+  return null;
+});
+
 export function useTranscriptStream(
   callId: number | null,
 ): UseTranscriptStreamResult {
-  const [entries, setEntries] = useState<TranscriptEntry[]>([]);
-  const [voiceEvents, setVoiceEvents] = useState<TranscriptEntry[]>([]);
-  const [isConnected, setIsConnected] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Use the generic WebSocket hook with transcript-specific parsers
+  const { events, isConnected, error } = useWebSocketEvents<TranscriptEntry>({
+    callId,
+    buildWsUrl,
+    eventParsers: [
+      (data) => parseTranscriptEntry(data),
+      (data) => parseVoiceEvent(data, callId || 0),
+    ],
+  });
 
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const reconnectAttemptsRef = useRef(0);
-  const entriesBufferRef = useRef<TranscriptEntry[]>([]);
-  const voiceEventsBufferRef = useRef<TranscriptEntry[]>([]);
-  const currentCallIdRef = useRef<number | null>(null);
+  // Split events into transcript entries and voice events
+  const entries: TranscriptEntry[] = [];
+  const voiceEvents: TranscriptEntry[] = [];
 
-  const { getToken } = useAuth();
-
-  const flushBuffer = useCallback(() => {
-    if (entriesBufferRef.current.length > 0) {
-      const buffered = entriesBufferRef.current;
-      entriesBufferRef.current = [];
-      setEntries((prev) => [...prev, ...buffered]);
+  for (const event of events) {
+    if (event.event_type) {
+      voiceEvents.push(event);
+    } else {
+      entries.push(event);
     }
-    if (voiceEventsBufferRef.current.length > 0) {
-      const buffered = voiceEventsBufferRef.current;
-      voiceEventsBufferRef.current = [];
-      setVoiceEvents((prev) => [...prev, ...buffered]);
-    }
-  }, []);
+  }
 
-  const clearReconnectTimer = useCallback(() => {
-    if (reconnectTimerRef.current) {
-      clearTimeout(reconnectTimerRef.current);
-      reconnectTimerRef.current = null;
-    }
-  }, []);
-
-  useEffect(() => {
-    if (currentCallIdRef.current !== callId) {
-      clearReconnectTimer();
-      reconnectAttemptsRef.current = 0;
-      currentCallIdRef.current = callId;
-    }
-  }, [callId, clearReconnectTimer]);
-
-  useEffect(() => {
-    if (!callId) {
-      setIsConnected(false);
-      setError(null);
-      setEntries([]);
-      setVoiceEvents([]);
-      entriesBufferRef.current = [];
-      voiceEventsBufferRef.current = [];
-      return;
-    }
-
-    let cancelled = false;
-
-    const activeCallId = callId;
-
-    async function connect() {
-      const token = await getToken();
-      if (!token || cancelled) {
-        if (!cancelled) {
-          setError("Not authenticated");
-        }
-        return;
-      }
-
-      const url = buildWsUrl(activeCallId);
-      const ws = new WebSocket(url);
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        if (cancelled) {
-          ws.close();
-          return;
-        }
-        ws.send(JSON.stringify({ token }));
-        setIsConnected(true);
-        setError(null);
-        reconnectAttemptsRef.current = 0;
-      };
-
-      ws.onmessage = (event) => {
-        if (cancelled) return;
-        try {
-          const data = JSON.parse(event.data);
-
-          // Handle transcript entries
-          if (data.type === "transcript" && data.entry) {
-            entriesBufferRef.current.push(data.entry);
-            flushBuffer();
-          }
-
-          // Handle voice state events from backend
-          if (data.type === "speech_state" && data.state) {
-            // Create a synthetic entry for voice events
-            const voiceEntry: TranscriptEntry = {
-              id: Date.now(),
-              callId: activeCallId,
-              role: "lead", // Voice events are always from lead perspective
-              text: "",
-              startTime: 0,
-              endTime: 0,
-              confidence: null,
-              receivedAt: new Date().toISOString(),
-              timestamp: Date.now(),
-              event_type: data.state.event_type,
-            };
-            voiceEventsBufferRef.current.push(voiceEntry);
-            flushBuffer();
-          }
-        } catch (error) {
-          // Log malformed JSON but don't crash
-          console.warn("[useTranscriptStream] Failed to parse WebSocket message:", error);
-        }
-      };
-
-      ws.onerror = () => {
-        if (!cancelled) {
-          setError("WebSocket connection error");
-        }
-      };
-
-      ws.onclose = (event) => {
-        if (cancelled) return;
-        setIsConnected(false);
-        wsRef.current = null;
-
-        if (event.code === 1008) {
-          setError("Authentication failed");
-          return;
-        }
-
-        if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
-          const attempt = reconnectAttemptsRef.current;
-          const delay = Math.min(
-            BASE_RECONNECT_DELAY_MS * Math.pow(2, attempt),
-            MAX_RECONNECT_DELAY_MS,
-          );
-          reconnectAttemptsRef.current += 1;
-          reconnectTimerRef.current = setTimeout(() => {
-            if (!cancelled && currentCallIdRef.current === callId) {
-              connect();
-            }
-          }, delay);
-        }
-      };
-    }
-
-    connect();
-
-    return () => {
-      cancelled = true;
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
-      clearReconnectTimer();
-    };
-  }, [callId, getToken, flushBuffer, clearReconnectTimer]);
-
-  return { entries, isConnected, error, voiceEvents };
+  return { entries, voiceEvents, isConnected, error };
 }
+
+/**
+ * Future parsers can be added for Epic 3 and beyond:
+ *
+ * // RAG Citation Events (Story 3.5)
+ * const parseCitationEvent = createEventParser((data) => {
+ *   if (data.type === "citation" && data.citation) {
+ *     return {
+ *       type: "citation",
+ *       source: data.citation.source,
+ *       relevance: data.citation.relevance,
+ *       // ... other citation fields
+ *     };
+ *   }
+ *   return null;
+ * });
+ *
+ * // Sentiment Analysis Events (Epic 5)
+ * const parseSentimentEvent = createEventParser((data) => {
+ *   if (data.type === "sentiment" && data.sentiment) {
+ *     return {
+ *       type: "sentiment",
+ *       score: data.sentiment.score,
+ *       label: data.sentiment.label,
+ *       // ... other sentiment fields
+ *     };
+ *   }
+ *   return null;
+ * });
+ */

@@ -54,3 +54,29 @@ async def shutdown_tts() -> None:
     for provider in _orchestrator._providers.values():
         await provider.aclose()
     _orchestrator = None
+
+
+def reset_orchestrator() -> None:
+    """
+    Reset the TTS orchestrator singleton.
+
+    This function is intended for test use only. It clears the global
+    orchestrator instance, forcing the next call to get_tts_orchestrator()
+    to create a fresh instance.
+
+    Usage in tests:
+        from services.tts.factory import reset_orchestrator
+
+        def teardown():
+            reset_orchestrator()
+
+    This prevents state leakage between test runs that could cause
+    test pollution and flaky tests.
+
+    Race Condition Fix:
+        The original module-level singleton pattern made it difficult
+        to isolate state between test runs. This public API allows tests
+        to explicitly reset the orchestrator state.
+    """
+    global _orchestrator
+    _orchestrator = None

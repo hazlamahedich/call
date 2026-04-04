@@ -1,4 +1,4 @@
-"""Preset sample generation service with Redis caching.
+"""Preset sample generation service with explicit caching strategy.
 
 Generates and caches audio samples for voice presets using the TTS
 orchestrator. Samples are cached for 24 hours to reduce API costs
@@ -8,12 +8,12 @@ and improve load times.
 import hashlib
 import logging
 
-import redis.asyncio as redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import settings
 from database.session import set_tenant_context
 from models.voice_preset import VoicePreset
+from services.cache_strategy import CacheStrategy
 from services.tts.orchestrator import TTSAllProvidersFailedError, TTSOrchestrator
 
 logger = logging.getLogger(__name__)
@@ -22,14 +22,14 @@ logger = logging.getLogger(__name__)
 class PresetSampleService:
     """Service for generating and caching voice preset samples."""
 
-    def __init__(self, redis_client: redis.Redis | None, tts_orchestrator: TTSOrchestrator):
+    def __init__(self, cache: CacheStrategy, tts_orchestrator: TTSOrchestrator):
         """Initialize the service.
 
         Args:
-            redis_client: Redis client for caching (can be None)
+            cache: Cache strategy implementation (Redis, NoOp, etc.)
             tts_orchestrator: TTS orchestrator for synthesis
         """
-        self.redis = redis_client
+        self.cache = cache
         self.tts = tts_orchestrator
         self.cache_ttl = getattr(settings, "SAMPLE_CACHE_TTL_SECONDS", 86400)  # 24 hours
 
@@ -54,16 +54,26 @@ class PresetSampleService:
         """
         await set_tenant_context(session, org_id)
 
-        # Check cache first if Redis is available
-        if self.redis:
-            cache_key = self._generate_cache_key(preset)
-            cached = await self.redis.get(cache_key)
-            if cached:
+        # Check cache first using explicit cache strategy
+        cache_key = self._generate_cache_key(preset)
+        cached = await self.cache.get(cache_key)
+        if cached:
+            # Handle potential cache corruption
+            try:
+                if isinstance(cached, str):
+                    cached = cached.encode('utf-8')
                 logger.debug(
                     "Preset sample cache hit",
                     extra={"code": "PRESET_SAMPLE_CACHE_HIT", "preset_id": preset.id},
                 )
                 return cached
+            except Exception as e:
+                logger.warning(
+                    f"Cache corruption detected for key {cache_key}: {e}",
+                    extra={"code": "PRESET_SAMPLE_CACHE_CORRUPTION", "preset_id": preset.id},
+                )
+                # Delete corrupted entry and regenerate
+                await self.cache.delete(cache_key)
 
         # Generate new sample
         sample_text = self._get_sample_text(preset.use_case)
@@ -77,24 +87,29 @@ class PresetSampleService:
                 temperature=preset.temperature,
             )
 
-            # Cache the sample if Redis is available
-            if self.redis:
-                cache_key = self._generate_cache_key(preset)
-                await self.redis.setex(
-                    cache_key,
-                    self.cache_ttl,
-                    response.audio_bytes,
+            # Cache the sample using explicit cache strategy
+            cache_key = self._generate_cache_key(preset)
+            cached = await self.cache.set(cache_key, response.audio_bytes, self.cache_ttl)
+            if cached:
+                logger.info(
+                    "Preset sample generated and cached",
+                    extra={
+                        "code": "PRESET_SAMPLE_GENERATED_CACHED",
+                        "preset_id": preset.id,
+                        "use_case": preset.use_case,
+                        "latency_ms": response.latency_ms,
+                    },
                 )
-
-            logger.info(
-                "Preset sample generated" + (" and cached" if self.redis else " (Redis not available)"),
-                extra={
-                    "code": "PRESET_SAMPLE_GENERATED",
-                    "preset_id": preset.id,
-                    "use_case": preset.use_case,
-                    "latency_ms": response.latency_ms,
-                },
-            )
+            else:
+                logger.info(
+                    "Preset sample generated (cache unavailable)",
+                    extra={
+                        "code": "PRESET_SAMPLE_GENERATED_NO_CACHE",
+                        "preset_id": preset.id,
+                        "use_case": preset.use_case,
+                        "latency_ms": response.latency_ms,
+                    },
+                )
 
             return response.audio_bytes
 
@@ -121,9 +136,12 @@ class PresetSampleService:
         Returns:
             Redis cache key
         """
-        # Hash preset configuration for cache key
-        config_str = f"{preset.voice_id}:{preset.speech_speed}:{preset.stability}:{preset.temperature}"
-        config_hash = hashlib.md5(config_str.encode()).hexdigest()[:8]
+        # Sanitize inputs to prevent key injection
+        safe_voice_id = preset.voice_id.replace(":", "_").replace(" ", "_")
+
+        # Use full SHA-256 hash instead of truncated MD5 for better collision resistance
+        config_str = f"{safe_voice_id}:{preset.speech_speed}:{preset.stability}:{preset.temperature}"
+        config_hash = hashlib.sha256(config_str.encode()).hexdigest()
 
         return f"preset_sample:{preset.id}:{config_hash}"
 
@@ -141,12 +159,27 @@ class PresetSampleService:
         """
         sample_texts = getattr(settings, "PRESET_SAMPLE_TEXTS", {})
 
+        # Validate that sample_texts is configured
+        if not sample_texts:
+            logger.error(
+                "PRESET_SAMPLE_TEXTS not configured in settings",
+                extra={"code": "PRESET_SAMPLE_TEXTS_NOT_CONFIGURED"},
+            )
+            return "Hello, this is a sample of the voice preset."
+
         text = sample_texts.get(use_case)
         if not text:
-            # Fallback default text
             logger.warning(
-                "No sample text found for use case, using default",
+                f"No sample text for use_case={use_case}. Available: {list(sample_texts.keys())}",
                 extra={"code": "PRESET_SAMPLE_TEXT_MISSING", "use_case": use_case},
+            )
+            return "Hello, this is a sample of the voice preset."
+
+        # Validate text is non-empty string
+        if not isinstance(text, str) or len(text.strip()) == 0:
+            logger.error(
+                f"Invalid sample text for use_case={use_case}",
+                extra={"code": "PRESET_SAMPLE_TEXT_INVALID", "use_case": use_case},
             )
             return "Hello, this is a sample of the voice preset."
 

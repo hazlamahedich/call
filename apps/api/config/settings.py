@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -52,6 +53,17 @@ class Settings(BaseSettings):
     TELEMETRY_WORKER_ENABLED: bool = True
 
     model_config = SettingsConfigDict(env_file=".env")
+
+    @field_validator("REDIS_URL")
+    @classmethod
+    def validate_redis_url(cls, v: str) -> str:
+        """Validate Redis URL format for security."""
+        if not v.startswith(("redis://", "rediss://")):
+            raise ValueError(
+                'REDIS_URL must start with "redis://" or "rediss://" for TLS. '
+                'Example: redis://localhost:6379/0 or rediss://your-redis-server:6380/0'
+            )
+        return v
 
 
 settings = Settings()

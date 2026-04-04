@@ -2,8 +2,16 @@
 
 import * as React from "react";
 import { cn } from "@/lib/utils";
-import { getVoicePresets, selectVoicePreset, getPresetSample, saveAdvancedVoiceConfig } from "@/actions/voice-presets";
+import {
+  getVoicePresets,
+  selectVoicePreset,
+  getPresetSample,
+  saveAdvancedVoiceConfig,
+  getVoicePresetRecommendation,
+  type VoicePresetRecommendation,
+} from "@/actions/voice-presets";
 import { AdvancedVoiceConfig } from "./AdvancedVoiceConfig";
+import { RecommendationBanner } from "./RecommendationBanner";
 import type { VoicePreset } from "@/actions/voice-presets";
 
 interface VoicePresetSelectorProps {
@@ -27,15 +35,57 @@ export function VoicePresetSelector({ onComplete }: VoicePresetSelectorProps) {
   const [presets, setPresets] = React.useState<VoicePreset[]>([]);
   const [selectedPresetId, setSelectedPresetId] = React.useState<number | null>(null);
   const [loading, setLoading] = React.useState(true);
-  const [selecting, setSelecting] = React.useState(false);
+  const [selectingPresetId, setSelectingPresetId] = React.useState<number | null>(null); // Per-preset selecting state
   const [playingId, setPlayingId] = React.useState<number | null>(null);
   const [advancedMode, setAdvancedMode] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
+  const [recommendation, setRecommendation] = React.useState<VoicePresetRecommendation | null>(null);
+  const [recommendationDismissed, setRecommendationDismissed] = React.useState(false);
+
+  // Web Audio API context
+  const audioContextRef = React.useRef<AudioContext | null>(null);
+  const currentSourceRef = React.useRef<AudioBufferSourceNode | null>(null);
+  const audioBufferRef = React.useRef<AudioBuffer | null>(null);
+
+  // Cleanup audio resources on unmount
+  React.useEffect(() => {
+    return () => {
+      // Stop any playing audio
+      if (currentSourceRef.current) {
+        try {
+          currentSourceRef.current.stop();
+        } catch (e) {
+          // Source may already be stopped
+        }
+        currentSourceRef.current = null;
+      }
+
+      // Close AudioContext
+      if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+        audioContextRef.current.close().catch(console.error);
+        audioContextRef.current = null;
+      }
+    };
+  }, []);
 
   React.useEffect(() => {
     loadPresets();
+    loadRecommendation();
   }, [selectedUseCase]);
+
+  async function loadRecommendation() {
+    try {
+      const result = await getVoicePresetRecommendation(selectedUseCase);
+      if (result.data && !result.error) {
+        setRecommendation(result.data);
+        setRecommendationDismissed(false);
+      }
+    } catch (err) {
+      // Silently fail - recommendations are optional
+      console.error("Failed to load recommendation:", err);
+    }
+  }
 
   async function loadPresets() {
     setLoading(true);
@@ -50,7 +100,7 @@ export function VoicePresetSelector({ onComplete }: VoicePresetSelectorProps) {
   }
 
   async function handleSelectPreset(presetId: number) {
-    setSelecting(true);
+    setSelectingPresetId(presetId); // Use per-preset selecting state
     setError(null);
     setSuccessMessage(null);
 
@@ -60,11 +110,27 @@ export function VoicePresetSelector({ onComplete }: VoicePresetSelectorProps) {
     } else {
       setSelectedPresetId(presetId);
       setSuccessMessage(result.data?.message || "Preset selected successfully");
+
+      // Clear recommendation if we selected the recommended preset
+      if (recommendation && recommendation.preset_id === presetId) {
+        setRecommendation(null);
+        setRecommendationDismissed(true);
+      }
+
       setTimeout(() => {
         onComplete?.();
       }, 1500);
     }
-    setSelecting(false);
+    setSelectingPresetId(null);
+  }
+
+  async function handleApplyRecommendation() {
+    if (!recommendation) return;
+    await handleSelectPreset(recommendation.preset_id);
+  }
+
+  function handleDismissRecommendation() {
+    setRecommendationDismissed(true);
   }
 
   async function handleSaveAdvancedConfig(config: {
@@ -86,8 +152,18 @@ export function VoicePresetSelector({ onComplete }: VoicePresetSelectorProps) {
   async function handlePlaySample(presetId: number, e: React.MouseEvent) {
     e.stopPropagation();
 
+    // Stop currently playing audio if any
+    if (currentSourceRef.current) {
+      try {
+        currentSourceRef.current.stop();
+      } catch (err) {
+        // Source may already be stopped
+      }
+      currentSourceRef.current = null;
+    }
+
+    // If clicking the same playing preset, just stop and return
     if (playingId === presetId) {
-      // Stop playing
       setPlayingId(null);
       return;
     }
@@ -101,23 +177,53 @@ export function VoicePresetSelector({ onComplete }: VoicePresetSelectorProps) {
       return;
     }
 
-    // Play audio
-    const audioUrl = URL.createObjectURL(result.data);
-    const audio = new Audio(audioUrl);
-    audio.onended = () => {
+    try {
+      // Initialize AudioContext if needed
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+
+      const audioContext = audioContextRef.current;
+
+      // Resume AudioContext if suspended (required by browser autoplay policy)
+      if (audioContext.state === "suspended") {
+        await audioContext.resume();
+      }
+
+      // Decode audio data using Web Audio API
+      const arrayBuffer = await result.data.arrayBuffer();
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      audioBufferRef.current = audioBuffer;
+
+      // Create and configure audio source
+      const source = audioContext.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioContext.destination);
+
+      // Handle playback end
+      source.onended = () => {
+        setPlayingId(null);
+        currentSourceRef.current = null;
+      };
+
+      // Handle playback errors
+      source.onerror = (err) => {
+        console.error("Audio playback error:", err);
+        setError("Failed to play audio");
+        setPlayingId(null);
+        currentSourceRef.current = null;
+      };
+
+      // Start playback
+      source.start(0);
+      currentSourceRef.current = source;
+
+    } catch (err: any) {
+      console.error("Failed to play audio with Web Audio API:", err);
+      setError(`Failed to play audio: ${err?.message || "Unknown error"}`);
       setPlayingId(null);
-      URL.revokeObjectURL(audioUrl);
-    };
-    audio.onerror = () => {
-      setError("Failed to play audio");
-      setPlayingId(null);
-      URL.revokeObjectURL(audioUrl);
-    };
-    audio.play().catch((err) => {
-      setError(`Failed to play audio: ${err.message}`);
-      setPlayingId(null);
-      URL.revokeObjectURL(audioUrl);
-    });
+      currentSourceRef.current = null;
+    }
   }
 
   return (
@@ -130,6 +236,17 @@ export function VoicePresetSelector({ onComplete }: VoicePresetSelectorProps) {
           Select your use case and pick a voice preset optimized for it.
         </p>
       </div>
+
+      {/* Recommendation Banner */}
+      {recommendation && !recommendationDismissed && !advancedMode && (
+        <RecommendationBanner
+          presetName={recommendation.preset_name}
+          improvementPct={recommendation.improvement_pct}
+          reasoning={recommendation.reasoning}
+          onApply={handleApplyRecommendation}
+          onDismiss={handleDismissRecommendation}
+        />
+      )}
 
       {/* Use Case Selector */}
       <div className="flex gap-2">
@@ -162,6 +279,7 @@ export function VoicePresetSelector({ onComplete }: VoicePresetSelectorProps) {
           </div>
         </div>
         <button
+          data-testid="advanced-mode-toggle"
           type="button"
           onClick={() => setAdvancedMode(!advancedMode)}
           className={cn(
@@ -209,6 +327,8 @@ export function VoicePresetSelector({ onComplete }: VoicePresetSelectorProps) {
               {presets.map((preset) => (
                 <div
                   key={preset.id}
+                  data-testid="preset-card"
+                  data-preset-id={preset.id}
                   className={cn(
                     "relative rounded-lg border p-4 transition-all",
                     "hover:border-emerald-500/50 hover:shadow-md",
@@ -218,20 +338,25 @@ export function VoicePresetSelector({ onComplete }: VoicePresetSelectorProps) {
                   )}
                 >
                   {selectedPresetId === preset.id && (
-                    <div className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500 text-white">
+                    <div
+                      data-testid="preset-checkmark"
+                      className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500 text-white"
+                    >
                       ✓
                     </div>
                   )}
 
                   <div className="space-y-2">
-                    <h3 className="font-medium text-foreground">{preset.name}</h3>
+                    <h3 data-testid="preset-name" className="font-medium text-foreground">{preset.name}</h3>
                     <p className="text-sm text-muted-foreground">{preset.description}</p>
 
                     <div className="flex gap-2 pt-2">
                       <button
+                        data-testid="play-sample-button"
                         type="button"
                         onClick={(e) => handlePlaySample(preset.id, e)}
                         disabled={playingId !== null && playingId !== preset.id}
+                        aria-label={playingId === preset.id ? "Stop sample" : "Play sample"}
                         className={cn(
                           "flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                           "hover:bg-muted",
@@ -244,16 +369,17 @@ export function VoicePresetSelector({ onComplete }: VoicePresetSelectorProps) {
                       </button>
 
                       <button
+                        data-testid="select-button"
                         type="button"
                         onClick={() => handleSelectPreset(preset.id)}
-                        disabled={selecting}
+                        disabled={selectingPresetId !== null}
                         className={cn(
                           "flex flex-1 items-center justify-center rounded-md px-3 py-2 text-sm font-medium transition-colors",
                           "bg-emerald-500 text-white hover:bg-emerald-600",
                           "disabled:opacity-50 disabled:cursor-not-allowed"
                         )}
                       >
-                        {selecting ? "Saving..." : "Select"}
+                        {selectingPresetId === preset.id ? "Saving..." : "Select"}
                       </button>
                     </div>
                   </div>

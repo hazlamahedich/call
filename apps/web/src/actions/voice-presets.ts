@@ -18,6 +18,14 @@ export interface VoicePreset {
   sort_order: number;
 }
 
+export interface VoicePresetRecommendation {
+  preset_id: number;
+  preset_name: string;
+  improvement_pct: number;
+  reasoning: string;
+  based_on_calls: number;
+}
+
 export async function getVoicePresets(useCase?: string): Promise<{
   data: VoicePreset[] | null;
   error: string | null;
@@ -45,6 +53,35 @@ export async function getVoicePresets(useCase?: string): Promise<{
     return { data: data.presets, error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : "Network error" };
+  }
+}
+
+export async function getVoicePresetRecommendation(useCase: string): Promise<{
+  data: VoicePresetRecommendation | null;
+  reason: string | null;
+  error: string | null;
+}> {
+  try {
+    const { getToken } = await auth();
+    const token = await getToken();
+    if (!token) return { data: null, reason: null, error: "Not authenticated" };
+
+    const response = await fetch(
+      `${API_URL}/api/v1/voice-presets/recommendations/${useCase}`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+
+    if (!response.ok) {
+      const err = await response.json();
+      return { data: null, reason: null, error: err.detail?.message || "Failed to get recommendation" };
+    }
+
+    const result = await response.json();
+    return { data: result.recommendation, reason: result.reason, error: null };
+  } catch (err) {
+    return { data: null, reason: null, error: err instanceof Error ? err.message : "Network error" };
   }
 }
 

@@ -115,7 +115,7 @@ async def _ensure_schema():
 _SCHEMA_INITIALIZED = False
 
 
-@pytest_asyncio.fixture(autouse=True, scope="session")
+@pytest.fixture(scope="session")
 async def _init_schema():
     global _SCHEMA_INITIALIZED
     if not _SCHEMA_INITIALIZED:

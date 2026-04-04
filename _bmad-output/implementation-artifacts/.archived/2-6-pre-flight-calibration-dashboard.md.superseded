@@ -1,0 +1,789 @@
+# Story 2.6: Pre-Flight Calibration Dashboard
+
+Status: needs-refinement
+
+## ⚠️ Adversarial Review Required
+
+**Date**: 2026-04-04
+**Reviewers**: Winston (Architect), Murat (Test Architect), John (Product Manager)
+**Finding**: Story requires significant refinement before development begins
+
+### Critical Concerns Summary
+
+| Category | Severity | Count | Status |
+|----------|----------|-------|--------|
+| Architecture | 🔴 High | 4 | Blocking |
+| Testing | 🟡 Medium | 5 | Requires Attention |
+| Product Value | 🔴 High | 5 | Blocking |
+
+**Recommendation**: Address critical concerns before moving to `ready-for-dev`. See "Adversarial Review Findings" section below.
+
+---
+
+## Story
+
+As an Agent Manager,
+I want to calibrate my AI's voice and goals before dialing,
+so that I can ensure the output is perfect before live engagement.
+
+## Acceptance Criteria
+
+1. **Given** the 10-Minute Launch onboarding is complete,
+   **When** the user enters the "Pre-Flight" calibration module,
+   **Then** they can trigger a 10-second audio test to hear the selected voice,
+   **And** the audio test plays immediately via the browser's Web Audio API,
+   **And** the test uses the configured TTS provider (ElevenLabs or Cartesia).
+
+2. **Given** the user is in the Pre-Flight calibration module,
+   **When** they adjust the "Speech Speed" slider (0.5x to 2.0x),
+   **Then** the audio test re-generates with instant feedback using the new speed,
+   **And** the UI displays the current speed value (e.g., "1.2x").
+
+3. **Given** the user is in the Pre-Flight calibration module,
+   **When** they adjust the "Stability" slider (0.0 to 1.0),
+   **Then** the audio test re-generates with instant feedback using the new stability setting,
+   **And** the UI displays the current stability value (e.g., "0.8"),
+   **And** higher stability values produce more consistent, less expressive speech.
+
+4. **Given** the user has adjusted voice settings to their satisfaction,
+   **When** they click the "Save Configuration" button,
+   **Then** the configuration is persisted to the `AgentConfig` table with `tenant_id` isolation,
+   **And** the settings are linked to the active agent/organization,
+   **And** a success confirmation appears (e.g., "Configuration saved").
+
+5. **Given** the user has not clicked "Save Configuration",
+   **When** they navigate away from the Pre-Flight module,
+   **Then** no changes are persisted to the database,
+   **And** the previous agent configuration remains unchanged.
+
+6. **Given** the Pre-Flight module is loaded,
+   **When** the module initializes,
+   **Then** it fetches the current agent's voice configuration from the backend,
+   **And** the sliders and controls are pre-populated with existing values,
+   **And** the UI displays a loading state during the fetch (if >100ms).
+
+7. **Given** an audio test is in progress,
+   **When** the test audio is playing,
+   **Then** the UI shows a visual "Playing" indicator (e.g., animated waveform),
+   **And** the user can stop the test by clicking a "Stop" button.
+
+8. **Given** the TTS provider is unavailable or returns an error,
+   **When** the user triggers an audio test,
+   **Then** a user-friendly error message appears (e.g., "Unable to generate audio test. Please try again."),
+   **And** the error is logged to the backend for monitoring,
+   **And** the UI remains functional for other adjustments.
+
+---
+
+## 🔍 Adversarial Review Findings
+
+**Review Date**: 2026-04-04
+**Review Type**: Multi-Agent Adversarial Review (Party Mode)
+**Agents**: Winston (Architect), Murat (Test Architect), John (Product Manager)
+
+### 🏗️ Architectural Concerns (Winston)
+
+#### 🔴 CRITICAL: Tight Coupling to TTS Providers
+**Issue**: AudioTestService directly integrates ElevenLabs and Cartesia SDKs with if/else branches.
+**Impact**: Violates Open-Closed Principle; adding new providers requires modifying service code.
+**Recommendation**:
+- Implement proper provider abstraction layer (see Story 2.3's `TTSProvider` base class pattern)
+- Use dependency injection for provider selection
+- Provider registration pattern for extensibility
+
+#### 🟡 MEDIUM: State Management Fragility
+**Issue**: AC5 requires no persistence on navigate-away, but AC6 requires pre-populating existing config. No interim state strategy defined.
+**Impact**: User refreshes lose adjustments; fragile UX.
+**Recommendation**:
+- Define interim state storage: `localStorage` with TTL or in-memory state
+- Consider React Query / SWR for optimistic updates
+- Add explicit state persistence strategy to dev notes
+
+#### 🟡 MEDIUM: Audio Test Performance Gap
+**Issue**: AC1 promises "immediate" feedback, but dev notes admit 2-3s generation time.
+**Impact**: UX mismatch; users won't perceive 2-3s as "immediate".
+**Recommendation**:
+- Implement caching for common (voice_id, speed, stability) combinations
+- Pre-generate test audio on config fetch
+- Add loading state with progress indicator (not just spinner)
+- Update AC1 to reflect realistic latency: "audio test plays within 3 seconds"
+
+#### 🔴 CRITICAL: Missing Circuit Breaker Integration
+**Issue**: Story 2.3 implemented circuit breakers for TTS fallback. Story 2.6 creates separate TTS path.
+**Impact**: Duplicated code paths = duplicated bugs. Audio tests bypass circuit breaker.
+**Recommendation**:
+- AudioTestService MUST use existing `TTSOrchestrator` from Story 2.3
+- Audio tests participate in circuit breaker state
+- Add test: circuit tripped → audio test fails fast with clear message
+
+---
+
+### 🧪 Testing Concerns (Murat)
+
+#### 🔴 CRITICAL: Mock Hell
+**Issue**: "Mock external TTS providers in all tests" + integration tests = false confidence.
+**Impact**: We're not integrating anything real; tests pass but production fails.
+**Recommendation**:
+- **Contract Tests**: One real provider test per CI run (pact or similar)
+- **Consumer-Driven Contracts**: Validate provider interface compatibility
+- Add test phase: "Phase 5b: Contract Testing with Real Providers"
+
+#### 🟡 MEDIUM: Arbitrary Coverage Target
+**Issue**: ">80% coverage" with no risk-based rationale.
+**Impact**: Teams game coverage; miss risky edge cases.
+**Recommendation**:
+- Replace with risk-based coverage: "Critical paths (config CRUD, audio generation): 95%"
+- "Happy path sliders: 70%"
+- Document coverage targets by risk level
+
+#### 🔴 CRITICAL: Missing Failure Scenarios
+**Issue**: Test list covers happy paths; no chaos engineering.
+**Impact**: 2 AM pager duty when edge cases fail.
+**Recommendation**:
+- Add chaos tests: API 500 mid-generation, rate limits, timeout at 2.9s
+- Add concurrent save tests: user clicks Save while audio generating
+- Add failure injection tests for all external dependencies
+
+#### 🟡 MEDIUM: E2E Test Factories Missing
+**Issue**: Story 2.4 found static IDs break parallel tests. This story repeats the mistake.
+**Impact**: Tests fail in CI, get ignored.
+**Recommendation**:
+- Create `tests/factories/agent-config-factory.ts`
+- Factory functions: `createAgentId()`, `createVoiceId()`, `createAgentConfig()`
+- Update all E2E tests to use factories
+
+#### 🟡 MEDIUM: Tenant Isolation Test Too Narrow
+**Issue**: Security test only checks org1 can't access org2 config.
+**Impact**: Missing DoS, injection, and privilege escalation vectors.
+**Recommendation**:
+- Add test: org1 creates 10,000 configs → rate limited or rejected
+- Add test: 1GB `custom_voice_settings` dict → validation error
+- Add test: SQL injection via `voice_id` → sanitized/rejected
+- Add test: Agent ID tampering for privilege escalation → 403
+
+---
+
+### 📋 Product Value Concerns (John)
+
+#### 🔴 CRITICAL: Solution Without Problem
+**Issue**: No evidence that users need pre-flight calibration.
+**Impact**: Build feature nobody uses; waste 45+ subtasks of engineering time.
+**Recommendation**:
+- **GATEKEEPER**: User interview 5-10 Agent Managers before starting implementation
+- Ask: "How often do voice settings need adjustment?" "What's the cost of bad voice output?"
+- If <10% of users need this, consider different approach
+
+#### 🟡 MEDIUM: Feature Bloat
+**Issue**: 10-minute onboarding + now calibration = increased drop-off.
+**Impact**: Lower activation rates; users quit before value.
+**Recommendation**:
+- A/B test: Skip calibration, measure impact on call quality
+- Make calibration optional: "Calibrate voice (optional)" not required
+- Add success metric: "% users who complete calibration"
+
+#### 🟡 MEDIUM: No Competitive Analysis
+**Issue**: Story references previous stories but zero competitive intelligence.
+**Impact**: We're flying blind; competitors may have solved this differently.
+**Recommendation**:
+- Research: Do Vapi, Retell, Vocode have pre-flight calibration?
+- If yes, how? If no, why not?
+- Document findings in project context
+
+#### 🔴 CRITICAL: No Success Metrics
+**Issue**: ACs measure functionality, not business outcomes.
+**Impact**: Can't measure success; feature becomes zombie code.
+**Recommendation**:
+- **Add Success Metrics Section** (see below)
+- Track: "% users who calibrate before first call", "Call redos rate", "User confidence score"
+- Define success criteria before writing code
+
+#### 🟡 MEDIUM: Opportunity Cost
+**Issue**: 45+ subtasks → 6-8 sprints. What aren't we building?
+**Impact**: Higher-impact features delayed.
+**Recommendation**:
+- **GATEKEEPER**: ROI analysis before implementation
+- Compare to other Epic 2 stories: is this highest value?
+- Consider MVP: 3-5 subtasks, validate with users, then iterate
+
+---
+
+## 📋 Recommended Actions
+
+### Before Moving to `ready-for-dev`
+
+#### Phase 0: Pre-Implementation Validation (NEW)
+
+- [ ] **User Research** (John's concern)
+  - [ ] Interview 5-10 Agent Managers about voice calibration needs
+  - [ ] Document: How often do they adjust voice settings? What's the pain?
+  - [ ] Decision gate: Proceed if >30% express strong need
+
+- [ ] **Competitive Analysis** (John's concern)
+  - [ ] Research Vapi, Retell, Vocode for similar features
+  - [ ] Document findings in `_bmad-output/research/voice-calibration-competitive-analysis.md`
+  - [ ] If competitors don't have this, understand why
+
+- [ ] **Success Metrics Definition** (John's concern)
+  - [ ] Define baseline metrics: current call redo rate, user confidence
+  - [ ] Define success criteria: 20% reduction in call redos? 15% increase in confidence?
+  - [ ] Add telemetry events to track calibration impact
+
+#### Phase 0b: Architecture Refinement (Winston's concerns)
+
+- [ ] **Provider Abstraction Layer**
+  - [ ] Review Story 2.3's `TTSProvider` base class in `apps/api/services/tts/base.py`
+  - [ ] Design AudioTestService to use `TTSOrchestrator`, not direct SDK calls
+  - [ ] Document: How to add third provider without modifying service code
+
+- [ ] **State Management Strategy**
+  - [ ] Define interim state storage: `localStorage` with 1-hour TTL
+  - [ ] Add React Query for optimistic updates
+  - [ ] Document state lifecycle in dev notes
+
+- [ ] **Circuit Breaker Integration**
+  - [ ] Update AudioTestService to use `TTSOrchestrator` from Story 2.3
+  - [ ] Add acceptance criterion: "When circuit breaker tripped, audio test fails fast with clear message"
+  - [ ] Add test: Verify audio tests participate in circuit state
+
+#### Phase 0c: Testing Strategy Enhancement (Murat's concerns)
+
+- [ ] **Factory Functions**
+  - [ ] Create `tests/factories/agent-config-factory.ts`
+  - [ ] Factories: `createAgentId()`, `createVoiceId()`, `createAgentConfig()`
+  - [ ] Apply lesson learned from Story 2.4 review
+
+- [ ] **Contract Testing**
+  - [ ] Design contract test with one real provider per CI run
+  - [ ] Use pact or similar for consumer-driven contracts
+  - [ ] Add to Phase 5b: Contract Testing
+
+- [ ] **Chaos Testing**
+  - [ ] Add chaos tests: API 500 mid-generation, rate limits, timeouts
+  - [ ] Add concurrent operation tests: Save while generating
+  - [ ] Add failure injection for all external dependencies
+
+- [ ] **Security Testing Expansion**
+  - [ ] Add DoS test: 10,000 configs → rate limit
+  - [ ] Add injection tests: SQL via `voice_id`, 1GB `custom_voice_settings`
+  - [ ] Add privilege escalation test: Agent ID tampering
+
+---
+
+## 📊 Success Metrics (NEW)
+
+### Baseline Metrics (Measure Before Implementation)
+- **Call redo rate**: % of calls that require redial due to voice issues
+- **Time to first successful call**: Average time from signup to first quality call
+- **User confidence score**: Survey rating (1-5) on voice output quality
+- **Calibration adoption**: % of eligible users who complete calibration (if we build it)
+
+### Success Criteria (Define Before Writing Code)
+- **Primary**: 20% reduction in call redo rate for users who calibrate
+- **Secondary**: 15% increase in user confidence score post-calibration
+- **Tertiary**: <5% drop-off rate during calibration flow
+- **Guardrail**: Overall activation rate doesn't decrease >2%
+
+### Telemetry Events (Track Impact)
+- `calibration_started` - User enters calibration flow
+- `calibration_completed` - User saves calibration config
+- `calibration_skipped` - User opts out of calibration
+- `first_call_quality` - User rates first call after calibration
+- `call_redo` - User redials due to voice issues (compare calibrated vs non-calibrated)
+
+---
+
+## Tasks / Subtasks
+
+### Phase 1: Backend — AgentConfig Data Model & Migration (ACs 4, 5)
+
+- [ ] Create `AgentConfig` SQLModel in `apps/api/models/agent_config.py` (AC: 4)
+  - [ ] Extend `TenantModel` with `table=True`, `__tablename__ = "agent_configs"`
+  - [ ] Columns: `agent_id` (int, FK to agents.id, indexed), `voice_id` (str, max_length=100), `speech_speed` (float, default=1.0), `stability` (float, default=0.8), `temperature` (Optional[float], default=0.7), `use_legacy_behavior` (bool, default=False), `custom_voice_settings` (Optional[dict]), `updated_at` (datetime, default=utc_now)
+  - [ ] Composite indexes: `(org_id, agent_id)`, `(agent_id, updated_at)`
+  - [ ] Unique constraint: `(org_id, agent_id)` — one config per agent per tenant
+  - [ ] Register in `apps/api/models/__init__.py`
+
+- [ ] Add shared types to `apps/api/models/base.py` (AC: 4)
+  - [ ] Add `VoiceProvider` Literal: "elevenlabs", "cartesia", "openai"
+  - [ ] Add default voice IDs for each provider as constants
+  - [ ] Export types for use in services and tests
+
+- [ ] Generate Alembic migration (AC: 4)
+  - [ ] Use `alembic revision --autogenerate -m "Create agent_configs table"`
+  - [ ] Verify composite indexes and FK constraints
+  - [ ] Add unique constraint on `(org_id, agent_id)`
+  - [ ] Apply migration with `alembic upgrade head`
+
+- [ ] Update TypeScript interfaces (AC: 4)
+  - [ ] Add `AgentConfig` type to `packages/types/agent.ts`
+  - [ ] Add `VoiceProvider` enum
+  - [ ] Export from `packages/types/index.ts`
+
+### Phase 2: Backend — TTS Integration for Audio Tests (ACs 1, 7, 8)
+
+- [ ] Create `AudioTestService` in `apps/api/services/audio_test.py` (ACs 1, 7, 8)
+  - [ ] `async generate_test_audio(text: str, voice_config: AgentConfig) -> bytes`
+  - [ ] Support both ElevenLabs and Cartesia providers
+  - [ ] Apply `speech_speed`, `stability`, and `temperature` settings
+  - [ ] Return audio bytes in MP3/WAV format
+  - [ ] Raise `AudioTestError` on provider failure
+
+- [ ] Implement ElevenLabs provider in `AudioTestService` (AC: 1)
+  - [ ] Use ElevenLabs SDK with API key from settings
+  - [ ] Map `stability` and `similarity_boost` parameters
+  - [ ] Handle rate limits and API errors gracefully
+  - [ ] Log generation latency for monitoring
+
+- [ ] Implement Cartesia provider in `AudioTestService` (AC: 1)
+  - [ ] Use Cartesia SDK with API key from settings
+  - [ ] Map `stability` to Cartesia's equivalent parameter
+  - [ ] Handle rate limits and API errors gracefully
+  - [ ] Log generation latency for monitoring
+
+- [ ] Add audio test settings to `apps/api/config/settings.py` (AC: 1)
+  - [ ] `ELEVENLABS_API_KEY` (from env)
+  - [ ] `CARTESIA_API_KEY` (from env)
+  - [ ] `DEFAULT_TEST_TEXT` (e.g., "Hello, this is a test of the AI voice configuration. How does it sound?")
+  - [ ] `AUDIO_TEST_TIMEOUT_MS` (default 10000)
+
+- [ ] Add error handling and logging (AC: 8)
+  - [ ] Create `AudioTestError` exception in `apps/api/exceptions.py`
+  - [ ] Log structured errors with `extra={"code": "AUDIO_TEST_ERROR"}`
+  - [ ] Include provider, voice_id, and error details in logs
+
+### Phase 3: Backend — API Endpoints (ACs 4, 6)
+
+- [ ] Create agent config router in `apps/api/routers/agent_config.py` (ACs 4, 6)
+  - [ ] `GET /api/v1/agent-config` — fetch current agent config (auth via `get_current_org_id`)
+  - [ ] `PUT /api/v1/agent-config` — update agent config (auth via `get_current_org_id`)
+  - [ ] `POST /api/v1/agent-config/audio-test` — generate audio test (auth via `get_current_org_id`)
+
+- [ ] Implement GET endpoint (AC: 6)
+  - [ ] Query `AgentConfig` by `org_id` and `agent_id`
+  - [ ] Return 404 if no config exists (frontend will use defaults)
+  - [ ] Return `AgentConfigResponse` schema
+  - [ ] Apply RLS via `org_id` filter
+
+- [ ] Implement PUT endpoint (AC: 4)
+  - [ ] Accept `AgentConfigUpdate` schema (speech_speed, stability, etc.)
+  - [ ] Use upsert: create if not exists, update if exists
+  - [ ] Validate `speech_speed` range [0.5, 2.0]
+  - [ ] Validate `stability` range [0.0, 1.0]
+  - [ ] Set `updated_at = utc_now()`
+  - [ ] Return updated `AgentConfigResponse`
+  - [ ] Apply RLS via `org_id` filter
+
+- [ ] Implement POST audio-test endpoint (ACs 1, 8)
+  - [ ] Accept `AudioTestRequest` schema (text, voice_config)
+  - [ ] Call `AudioTestService.generate_test_audio()`
+  - [ ] Return audio bytes with `Content-Type: audio/mpeg`
+  - [ ] Handle `AudioTestError` and return user-friendly error
+  - [ ] Apply RLS via `org_id` filter
+
+- [ ] Add schemas in `apps/api/schemas/agent_config.py` (ACs 4, 6)
+  - [ ] `AgentConfigResponse` — full config response schema
+  - [ ] `AgentConfigUpdate` — update request schema
+  - [ ] `AudioTestRequest` — audio test request schema
+  - [ ] `AudioTestErrorResponse` — error response schema
+
+- [ ] Register router in `apps/api/main.py` (ACs 4, 6)
+  - [ ] Include router with prefix `/api/v1/agent-config`
+
+### Phase 4: Frontend — Pre-Flight Calibration Component (ACs 1, 2, 3, 6, 7)
+
+- [ ] Create `PreFlightCalibration` component in `apps/web/src/components/onboarding/PreFlightCalibration.tsx` (ACs 1-7)
+  - [ ] State: `config` (AgentConfig | null), `isPlaying` (boolean), `isLoading` (boolean), `error` (string | null)
+  - [ ] Fetch config on mount using Server Action `getAgentConfig()`
+  - [ ] Render loading skeleton if `isLoading` and fetch >100ms
+  - [ ] Render sliders for `speech_speed` (0.5-2.0) and `stability` (0.0-1.0)
+  - [ ] Render "Test Audio" button with play/stop toggle
+  - [ ] Render "Save Configuration" button (disabled if no changes)
+  - [ ] Display current values next to sliders (e.g., "1.2x", "0.8")
+
+- [ ] Implement audio test playback (ACs 1, 7)
+  - [ ] Use Web Audio API to play returned audio bytes
+  - [ ] Show animated waveform visualizer while playing (CSS animation)
+  - [ ] Enable "Stop" button during playback
+  - [ ] Handle audio errors gracefully (show error message)
+  - [ ] Disable "Test Audio" button while generating
+
+- [ ] Implement Server Action `getAgentConfig` in `apps/web/src/actions/agent-config.ts` (AC: 6)
+  - [ ] Use canonical Clerk auth pattern: `auth()` from `@clerk/nextjs/server`
+  - [ ] Fetch from `${API_URL}/api/v1/agent-config` with `Authorization: Bearer ${token}`
+  - [ ] Return `{ data: AgentConfig | null; error: string | null }`
+  - [ ] Handle 404 as "no config exists" (return `data: null`)
+
+- [ ] Implement Server Action `updateAgentConfig` in `apps/web/src/actions/agent-config.ts` (AC: 4)
+  - [ ] Use canonical Clerk auth pattern
+  - [ ] PUT to `${API_URL}/api/v1/agent-config` with `Authorization: Bearer ${token}`
+  - [ ] Pass `AgentConfigUpdate` body
+  - [ ] Return `{ data: AgentConfig; error: string | null }`
+
+- [ ] Implement Server Action `generateAudioTest` in `apps/web/src/actions/agent-config.ts` (ACs 1, 8)
+  - [ ] Use canonical Clerk auth pattern
+  - [ ] POST to `${API_URL}/api/v1/agent-config/audio-test` with `Authorization: Bearer ${token}`
+  - [ ] Pass `AudioTestRequest` body (text, current config)
+  - [ ] Return `{ data: Blob; error: string | null }`
+  - [ ] Handle errors with user-friendly messages
+
+- [ ] Add styling in `apps/web/src/components/onboarding/PreFlightCalibration.module.css` (ACs 1-7)
+  - [ ] Use Obsidian design system: `#09090B` background
+  - [ ] Glassmorphism containers for controls
+  - [ ] Neon Emerald (`#10B981`) for active states
+  - [ ] Zinc (`#3F3F46`) for inactive states
+  - [ ] Geist Sans for labels, Geist Mono for values
+  - [ ] Custom slider styling (vanilla CSS)
+  - [ ] Animated waveform for playback state
+
+- [ ] Create tests in `apps/web/src/components/onboarding/__tests__/PreFlightCalibration.test.tsx` (ACs 1-7)
+  - [ ] Test component renders with loading state
+  - [ ] Test component renders with config data
+  - [ ] Test sliders update local state on change
+  - [ ] Test "Test Audio" button triggers audio generation
+  - [ ] Test "Save Configuration" button calls update Server Action
+  - [ ] Test error handling for audio generation failures
+  - [ ] Test error handling for config fetch failures
+  - [ ] Use `[2.6-FRONTEND-XXX]` traceability IDs
+
+### Phase 5: Backend — Testing (ACs 1-8)
+
+- [ ] Create unit tests in `apps/api/tests/test_agent_config.py` (ACs 4, 6)
+  - [ ] Test GET endpoint returns config for valid agent
+  - [ ] Test GET returns 404 for non-existent config
+  - [ ] Test PUT creates new config if not exists
+  - [ ] Test PUT updates existing config
+  - [ ] Test PUT validates `speech_speed` range
+  - [ ] Test PUT validates `stability` range
+  - [ ] Test tenant isolation (org1 cannot access org2 config)
+  - [ ] Use `[2.6-BACKEND-CONFIG-XXX]` traceability IDs
+
+- [ ] Create unit tests in `apps/api/tests/test_audio_test_service.py` (ACs 1, 8)
+  - [ ] Test audio generation for ElevenLabs provider
+  - [ ] Test audio generation for Cartesia provider
+  - [ ] Test `speech_speed` parameter is applied
+  - [ ] Test `stability` parameter is applied
+  - [ ] Test `AudioTestError` raised on provider failure
+  - [ ] Test rate limit handling
+  - [ ] Mock external provider SDKs
+  - [ ] Use `[2.6-BACKEND-AUDIO-XXX]` traceability IDs
+
+- [ ] Create integration tests in `apps/api/tests/test_agent_config_api.py` (ACs 4, 6)
+  - [ ] Test full config lifecycle (create → read → update → read)
+  - [ ] Test audio-test endpoint returns valid audio
+  - [ ] Test audio-test endpoint handles provider errors
+  - [ ] Test unauthenticated requests return 403
+  - [ ] Test tenant isolation enforcement
+  - [ ] Use `[2.6-INTEGRATION-XXX]` traceability IDs
+
+- [ ] **[P0 SECURITY] Create tenant isolation test** in `apps/api/tests/test_agent_config_security.py` (AC: 4)
+  - [ ] Given org1 and org2 both have agent configs, when org1 tries to update org2's config via agent_id tampering, then request is rejected with 403
+  - [ ] Test verifies RLS policies prevent cross-tenant config access
+  - [ ] Test prevents privilege escalation via config manipulation
+  - [ ] Use `[2.6-SECURITY-TENANT-ISOLATION-001]` traceability ID
+
+- [ ] **Backend Coverage Target**: >80% for all agent config services (pytest --cov=apps/api/services/audio_test --cov=apps/api/routers/agent_config)
+
+### Phase 6: Frontend — E2E Testing (ACs 1-7)
+
+- [ ] Create E2E test in `tests/e2e/pre-flight-calibration.spec.ts` (ACs 1-7)
+  - [ ] Test user can navigate to Pre-Flight module
+  - [ ] Test sliders are pre-populated with existing config
+  - [ ] Test user can adjust speech_speed slider
+  - [ ] Test user can adjust stability slider
+  - [ ] Test "Test Audio" button plays audio
+  - [ ] Test visual waveform appears during playback
+  - [ ] Test "Save Configuration" button persists changes
+  - [ ] Test error handling for TTS provider failures
+  - [ ] Test tenant isolation (user cannot access other org's config)
+  - [ ] Use `[2.6-E2E-XXX]` traceability IDs
+
+### Phase 7: Documentation & Handoff (Optional)
+
+- [ ] Update API documentation (ACs 1, 4, 6)
+  - [ ] Add OpenAPI docs for agent config endpoints
+  - [ ] Document audio-test endpoint with example requests/responses
+  - [ ] Document supported voice providers and parameters
+  - [ ] Add rate limiting information
+
+- [ ] Create component documentation (ACs 1-7)
+  - [ ] Document `PreFlightCalibration` component props and usage
+  - [ ] Add Storybook story for component (if using Storybook)
+  - [ ] Document Server Actions and their signatures
+
+## Dev Notes
+
+### Relevant Architecture Patterns and Constraints
+
+**⚠️ ADVERSARIAL REVIEW ADVISORIES:**
+- **Provider Abstraction Required**: AudioTestService MUST use existing `TTSOrchestrator` from Story 2.3, not direct SDK calls
+- **State Management Strategy**: Use `localStorage` with 1-hour TTL for interim state; implement React Query for optimistic updates
+- **Testing Avoids Mock Hell**: Include contract tests with real providers; chaos tests for failure scenarios
+- **Performance Realism**: Update AC1 to reflect 2-3s audio generation (not "immediate"); implement caching for common configurations
+- **User Validation Required**: Conduct user interviews before implementation to confirm feature necessity
+
+**Monorepo Structure:**
+- Frontend: `apps/web` (Next.js 15 with App Router)
+- Backend: `apps/api` (FastAPI with Python 3.x)
+- Shared types: `packages/types` (TypeScript interfaces)
+
+**Data Layer:**
+- **SQLModel** as source of truth for backend models
+- **PostgreSQL Row-Level Security (RLS)** for tenant isolation on all queries
+- Use `TenantModel.model_validate({"camelKey": value})` pattern — NEVER use positional kwargs
+- See: `_bmad-output/implementation-artifacts/1-3-*.md` Discovery #2
+
+**Authentication Pattern:**
+- All Server Actions MUST use canonical Clerk auth pattern:
+  ```typescript
+  import { auth } from "@clerk/nextjs/server";
+  const { getToken } = await auth();
+  const token = await getToken();
+  if (!token) return { data: null, error: "Not authenticated" };
+  ```
+- See: `project-context.md` Server Action Auth Pattern (CANONICAL)
+
+**Naming Conventions:**
+- Backend (Python): `snake_case` for functions, variables, and database columns
+- Frontend (TypeScript): `camelCase` for variables/functions, `PascalCase` for components
+- API boundary: Use `AliasGenerator` to map `snake_case` → `camelCase`
+
+**Multi-Tenancy:**
+- Every query MUST include `org_id` filter for RLS enforcement
+- Use `set_tenant_context(org_id)` before database operations
+- Composite indexes MUST include `org_id` for query performance
+
+**Error Handling:**
+- Backend: Standardized JSON errors via `packages/constants`
+- Frontend: Extract errors via `err.detail?.message` from HTTPException
+- Return `{ data: T | null; error: string | null }` pattern from Server Actions
+
+**Testing:**
+- Backend: Pytest with >80% coverage requirement
+- Frontend: Vitest for unit tests, Playwright for E2E
+- Mock external TTS providers (ElevenLabs, Cartesia) in all tests
+- Use traceability IDs: `[2.6-{TYPE}-{XXX}]`
+
+**UI/UX Requirements:**
+- **Obsidian Design System**: `#09090B` background, Neon accents (Emerald `#10B981`, Crimson `#F43F5E`, Zinc `#3F3F46`)
+- **Typography**: Geist Sans (headings/labels), Geist Mono (telemetry/values)
+- **Styling**: Vanilla CSS only — NO Tailwind, NO CSS-in-JS
+- **Accessibility**: WCAG AA for text, semantic HTML5 landmarks
+
+**Performance:**
+- Voice pipeline latency: <500ms (95th percentile)
+- TTS audio generation should complete <3s for 10-second test clip
+- Use async/await patterns throughout to prevent blocking
+
+### Source Tree Components to Touch
+
+**Backend Files:**
+- `apps/api/models/agent_config.py` — NEW: AgentConfig SQLModel
+- `apps/api/models/base.py` — ADD: VoiceProvider type, default voice constants
+- `apps/api/models/__init__.py` — REGISTER: AgentConfig model
+- `apps/api/services/audio_test.py` — NEW: AudioTestService with provider integrations
+- `apps/api/routers/agent_config.py` — NEW: Agent config API endpoints
+- `apps/api/schemas/agent_config.py` — NEW: Request/response schemas
+- `apps/api/config/settings.py` — ADD: TTS provider API keys, test settings
+- `apps/api/main.py` — REGISTER: Agent config router
+- `apps/api/exceptions.py` — ADD: AudioTestError exception
+
+**Frontend Files:**
+- `apps/web/src/components/onboarding/PreFlightCalibration.tsx` — NEW: Main component
+- `apps/web/src/components/onboarding/PreFlightCalibration.module.css` — NEW: Styles
+- `apps/web/src/actions/agent-config.ts` — NEW: Server Actions (getAgentConfig, updateAgentConfig, generateAudioTest)
+- `packages/types/agent.ts` — ADD: AgentConfig TypeScript interface
+- `packages/types/index.ts` — EXPORT: AgentConfig, VoiceProvider
+
+**Test Files:**
+- `apps/api/tests/test_agent_config.py` — NEW: Config CRUD tests
+- `apps/api/tests/test_audio_test_service.py` — NEW: TTS service tests
+- `apps/api/tests/test_agent_config_api.py` — NEW: API integration tests
+- `apps/api/tests/test_agent_config_security.py` — NEW: P0 tenant isolation test
+- `apps/web/src/components/onboarding/__tests__/PreFlightCalibration.test.tsx` — NEW: Component tests
+- `tests/e2e/pre-flight-calibration.spec.ts` — NEW: E2E test
+
+**Migration Files:**
+- `apps/api/migrations/versions/{timestamp}_create_agent_configs_table.py` — NEW: Database migration
+
+### Project Structure Notes
+
+**Alignment with Unified Project Structure:**
+- Follow Turborepo monorepo layout: `apps/web`, `apps/api`, `packages/types`
+- Use absolute path imports: `@/components/...`, `@/lib/...`
+- Run `turbo run types:sync` after creating new SQLModel to sync TypeScript types
+
+**Naming Conventions:**
+- Backend files: `snake_case` (e.g., `agent_config.py`)
+- Frontend files: `PascalCase` for components (e.g., `PreFlightCalibration.tsx`)
+- CSS files: Match component name (e.g., `PreFlightCalibration.module.css`)
+
+**Database Schema Conventions:**
+- All tables MUST have `org_id` for RLS
+- All tables MUST have `created_at` and `updated_at` timestamps
+- Composite indexes MUST include `org_id` for query performance
+- Use `table=True` in SQLModel for explicit table naming
+
+**API Endpoint Conventions:**
+- RESTful pattern: `GET /api/v1/agent-config`, `PUT /api/v1/agent-config`
+- Versioned APIs: `/api/v1/...`
+- Tenant-scoped: Always filter by `org_id` from Clerk token
+- Error responses: `{ error: { code: "STRING_ID", message: "Human readable" } }`
+
+**Testing Conventions:**
+- Backend tests: Co-located in `apps/api/tests/`
+- Frontend unit tests: Co-located in `__tests__/` directories
+- E2E tests: Centralized in `tests/e2e/`
+- Use traceability IDs: `[2.6-{TYPE}-{DESCRIPTION}]`
+
+### References
+
+**Epic 2: High-Performance AI Voice Engine**
+- Story 2.6: Pre-Flight Calibration Dashboard
+- Source: `_bmad-output/planning-artifacts/epics.md#Epic-2`
+
+**Architecture Requirements**
+- SQLModel Synchronicity: `_bmad-output/planning-artifacts/architecture.md#Step-4`
+- Tenant Isolation: `_bmad-output/planning-artifacts/architecture.md#Step-4`
+- Error Handling: `_bmad-output/planning-artifacts/architecture.md#Step-5`
+
+**UX Design Requirements**
+- Pre-Flight Calibration: `_bmad-output/planning-artifacts/ux-design-specification.md#Step-10`
+- Obsidian Theme: `_bmad-output/planning-artifacts/ux-design-specification.md#Step-8`
+- Typography: `_bmad-output/planning-artifacts/ux-design-specification.md#Step-8`
+
+**Previous Story Learnings**
+- Story 2.3 (TTS Fallback): Circuit breaker pattern, TTS provider abstraction
+  - Source: `_bmad-output/implementation-artifacts/2-3-tts-provider-abstraction-and-fallback.md`
+  - **Critical**: AudioTestService must integrate with existing `TTSOrchestrator`
+- Story 2.4 (Telemetry Sidecars): Async processing patterns, PostgreSQL RLS implementation
+  - Source: `_bmad-output/implementation-artifacts/2-4-asynchronous-telemetry-sidecars-for-voice-events.md`
+  - **Lesson Learned**: Use factory functions for test data to avoid parallel collisions
+- Story 2.5 (Pulse-Maker): Frontend component patterns, voice event streaming
+  - Source: `_bmad-output/implementation-artifacts/2-5-pulse-maker-visual-visualizer-component.md`
+
+**Adversarial Review Findings**
+- Multi-Agent Review: Winston (Architect), Murat (Test Architect), John (Product Manager)
+  - Source: Party Mode Session 2026-04-04
+  - **Critical Concerns**: Provider abstraction, state management, mock hell in tests, missing user validation
+  - **Status**: Story requires Phase 0 (pre-implementation validation) before development
+
+**Project Context**
+- Server Action Auth Pattern: `project-context.md` (Canonical pattern section)
+- SQLModel Construction: `project-context.md` (Database & Security section)
+- Monorepo Layout: `project-context.md` (Monorepo Layout section)
+
+## Dev Agent Record
+
+### Agent Model Used
+
+Story created using Claude Sonnet 4.6 following comprehensive artifact analysis and BMad Method workflow.
+
+### Debug Log References
+
+**Story Creation Session** (2026-04-04):
+- Analyzed Epic 2 requirements from epics.md
+- Extracted architecture patterns from architecture.md
+- Reviewed UX design requirements from ux-design-specification.md
+- Studied previous stories (2.4, 2.5) for implementation patterns
+- Identified TTS integration requirements (ElevenLabs, Cartesia)
+- Designed AgentConfig data model with RLS enforcement
+- Planned frontend component with Obsidian design system
+- Created comprehensive testing strategy (unit, integration, E2E)
+- Applied traceability ID system for test tracking
+
+**Key Implementation Decisions:**
+- Use Server Actions for frontend-backend communication (canonical pattern)
+- Implement AudioTestService to abstract TTS provider complexity
+- Apply TenantModel.model_validate() pattern for SQLModel construction
+- Enforce tenant isolation via PostgreSQL RLS policies
+- Use Web Audio API for client-side audio playback
+- Support real-time slider adjustments with instant audio feedback
+- Follow Obsidian design system with Geist Sans/Mono typography
+
+**Adversarial Review Session** (2026-04-04):
+- Conducted multi-agent adversarial review via Party Mode
+- Agents: Winston (Architect), Murat (Test Architect), John (Product Manager)
+- **14 concerns identified** across architecture, testing, and product value
+- **Story status updated**: `ready-for-dev` → `needs-refinement`
+- **Phase 0 added**: Pre-implementation validation (user research, competitive analysis, success metrics)
+- **Critical advisories documented** in Dev Notes section
+- **Testing strategy enhanced**: Contract tests, chaos tests, security expansion
+- **Architecture refined**: Provider abstraction via Story 2.3's TTSOrchestrator integration
+
+### Completion Notes List
+
+**Story 2.6 Creation Complete** ✅
+
+All acceptance criteria translated to actionable tasks:
+- **AC1**: Audio test trigger with 10-second playback via Web Audio API
+- **AC2**: Speech Speed slider (0.5x-2.0x) with instant feedback
+- **AC3**: Stability slider (0.0-1.0) with instant feedback
+- **AC4**: Explicit save to AgentConfig table with tenant isolation
+- **AC5**: No persistence on navigation away without save
+- **AC6**: Fetch and pre-populate existing config on load
+- **AC7**: Visual "Playing" indicator during audio playback
+- **AC8**: User-friendly error handling for TTS provider failures
+
+**Task Breakdown:**
+- 7 phases with 45+ subtasks
+- Backend: 3 phases (Data Model, TTS Integration, API Endpoints)
+- Frontend: 1 phase (Pre-Flight Component with Server Actions)
+- Testing: 2 phases (Backend Unit/Integration, Frontend E2E)
+- Documentation: 1 phase (API docs, component docs)
+
+**Files to Create:**
+- Backend: 8 new files (models, services, routers, schemas, tests)
+- Frontend: 4 new files (component, styles, Server Actions, tests)
+- Migration: 1 Alembic migration file
+- Total: 13 new files
+
+**Testing Strategy:**
+- Backend: 4 test files (config CRUD, audio service, API integration, security)
+- Frontend: 2 test files (component unit tests, E2E tests)
+- P0 security test for tenant isolation
+- >80% coverage target for backend services
+
+**Ready for Development:**
+- Comprehensive task breakdown with AC traceability
+- Clear architecture patterns and constraints documented
+- Previous story learnings integrated (async patterns, RLS)
+- Complete file structure and naming conventions
+- Testing approach with traceability IDs
+
+### Change List
+
+**Story file created**: 2026-04-04
+**Story refined after adversarial review**: 2026-04-04
+**Status**: needs-refinement (updated from ready-for-dev)
+
+**Adversarial Review Updates:**
+- Added comprehensive adversarial review findings section (14 concerns)
+- Added Phase 0: Pre-implementation validation (user research, competitive analysis, success metrics)
+- Added Success Metrics section with baseline, criteria, and telemetry events
+- Updated Dev Notes with adversarial review advisories
+- Updated References to include Story 2.3 circuit breaker integration
+- Enhanced testing strategy: contract tests, chaos tests, security expansion
+- Refined architecture: provider abstraction via TTSOrchestrator integration
+
+**Implementation Guidance:**
+- 45+ subtasks across 7 phases
+- All acceptance criteria covered with detailed tasks
+- Backend: AgentConfig model, AudioTestService, API endpoints
+- Frontend: PreFlightCalibration component with Server Actions
+- Comprehensive testing (unit, integration, E2E, security)
+- Documentation and handoff phase included
+
+**Quality Checks:**
+- Follows canonical Server Action auth pattern
+- Applies TenantModel.model_validate() anti-pattern prevention
+- Enforces PostgreSQL RLS for tenant isolation
+- Uses Obsidian design system with Vanilla CSS
+- Includes P0 tenant isolation security test
+- Traceability IDs for all tests
+
+**Next Steps:**
+1. Review story file for completeness
+2. Run `dev-story` to begin implementation
+3. Follow task breakdown in sequential order
+4. Apply traceability IDs to all tests
+5. Update story file with completion notes

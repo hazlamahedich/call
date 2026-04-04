@@ -61,7 +61,7 @@ development_status:
   2-6-voice-presets: done
   epic-2-retrospective: done
   epic-3: in-progress
-  3-1-multi-format-knowledge-ingestion-validation: ready-for-dev
+  3-1-multi-format-knowledge-ingestion-validation: review
   3-2-per-tenant-rag-namespacing-with-namespace-guard: backlog
   3-3-script-generation-logic-with-grounding-constraints: backlog
   3-4-dynamic-variable-injection-for-hyper-personalization: backlog

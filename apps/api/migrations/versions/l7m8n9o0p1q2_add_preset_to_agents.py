@@ -20,7 +20,7 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     conn = op.get_bind()
 
-    # Add preset_id foreign key column (nullable for backward compatibility)
+    # Add columns as nullable first for backward compatibility with existing data
     conn.execute(
         sa.text("""
         ALTER TABLE agents ADD COLUMN IF NOT EXISTS preset_id INTEGER
@@ -28,35 +28,64 @@ def upgrade() -> None:
     """)
     )
 
-    # Add use_advanced_mode boolean column
     conn.execute(
         sa.text("""
         ALTER TABLE agents ADD COLUMN IF NOT EXISTS use_advanced_mode BOOLEAN
-        NOT NULL DEFAULT FALSE
     """)
     )
 
-    # Add speech_speed column
     conn.execute(
         sa.text("""
         ALTER TABLE agents ADD COLUMN IF NOT EXISTS speech_speed FLOAT
-        NOT NULL DEFAULT 1.0
     """)
     )
 
-    # Add stability column
     conn.execute(
         sa.text("""
         ALTER TABLE agents ADD COLUMN IF NOT EXISTS stability FLOAT
-        NOT NULL DEFAULT 0.8
     """)
     )
 
-    # Add temperature column
     conn.execute(
         sa.text("""
         ALTER TABLE agents ADD COLUMN IF NOT EXISTS temperature FLOAT
-        NOT NULL DEFAULT 0.7
+    """)
+    )
+
+    # Update existing rows with defaults
+    conn.execute(
+        sa.text("""
+        UPDATE agents
+        SET use_advanced_mode = FALSE,
+            speech_speed = 1.0,
+            stability = 0.8,
+            temperature = 0.7
+        WHERE use_advanced_mode IS NULL
+    """)
+    )
+
+    # Now make columns NOT NULL
+    conn.execute(
+        sa.text("""
+        ALTER TABLE agents ALTER COLUMN use_advanced_mode SET NOT NULL
+    """)
+    )
+
+    conn.execute(
+        sa.text("""
+        ALTER TABLE agents ALTER COLUMN speech_speed SET NOT NULL
+    """)
+    )
+
+    conn.execute(
+        sa.text("""
+        ALTER TABLE agents ALTER COLUMN stability SET NOT NULL
+    """)
+    )
+
+    conn.execute(
+        sa.text("""
+        ALTER TABLE agents ALTER COLUMN temperature SET NOT NULL
     """)
     )
 

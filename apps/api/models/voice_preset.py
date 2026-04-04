@@ -22,14 +22,20 @@ class VoicePreset(TenantModel, table=True):
     voice_id: str = Field(max_length=100, description="TTS provider voice ID")
     speech_speed: float = Field(
         default=1.0,
+        ge=0.5,
+        le=2.0,
         description="Speech rate multiplier (0.5-2.0)",
     )
     stability: float = Field(
         default=0.8,
+        ge=0.0,
+        le=1.0,
         description="Voice stability (0.0-1.0)",
     )
     temperature: float = Field(
         default=0.7,
+        ge=0.0,
+        le=1.0,
         description="Voice expressiveness (0.0-1.0)",
     )
     description: str = Field(

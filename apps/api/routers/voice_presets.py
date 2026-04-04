@@ -24,7 +24,8 @@ from schemas.voice_presets import (
     VoicePresetSelectResponse,
 )
 from services.preset_samples import PresetSampleService
-from services.tts.orchestrator import TTSAllProvidersFailedError, TTSOrchestrator
+from services.tenant_helpers import require_tenant_resource
+from services.tts.orchestrator import TTSAllProvidersFailedError
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -47,6 +48,17 @@ async def get_presets(
         VoicePresetResponse with list of presets
     """
     org_id = token.org_id  # CRITICAL: from JWT, never request body
+
+    # Validate use_case parameter to prevent arbitrary input
+    VALID_USE_CASES = {"sales", "support", "marketing"}
+    if use_case and use_case not in VALID_USE_CASES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "INVALID_USE_CASE",
+                "message": "Use case must be one of: sales, support, marketing",
+            },
+        )
 
     query = select(VoicePreset).where(
         VoicePreset.org_id == org_id,
@@ -133,10 +145,19 @@ async def save_advanced_config(
     """
     org_id = token.org_id
 
-    # Validate config values
-    speech_speed = config.get("speech_speed", 1.0)
-    stability = config.get("stability", 0.8)
-    temperature = config.get("temperature", 0.7)
+    # Validate config values with type checking
+    try:
+        speech_speed = float(config.get("speech_speed", 1.0))
+        stability = float(config.get("stability", 0.8))
+        temperature = float(config.get("temperature", 0.7))
+    except (ValueError, TypeError) as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "INVALID_VALUE_TYPE",
+                "message": f"All parameters must be numeric: {str(e)}",
+            },
+        )
 
     if not (0.5 <= speech_speed <= 2.0):
         raise HTTPException(
@@ -165,32 +186,32 @@ async def save_advanced_config(
             },
         )
 
-    # Get or create tenant's agent
-    agent = await session.execute(
-        select(Agent).where(Agent.org_id == org_id).limit(1)
-    )
-    agent = agent.scalar_one_or_none()
-
-    if agent:
-        # Update agent with custom config
-        agent.speech_speed = speech_speed
-        agent.stability = stability
-        agent.temperature = temperature
-        agent.use_advanced_mode = True
-        agent.preset_id = None  # Clear preset when using advanced mode
-        await session.commit()
-    else:
-        # Create new agent with custom config
-        agent = Agent(
-            org_id=org_id,
-            speech_speed=speech_speed,
-            stability=stability,
-            temperature=temperature,
-            use_advanced_mode=True,
-            preset_id=None,
+    # Use transaction context for automatic commit/rollback
+    async with session.begin():
+        # Get or create tenant's agent
+        agent = await session.execute(
+            select(Agent).where(Agent.org_id == org_id).limit(1)
         )
-        session.add(agent)
-        await session.commit()
+        agent = agent.scalar_one_or_none()
+
+        if agent:
+            # Update agent with custom config
+            agent.speech_speed = speech_speed
+            agent.stability = stability
+            agent.temperature = temperature
+            agent.use_advanced_mode = True
+            agent.preset_id = None  # Clear preset when using advanced mode
+        else:
+            # Create new agent with custom config
+            agent = Agent(
+                org_id=org_id,
+                speech_speed=speech_speed,
+                stability=stability,
+                temperature=temperature,
+                use_advanced_mode=True,
+                preset_id=None,
+            )
+            session.add(agent)
 
     logger.info(
         "Advanced voice config saved",
@@ -232,43 +253,43 @@ async def select_preset(
     """
     org_id = token.org_id
 
-    # Verify preset belongs to tenant
-    preset = await session.get(VoicePreset, preset_id)
-    if not preset or preset.org_id != org_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={
-                "code": "PRESET_NOT_FOUND",
-                "message": "Voice preset not found or access denied",
-            },
-        )
-
-    # Get or create tenant's agent
-    agent = await session.execute(
-        select(Agent).where(Agent.org_id == org_id).limit(1)
+    # Use tenant helper to verify preset belongs to tenant
+    preset = await require_tenant_resource(
+        session=session,
+        model=VoicePreset,
+        resource_id=preset_id,
+        org_id=org_id,
+        resource_name="Voice preset",
     )
-    agent = agent.scalar_one_or_none()
 
-    if agent:
-        # Update agent with preset settings
-        agent.preset_id = preset_id
-        agent.speech_speed = preset.speech_speed
-        agent.stability = preset.stability
-        agent.temperature = preset.temperature
-        agent.use_advanced_mode = False
-        await session.commit()
-    else:
-        # Create new agent with preset settings
-        agent = Agent(
-            org_id=org_id,
-            preset_id=preset_id,
-            speech_speed=preset.speech_speed,
-            stability=preset.stability,
-            temperature=preset.temperature,
-            use_advanced_mode=False,
+    # Use transaction with FOR UPDATE to prevent race conditions
+    async with session.begin():
+        # Get or create tenant's agent with row-level lock
+        agent = await session.execute(
+            select(Agent)
+            .where(Agent.org_id == org_id)
+            .with_for_update()
         )
-        session.add(agent)
-        await session.commit()
+        agent = agent.scalar_one_or_none()
+
+        if agent:
+            # Update agent with preset settings
+            agent.preset_id = preset_id
+            agent.speech_speed = preset.speech_speed
+            agent.stability = preset.stability
+            agent.temperature = preset.temperature
+            agent.use_advanced_mode = False
+        else:
+            # Create new agent with preset settings
+            agent = Agent(
+                org_id=org_id,
+                preset_id=preset_id,
+                speech_speed=preset.speech_speed,
+                stability=preset.stability,
+                temperature=preset.temperature,
+                use_advanced_mode=False,
+            )
+            session.add(agent)
 
     logger.info(
         "Voice preset selected",
@@ -316,28 +337,26 @@ async def get_preset_sample(
     """
     org_id = token.org_id
 
-    # Verify preset belongs to tenant
-    preset = await session.get(VoicePreset, preset_id)
-    if not preset or preset.org_id != org_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={
-                "code": "PRESET_NOT_FOUND",
-                "message": "Voice preset not found or access denied",
-            },
-        )
+    # Use tenant helper to verify preset belongs to tenant
+    preset = await require_tenant_resource(
+        session=session,
+        model=VoicePreset,
+        resource_id=preset_id,
+        org_id=org_id,
+        resource_name="Voice preset",
+    )
 
     try:
         # Import here to avoid circular dependency
-        from main import get_preset_sample_service, get_tts_orchestrator
+        from main import get_preset_sample_service
 
-        preset_service = get_preset_sample_service()
+        preset_service = await get_preset_sample_service()
         if not preset_service:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail={
-                    "code": "REDIS_NOT_CONFIGURED",
-                    "message": "Preset sample service not available. Please configure Redis.",
+                    "code": "CACHE_NOT_CONFIGURED",
+                    "message": "Preset sample service not available. Please configure cache.",
                     "retryable": False,
                 },
             )
