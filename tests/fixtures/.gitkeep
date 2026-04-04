@@ -1,0 +1,37 @@
+# Test Fixtures Directory
+
+This directory contains test data fixtures for knowledge ingestion tests.
+
+## Required Fixtures
+
+1. **sample.pdf** - Valid PDF file for upload tests
+2. **encrypted.pdf** - Password-protected PDF (for error handling tests)
+3. **scanned.pdf** - Scanned image-only PDF (for validation tests)
+
+## Creating Test PDFs
+
+You can create minimal test PDFs using:
+
+```bash
+# Using echo and ps2pdf (if available)
+echo "Test content" | ps2pdf - tests/fixtures/sample.pdf
+
+# Or use Python with reportlab
+python -c "
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
+c = canvas.Canvas('tests/fixtures/sample.pdf', pagesize=letter)
+c.drawString(100, 750, 'Test PDF Content for Knowledge Ingestion')
+c.drawString(100, 730, 'This is a test document with sufficient content.')
+c.save()
+"
+
+# Or copy any existing small PDF
+cp ~/Documents/small-sample.pdf tests/fixtures/sample.pdf
+```
+
+## File Requirements
+
+- **sample.pdf**: 1-2 pages, text-extractable, < 1MB
+- **encrypted.pdf**: Password protected (use "test123" as password)
+- **scanned.pdf**: Image-only PDF (no extractable text)
