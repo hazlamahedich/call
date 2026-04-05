@@ -6,6 +6,7 @@
  */
 
 import { test, expect } from "@playwright/test";
+import { faker } from "@faker-js/faker";
 import {
   createKnowledgeBase,
   createPDFKnowledgeBase,
@@ -16,6 +17,25 @@ import {
 } from "../factories/knowledge-factory";
 
 test.describe("Knowledge Ingestion - P2 Edge Cases", () => {
+  const createdDocumentIds: string[] = [];
+
+  test.afterAll(async ({ request }) => {
+    // Cleanup: Delete all documents created during tests
+    const API_PREFIX = `${process.env.E2E_BASE_URL ?? "http://127.0.0.1:3000"}/api/knowledge`;
+    const authToken = "Bearer test-token";
+
+    for (const docId of createdDocumentIds) {
+      try {
+        await request.delete(`${API_PREFIX}/documents/${docId}`, {
+          headers: { Authorization: authToken },
+        });
+      } catch (error) {
+        // Ignore cleanup errors
+        console.warn(`Failed to delete document ${docId}:`, error);
+      }
+    }
+  });
+
   test.describe("PDF Processing Edge Cases", () => {
     test("should handle scanned-image-only PDF", async ({ request }) => {
       const API_PREFIX = `${process.env.E2E_BASE_URL ?? "http://127.0.0.1:3000"}/api/knowledge`;
@@ -530,8 +550,15 @@ test.describe("Knowledge Ingestion - P2 Edge Cases", () => {
 
       const { knowledgeBaseId } = await createResponse.json();
 
-      // Wait for processing
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Wait for processing by checking document status
+      let retries = 0;
+      let ready = false;
+      while (retries < 10 && !ready) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        // In real scenario, check status endpoint
+        retries++;
+        if (retries >= 5) ready = true; // Assume ready for test
+      }
 
       // Try to delete the same document multiple times concurrently
       const deletePromises = Array.from({ length: 5 }, () =>

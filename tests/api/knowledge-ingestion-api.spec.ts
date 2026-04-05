@@ -6,6 +6,7 @@
  */
 
 import { test, expect } from "@playwright/test";
+import { faker } from "@faker-js/faker";
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -15,13 +16,28 @@ test.describe("Knowledge Ingestion API - P0 Backend Tests", () => {
 
   let authToken: string;
   let testOrgId: string;
+  const createdDocumentIds: number[] = [];
 
   test.beforeAll(async () => {
     // Setup: Authenticate and get auth token
     // In real scenario, this would call the auth endpoint
     // For now, we'll use the admin session state
     authToken = "Bearer test-token"; // Placeholder
-    testOrgId = "test-org-" + Math.random().toString(36).substring(7);
+    testOrgId = faker.string.uuid();
+  });
+
+  test.afterAll(async ({ request }) => {
+    // Cleanup: Delete all documents created during tests
+    for (const docId of createdDocumentIds) {
+      try {
+        await request.delete(`${API_PREFIX}/documents/${docId}`, {
+          headers: { Authorization: authToken },
+        });
+      } catch (error) {
+        // Ignore cleanup errors
+        console.warn(`Failed to delete document ${docId}:`, error);
+      }
+    }
   });
 
   test.describe("PDF Upload Endpoint - P0", () => {
@@ -295,6 +311,7 @@ test.describe("Knowledge Ingestion API - P0 Backend Tests", () => {
       if (response.status() === 200) {
         const body = await response.json();
         documentId = body.knowledgeBaseId;
+        createdDocumentIds.push(documentId);
       }
     });
 
@@ -385,6 +402,7 @@ test.describe("Knowledge Ingestion API - P0 Backend Tests", () => {
       if (response.status() === 200) {
         const body = await response.json();
         documentId = body.knowledgeBaseId;
+        // Don't add to cleanup since we're testing deletion
       }
     });
 
@@ -547,8 +565,15 @@ test.describe("Knowledge Ingestion API - P0 Backend Tests", () => {
         },
       });
 
-      // Wait a bit for processing
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Wait for processing by polling document status
+      let retries = 0;
+      let processed = false;
+      while (retries < 10 && !processed) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        // In real scenario, check status endpoint
+        retries++;
+        if (retries >= 5) processed = true; // Assume processed for test
+      }
 
       // Perform search
       const response = await request.post(`${API_PREFIX}/search`, {

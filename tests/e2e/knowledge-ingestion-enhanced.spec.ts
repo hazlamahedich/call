@@ -6,6 +6,7 @@
  */
 
 import { test, expect } from "@playwright/test";
+import { faker } from "@faker-js/faker";
 import {
   createPDFKnowledgeBase,
   createURLKnowledgeBase,
@@ -17,11 +18,35 @@ import {
 } from "../factories/knowledge-factory";
 
 test.describe("Knowledge Ingestion - P0 Critical Paths", () => {
+  const createdDocumentIds: string[] = [];
+
   test.beforeEach(async ({ page }) => {
     // Navigate to knowledge base page
     await page.goto("/onboarding/knowledge");
     // Wait for page to load
     await expect(page.locator("h2")).toContainText("Knowledge Base");
+  });
+
+  test.afterEach(async ({ page }) => {
+    // Cleanup: Navigate back to knowledge base for next test
+    await page.goto("/onboarding/knowledge");
+  });
+
+  test.afterAll(async ({ request }) => {
+    // Cleanup: Delete all documents created during tests
+    const API_PREFIX = `${process.env.E2E_BASE_URL ?? "http://127.0.0.1:3000"}/api/knowledge`;
+    const authToken = "Bearer test-token";
+
+    for (const docId of createdDocumentIds) {
+      try {
+        await request.delete(`${API_PREFIX}/documents/${docId}`, {
+          headers: { Authorization: authToken },
+        });
+      } catch (error) {
+        // Ignore cleanup errors
+        console.warn(`Failed to delete document ${docId}:`, error);
+      }
+    }
   });
 
   test.describe("File Upload Flow - P0", () => {
@@ -30,12 +55,12 @@ test.describe("Knowledge Ingestion - P0 Critical Paths", () => {
       await page.click("text=Upload File");
 
       // Create a test PDF file
-      const fileData = Buffer.from("%PDF-test-content-" + Math.random());
+      const fileData = Buffer.from("%PDF-test-content-" + faker.string.uuid());
 
       // Upload file
       const fileInput = page.locator('input[type="file"]');
       await fileInput.setInputFiles({
-        name: `test-${Math.random()}.pdf`,
+        name: `test-${faker.string.uuid()}.pdf`,
         mimeType: "application/pdf",
         buffer: fileData,
       });
@@ -100,11 +125,11 @@ test.describe("Knowledge Ingestion - P0 Critical Paths", () => {
     test("should show processing status after upload", async ({ page }) => {
       await page.click("text=Upload File");
 
-      const fileData = Buffer.from("%PDF-test-" + Math.random());
+      const fileData = Buffer.from("%PDF-test-" + faker.string.uuid());
 
       const fileInput = page.locator('input[type="file"]');
       await fileInput.setInputFiles({
-        name: `test-${Math.random()}.pdf`,
+        name: `test-${faker.string.uuid()}.pdf`,
         mimeType: "application/pdf",
         buffer: fileData,
       });
@@ -123,11 +148,11 @@ test.describe("Knowledge Ingestion - P0 Critical Paths", () => {
     test("should poll for status changes", async ({ page }) => {
       await page.click("text=Upload File");
 
-      const fileData = Buffer.from("%PDF-test-" + Math.random());
+      const fileData = Buffer.from("%PDF-test-" + faker.string.uuid());
 
       const fileInput = page.locator('input[type="file"]');
       await fileInput.setInputFiles({
-        name: `test-${Math.random()}.pdf`,
+        name: `test-${faker.string.uuid()}.pdf`,
         mimeType: "application/pdf",
         buffer: fileData,
       });
@@ -162,7 +187,7 @@ test.describe("Knowledge Ingestion - P0 Critical Paths", () => {
       // Enter a valid URL
       await page.fill(
         'input[type="url"]',
-        "https://example.com/article-" + Math.random(),
+        "https://example.com/article-" + faker.string.uuid(),
       );
 
       // Optionally add title
@@ -308,7 +333,7 @@ test.describe("Knowledge Ingestion - P0 Critical Paths", () => {
         await statusFilter.selectOption("ready");
 
         // Verify filtered results
-        await page.waitForTimeout(1000);
+        await page.waitForLoadState("networkidle");
         const documents = page.locator('[data-testid="document-item"]');
         const count = await documents.count();
 
@@ -503,11 +528,11 @@ test.describe("Knowledge Ingestion - P0 Critical Paths", () => {
       await page.click("text=Upload File");
 
       // Trigger upload
-      const fileData = Buffer.from("%PDF-test-" + Math.random());
+      const fileData = Buffer.from("%PDF-test-" + faker.string.uuid());
 
       const fileInput = page.locator('input[type="file"]');
       await fileInput.setInputFiles({
-        name: `test-${Math.random()}.pdf`,
+        name: `test-${faker.string.uuid()}.pdf`,
         mimeType: "application/pdf",
         buffer: fileData,
       });
