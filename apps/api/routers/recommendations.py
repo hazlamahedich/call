@@ -8,8 +8,9 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database.session import get_db
-from middleware.auth_middleware import auth_middleware
+from database.session import get_session as get_db
+from middleware.auth import AuthMiddleware
+from dependencies.org_context import get_current_org_id
 from services.performance_analytics import PerformanceAnalyticsService
 
 router = APIRouter()
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 @router.get("/voice-presets/recommendations/stats")
 async def get_recommendation_stats(
     session: AsyncSession = Depends(get_db),
-    token=Depends(auth_middleware),
+    org_id: str = Depends(get_current_org_id),
 ):
     org_id = token.org_id
     analytics_service = PerformanceAnalyticsService()
@@ -87,7 +88,7 @@ async def get_recommendation_stats(
 async def get_preset_recommendation(
     use_case: str,
     session: AsyncSession = Depends(get_db),
-    token=Depends(auth_middleware),
+    org_id: str = Depends(get_current_org_id),
 ):
     org_id = token.org_id
 

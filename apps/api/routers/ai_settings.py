@@ -6,7 +6,8 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.session import get_session as get_db
-from middleware.auth_middleware import auth_middleware
+from middleware.auth import AuthMiddleware
+from dependencies.org_context import get_current_org_id
 from models.ai_provider_settings import AIProviderSettings
 from config.settings import settings
 
@@ -63,7 +64,7 @@ class ConnectionTestResponse(BaseModel):
 @router.get("/settings/ai-provider", response_model=AIProviderConfigResponse)
 async def get_ai_provider_config(
     session: AsyncSession = Depends(get_db),
-    token=Depends(auth_middleware),
+    org_id: str = Depends(get_current_org_id),
 ):
     org_id = token.org_id
     from services.tenant_helpers import set_tenant_context
@@ -95,7 +96,7 @@ async def get_ai_provider_config(
 async def update_ai_provider_config(
     payload: AIProviderUpdatePayload,
     session: AsyncSession = Depends(get_db),
-    token=Depends(auth_middleware),
+    org_id: str = Depends(get_current_org_id),
 ):
     org_id = token.org_id
     from services.tenant_helpers import set_tenant_context
@@ -150,7 +151,7 @@ async def update_ai_provider_config(
 
 @router.get("/settings/ai-provider/models")
 async def get_available_models(
-    token=Depends(auth_middleware),
+    org_id: str = Depends(get_current_org_id),
 ):
     return PROVIDER_MODELS
 
@@ -158,7 +159,7 @@ async def get_available_models(
 @router.post("/settings/ai-provider/test", response_model=ConnectionTestResponse)
 async def test_ai_provider_connection(
     session: AsyncSession = Depends(get_db),
-    token=Depends(auth_middleware),
+    org_id: str = Depends(get_current_org_id),
 ):
     org_id = token.org_id
     from services.tenant_helpers import set_tenant_context

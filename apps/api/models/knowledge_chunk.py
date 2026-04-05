@@ -24,6 +24,8 @@ class KnowledgeChunk(TenantModel, table=True):
 
     __tablename__ = "knowledge_chunks"  # type: ignore
 
+    model_config = {"arbitrary_types_allowed": True}  # type: ignore
+
     knowledge_base_id: Optional[int] = Field(
         default=None,
         foreign_key="knowledge_bases.id",
@@ -34,8 +36,8 @@ class KnowledgeChunk(TenantModel, table=True):
     content: str = Field(
         description="Chunk text content (unlimited length for 1000-token chunks)"
     )
-    embedding: Vector = Field(
-        dimension=settings.AI_EMBEDDING_DIMENSIONS,
+    embedding: Optional[Vector] = Field(
+        default=None,
         description="Vector embedding (configurable dimensions)",
     )
     embedding_model: Optional[str] = Field(

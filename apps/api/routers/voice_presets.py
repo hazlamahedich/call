@@ -12,8 +12,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import settings
-from database.session import get_db
-from middleware.auth_middleware import auth_middleware
+from database.session import get_session as get_db
+from dependencies.org_context import get_current_org_id
 from models.agent import Agent
 from models.voice_preset import VoicePreset
 from schemas.voice_presets import (
@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 async def get_presets(
     use_case: str | None = None,
     session: AsyncSession = Depends(get_db),
-    token=Depends(auth_middleware),
+    org_id: str = Depends(get_current_org_id),
 ):
     """Get all voice presets for the tenant.
 
@@ -82,7 +82,7 @@ async def get_presets(
 @router.get("/agent-config/current", response_model=AgentConfigResponse)
 async def get_current_agent_config(
     session: AsyncSession = Depends(get_db),
-    token=Depends(auth_middleware),
+    org_id: str = Depends(get_current_org_id),
 ):
     """Get current agent voice configuration.
 
@@ -126,7 +126,7 @@ async def get_current_agent_config(
 async def save_advanced_config(
     config: dict,
     session: AsyncSession = Depends(get_db),
-    token=Depends(auth_middleware),
+    org_id: str = Depends(get_current_org_id),
 ):
     """Save custom advanced voice configuration.
 
@@ -234,7 +234,7 @@ async def save_advanced_config(
 async def select_preset(
     preset_id: int,
     session: AsyncSession = Depends(get_db),
-    token=Depends(auth_middleware),
+    org_id: str = Depends(get_current_org_id),
 ):
     """Select a voice preset for the tenant's agent.
 
@@ -317,7 +317,7 @@ async def select_preset(
 async def get_preset_sample(
     preset_id: int,
     session: AsyncSession = Depends(get_db),
-    token=Depends(auth_middleware),
+    org_id: str = Depends(get_current_org_id),
 ):
     """Get audio sample for a voice preset.
 

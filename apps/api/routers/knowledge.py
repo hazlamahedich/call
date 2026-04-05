@@ -15,7 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
 from database.session import AsyncSessionLocal, get_session as get_db
-from middleware.auth_middleware import auth_middleware
+from middleware.auth import AuthMiddleware
+from dependencies.org_context import get_current_org_id
 from models.knowledge_base import KnowledgeBase, KnowledgeSourceType, KnowledgeStatus
 from models.knowledge_chunk import KnowledgeChunk
 from schemas.knowledge import (
@@ -349,7 +350,7 @@ async def upload_knowledge(
     text: Optional[str] = None,
     title: Optional[str] = None,
     session: AsyncSession = Depends(get_db),
-    token=Depends(auth_middleware),
+    org_id: str = Depends(get_current_org_id),
 ):
     org_id = token.org_id
     if not _validate_org_id(org_id):
@@ -518,7 +519,7 @@ async def list_documents(
     page_size: int = 20,
     status_filter: Optional[str] = None,
     session: AsyncSession = Depends(get_db),
-    token=Depends(auth_middleware),
+    org_id: str = Depends(get_current_org_id),
 ):
     org_id = token.org_id
     await _set_rls_context(session, org_id)
@@ -596,7 +597,7 @@ async def list_documents(
 async def get_document(
     document_id: int,
     session: AsyncSession = Depends(get_db),
-    token=Depends(auth_middleware),
+    org_id: str = Depends(get_current_org_id),
 ):
     org_id = token.org_id
     await _set_rls_context(session, org_id)
@@ -628,7 +629,7 @@ async def get_document(
 async def delete_document(
     document_id: int,
     session: AsyncSession = Depends(get_db),
-    token=Depends(auth_middleware),
+    org_id: str = Depends(get_current_org_id),
 ):
     org_id = token.org_id
     await _set_rls_context(session, org_id)
@@ -673,7 +674,7 @@ async def delete_document(
 async def search_knowledge(
     request: KnowledgeSearchRequest,
     session: AsyncSession = Depends(get_db),
-    token=Depends(auth_middleware),
+    org_id: str = Depends(get_current_org_id),
 ):
     org_id = token.org_id
     await _set_rls_context(session, org_id)
@@ -725,7 +726,7 @@ async def search_knowledge(
 async def retry_document(
     document_id: int,
     session: AsyncSession = Depends(get_db),
-    token=Depends(auth_middleware),
+    org_id: str = Depends(get_current_org_id),
 ):
     org_id = token.org_id
     await _set_rls_context(session, org_id)

@@ -132,7 +132,7 @@ export default function AIProvidersSettingsPage() {
   const models = availableModels[provider] || { embedding: [], llm: [] };
 
   return (
-    <div className="mx-auto max-w-2xl space-y-lg p-lg">
+    <div className="w-full max-w-4xl space-y-lg p-lg">
       <div>
         <h1 className="text-lg font-semibold text-foreground">
           AI Provider Settings

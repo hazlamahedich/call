@@ -9,8 +9,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database.session import get_db
-from middleware.auth_middleware import auth_middleware
+from database.session import get_session as get_db
+from middleware.auth import AuthMiddleware
+from dependencies.org_context import get_current_org_id
 from models.agent import Agent
 from models.voice_preset import VoicePreset
 from schemas.agent_management import (
@@ -29,7 +30,7 @@ logger = logging.getLogger(__name__)
 async def list_agents(
     status_filter: str | None = None,
     session: AsyncSession = Depends(get_db),
-    token=Depends(auth_middleware),
+    org_id: str = Depends(get_current_org_id),
 ):
     """List all agents for the organization.
 
@@ -100,7 +101,7 @@ async def list_agents(
 async def create_agent(
     agent_data: CreateAgentRequest,
     session: AsyncSession = Depends(get_db),
-    token=Depends(auth_middleware),
+    org_id: str = Depends(get_current_org_id),
 ):
     """Create a new agent for the organization.
 
@@ -195,7 +196,7 @@ async def update_agent(
     agent_id: int,
     agent_data: UpdateAgentRequest,
     session: AsyncSession = Depends(get_db),
-    token=Depends(auth_middleware),
+    org_id: str = Depends(get_current_org_id),
 ):
     """Update agent configuration.
 
@@ -306,7 +307,7 @@ async def update_agent(
 async def bulk_update_agents(
     bulk_data: BulkUpdateAgentsRequest,
     session: AsyncSession = Depends(get_db),
-    token=Depends(auth_middleware),
+    org_id: str = Depends(get_current_org_id),
 ):
     """Bulk update agents with the same preset.
 
@@ -387,7 +388,7 @@ async def bulk_update_agents(
 async def delete_agent(
     agent_id: int,
     session: AsyncSession = Depends(get_db),
-    token=Depends(auth_middleware),
+    org_id: str = Depends(get_current_org_id),
 ):
     """Delete an agent.
 
