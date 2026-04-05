@@ -11,6 +11,7 @@ from typing import Optional
 from pgvector.sqlalchemy import Vector
 from sqlmodel import Field, ForeignKey, SQLModel
 
+from config.settings import settings
 from models.base import TenantModel
 
 
@@ -29,15 +30,13 @@ class KnowledgeChunk(TenantModel, table=True):
         index=True,
         description="Parent knowledge base document ID",
     )
-    chunk_index: int = Field(
-        description="Order of this chunk within the document"
-    )
+    chunk_index: int = Field(description="Order of this chunk within the document")
     content: str = Field(
         description="Chunk text content (unlimited length for 1000-token chunks)"
     )
     embedding: Vector = Field(
-        dimension=1536,
-        description="Vector embedding (text-embedding-3-small, 1536 dimensions)",
+        dimension=settings.AI_EMBEDDING_DIMENSIONS,
+        description="Vector embedding (configurable dimensions)",
     )
     embedding_model: Optional[str] = Field(
         default=None,

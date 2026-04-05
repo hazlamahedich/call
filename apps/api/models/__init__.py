@@ -15,3 +15,4 @@ from models.voice_preset import VoicePreset
 from models.call_performance import CallPerformance
 from models.knowledge_base import KnowledgeBase
 from models.knowledge_chunk import KnowledgeChunk
+from models.ai_provider_settings import AIProviderSettings

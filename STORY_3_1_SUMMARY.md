@@ -18,7 +18,7 @@ So that my AI agent can learn about my specific products and services.
 
 - **Multi-format support**: PDF, URL, TXT file ingestion
 - **Semantic chunking**: Intelligent text splitting (500-1000 tokens with overlap)
-- **Vector embeddings**: OpenAI ada-002 with pgvector storage
+- **Vector embeddings**: Multi-provider (OpenAI/Gemini) via configurable `AI_PROVIDER` with pgvector storage
 - **Tenant isolation**: Per-tenant namespace enforcement with RLS
 - **Real-time status**: Processing → Ready/Failed tracking
 - **Performance**: <200ms retrieval latency (NFR.P2 compliance)
@@ -26,16 +26,18 @@ So that my AI agent can learn about my specific products and services.
 ## Implementation Scope
 
 ### Files to Create (8)
+
 1. `apps/api/models/knowledge_base.py` - KnowledgeBase SQLModel
 2. `apps/api/models/knowledge_chunk.py` - KnowledgeChunk with pgvector
 3. `apps/api/services/ingestion.py` - File parsing (PDF, URL, TXT)
 4. `apps/api/services/chunking.py` - Semantic chunking service
-5. `apps/api/services/embedding.py` - Vector embeddings with Redis caching
-6. `apps/api/routers/knowledge.py` - Tenant-isolated API endpoints
-7. `apps/web/src/components/onboarding/KnowledgeIngestion.tsx` - UI component
-8. 2 migration files for schema changes
+5. `apps/api/services/embedding/` - Provider abstraction (base, openai, gemini, factory)
+6. `apps/api/services/llm/` - LLM provider abstraction (base, openai, gemini, factory, service)
+7. `apps/api/routers/knowledge.py` - Tenant-isolated API endpoints
+8. `apps/web/src/components/onboarding/KnowledgeIngestion.tsx` - UI component
 
 ### Files to Modify (3)
+
 1. `apps/api/models/__init__.py` - Register new models
 2. `apps/web/src/actions/knowledge.ts` - Server Actions with auth
 3. Additional integration points
@@ -45,7 +47,7 @@ So that my AI agent can learn about my specific products and services.
 - **PDF Parsing**: pdfplumber
 - **URL Extraction**: beautifulsoup4 + httpx
 - **Vector DB**: pgvector for PostgreSQL
-- **Embeddings**: OpenAI text-embedding-ada-002 (1536 dimensions)
+- **Embeddings**: Configurable via `AI_PROVIDER` — OpenAI (`text-embedding-3-small`) or Gemini (`text-embedding-004`) with configurable dimensions
 - **Caching**: Redis for embedding deduplication
 
 ## Security & Compliance

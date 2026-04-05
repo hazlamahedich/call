@@ -6,7 +6,9 @@ Tests embedding generation, batch processing, and Redis caching.
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from services.embedding import EmbeddingService
+from services.embedding.service import EmbeddingService
+from services.embedding.providers.base import EmbeddingProvider
+from services.embedding.providers.openai_provider import OpenAIEmbeddingProvider
 
 
 @pytest.mark.asyncio
@@ -14,24 +16,26 @@ class TestEmbeddingService:
     """Test suite for EmbeddingService."""
 
     @pytest.fixture
-    def mock_openai(self):
-        """Mock OpenAI client."""
-        with patch("services.embedding.AsyncOpenAI") as mock:
-            yield mock
+    def mock_provider(self):
+        """Mock embedding provider."""
+        provider = AsyncMock(spec=EmbeddingProvider)
+        provider.embed = AsyncMock(return_value=[0.1, 0.2, 0.3] * 512)
+        provider.embed_batch = AsyncMock(
+            return_value=[[0.1] * 1536, [0.2] * 1536, [0.3] * 1536]
+        )
+        provider.model_name = "text-embedding-3-small"
+        provider.dimensions = 1536
+        return provider
 
     @pytest.fixture
-    def embedding_service(self, mock_openai):
-        """Create embedding service with mocked OpenAI client."""
-        return EmbeddingService(api_key="test-key")
+    def embedding_service(self, mock_provider):
+        """Create embedding service with mocked provider."""
+        return EmbeddingService(provider=mock_provider)
 
     @pytest.mark.asyncio
-    async def test_generate_embedding(self, embedding_service, mock_openai):
+    async def test_generate_embedding(self, embedding_service, mock_provider):
         """Test single embedding generation."""
-        # Mock OpenAI response
-        mock_response = MagicMock()
-        mock_response.data = [MagicMock(embedding=[0.1, 0.2, 0.3] * 512)]  # 1536 dimensions
-
-        mock_openai.return_value.embeddings.create = AsyncMock(return_value=mock_response)
+        mock_provider.embed = AsyncMock(return_value=[0.1, 0.2, 0.3] * 512)
 
         embedding = await embedding_service.generate_embedding("Test text")
 
@@ -39,19 +43,13 @@ class TestEmbeddingService:
         assert all(isinstance(x, float) for x in embedding)
 
     @pytest.mark.asyncio
-    async def test_generate_embeddings_batch(self, embedding_service, mock_openai):
+    async def test_generate_embeddings_batch(self, embedding_service, mock_provider):
         """Test batch embedding generation."""
         texts = ["Text one", "Text two", "Text three"]
 
-        # Mock OpenAI response
-        mock_response = MagicMock()
-        mock_response.data = [
-            MagicMock(embedding=[0.1] * 1536),
-            MagicMock(embedding=[0.2] * 1536),
-            MagicMock(embedding=[0.3] * 1536),
-        ]
-
-        mock_openai.return_value.embeddings.create = AsyncMock(return_value=mock_response)
+        mock_provider.embed_batch = AsyncMock(
+            return_value=[[0.1] * 1536, [0.2] * 1536, [0.3] * 1536]
+        )
 
         embeddings = await embedding_service.generate_embeddings_batch(texts)
 
@@ -109,21 +107,16 @@ class TestEmbeddingService:
         """Test caching with no Redis client fails gracefully."""
         # No Redis client configured
         result = await embedding_service.cache_embedding(
-            "hash123",
-            "org_123",
-            [0.1, 0.2, 0.3]
+            "hash123", "org_123", [0.1, 0.2, 0.3]
         )
 
         # Should return False (no Redis to cache to)
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_generate_with_cache_miss(self, embedding_service, mock_openai):
+    async def test_generate_with_cache_miss(self, embedding_service, mock_provider):
         """Test generate_with_cache when cache misses."""
-        # Mock OpenAI response
-        mock_response = MagicMock()
-        mock_response.data = [MagicMock(embedding=[0.1] * 1536)]
-        mock_openai.return_value.embeddings.create = AsyncMock(return_value=mock_response)
+        mock_provider.embed = AsyncMock(return_value=[0.1] * 1536)
 
         text = "Test text"
         org_id = "org_123"
@@ -131,13 +124,21 @@ class TestEmbeddingService:
         embedding = await embedding_service.generate_with_cache(text, org_id)
 
         assert len(embedding) == 1536
-        # Verify API was called (cache miss)
-        mock_openai.return_value.embeddings.create.assert_called_once()
+        # Verify provider was called (cache miss)
+        mock_provider.embed.assert_called_once()
 
 
 @pytest.mark.asyncio
 class TestEmbeddingServiceWithRedis:
     """Test suite with mocked Redis client."""
+
+    @pytest.fixture
+    def mock_provider(self):
+        """Mock embedding provider."""
+        provider = AsyncMock(spec=EmbeddingProvider)
+        provider.model_name = "text-embedding-3-small"
+        provider.dimensions = 1536
+        return provider
 
     @pytest.fixture
     def mock_redis(self):
@@ -146,9 +147,9 @@ class TestEmbeddingServiceWithRedis:
         return redis
 
     @pytest.fixture
-    def embedding_service(self, mock_redis):
+    def embedding_service(self, mock_provider, mock_redis):
         """Create embedding service with mocked Redis."""
-        return EmbeddingService(api_key="test-key", redis_client=mock_redis)
+        return EmbeddingService(provider=mock_provider, redis_client=mock_redis)
 
     @pytest.mark.asyncio
     async def test_get_cached_embedding_hit(self, embedding_service, mock_redis):
@@ -169,9 +170,7 @@ class TestEmbeddingServiceWithRedis:
         embedding = [0.1, 0.2, 0.3] * 512  # 1536 dimensions
 
         result = await embedding_service.cache_embedding(
-            "hash123",
-            "org_123",
-            embedding
+            "hash123", "org_123", embedding
         )
 
         assert result is True
@@ -184,16 +183,16 @@ class TestEmbeddingServiceWithRedis:
         mock_redis.setex.side_effect = Exception("Redis connection failed")
 
         result = await embedding_service.cache_embedding(
-            "hash123",
-            "org_123",
-            [0.1, 0.2, 0.3]
+            "hash123", "org_123", [0.1, 0.2, 0.3]
         )
 
         # Should return False but not raise exception
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_get_cached_embedding_redis_error(self, embedding_service, mock_redis):
+    async def test_get_cached_embedding_redis_error(
+        self, embedding_service, mock_redis
+    ):
         """Test that Redis get errors are handled gracefully."""
         # Mock Redis error
         mock_redis.get.side_effect = Exception("Redis connection failed")
@@ -227,29 +226,27 @@ class TestEmbeddingServiceRetry:
     """Test retry logic for API failures."""
 
     @pytest.fixture
-    def mock_openai_flaky(self):
-        """Mock OpenAI client that fails initially."""
-        with patch("services.embedding.AsyncOpenAI") as mock:
-            client = mock.return_value
-            # First two calls fail, third succeeds
-            call_count = [0]
+    def mock_provider_flaky(self):
+        """Mock embedding provider that fails initially."""
+        provider = AsyncMock(spec=EmbeddingProvider)
+        provider.model_name = "text-embedding-3-small"
+        provider.dimensions = 1536
+        # First two calls fail, third succeeds
+        call_count = [0]
 
-            async def flaky_create(*args, **kwargs):
-                call_count[0] += 1
-                if call_count[0] < 3:
-                    raise Exception("API error")
-                # Success response
-                mock_response = MagicMock()
-                mock_response.data = [MagicMock(embedding=[0.1] * 1536)]
-                return mock_response
+        async def flaky_embed(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] < 3:
+                raise Exception("API error")
+            return [0.1] * 1536
 
-            client.embeddings.create = flaky_create
-            yield mock
+        provider.embed = flaky_embed
+        return provider
 
     @pytest.fixture
-    def embedding_service(self, mock_openai_flaky):
+    def embedding_service(self, mock_provider_flaky):
         """Create embedding service."""
-        return EmbeddingService(api_key="test-key")
+        return EmbeddingService(provider=mock_provider_flaky)
 
     @pytest.mark.asyncio
     async def test_generate_embedding_retry_success(self, embedding_service):
@@ -259,16 +256,15 @@ class TestEmbeddingServiceRetry:
         assert len(embedding) == 1536
 
     @pytest.mark.asyncio
-    async def test_generate_embedding_retry_fails(self, mock_openai_flaky):
+    async def test_generate_embedding_retry_fails(self):
         """Test that retries are exhausted after MAX_RETRIES."""
-        # Mock that always fails
-        with patch("services.embedding.AsyncOpenAI") as mock:
-            client = mock.return_value
-            client.embeddings.create = AsyncMock(side_effect=Exception("Permanent failure"))
+        provider = AsyncMock(spec=EmbeddingProvider)
+        provider.embed = AsyncMock(side_effect=Exception("Permanent failure"))
+        provider.model_name = "text-embedding-3-small"
 
-            service = EmbeddingService(api_key="test-key")
+        service = EmbeddingService(provider=provider)
 
-            with pytest.raises(Exception) as exc_info:
-                await service.generate_embedding("Test text")
+        with pytest.raises(Exception) as exc_info:
+            await service.generate_embedding("Test text")
 
-            assert "failed after" in str(exc_info.value).lower()
+        assert "failed after" in str(exc_info.value).lower()

@@ -2,7 +2,7 @@
 
 ## Product Requirements & Planning (PRP)
 
-------------------------------------------------------------------------
+---
 
 # 1. Product Overview
 
@@ -22,7 +22,7 @@ The system should use **open-source tools where possible** and maintain
 a **modular architecture** so it can later integrate with other systems
 such as chatbots or marketing automation platforms.
 
-------------------------------------------------------------------------
+---
 
 # 2. Target Users
 
@@ -41,7 +41,7 @@ Agencies managing outbound lead generation for clients.
 Needs: - Multi-client management - campaign analytics - customizable
 scripts per client - scalable call campaigns
 
-------------------------------------------------------------------------
+---
 
 # 3. Core Product Goals
 
@@ -66,7 +66,7 @@ context-aware.
 
 Provide **campaign analytics and optimization insights**.
 
-------------------------------------------------------------------------
+---
 
 # 4. Key Features (MVP)
 
@@ -77,7 +77,7 @@ Users must be able to: - Register account - Login - Reset password
 Authentication system includes: - Email login - JWT authentication -
 session handling
 
-------------------------------------------------------------------------
+---
 
 ## 4.2 Organization System (Multi-Tenant)
 
@@ -94,7 +94,7 @@ Structure:
 
 This enables: - SME usage - future agency multi-client support
 
-------------------------------------------------------------------------
+---
 
 ## 4.3 Lead Management
 
@@ -104,7 +104,7 @@ Fields: - name - phone number - company - email - tags - notes
 
 Lead import formats: - CSV - manual entry
 
-------------------------------------------------------------------------
+---
 
 ## 4.4 AI Script Generator
 
@@ -123,7 +123,9 @@ Example request:
 Output includes: - opening line - pitch - objection handling - closing
 statement
 
-------------------------------------------------------------------------
+**Implementation**: Uses `LLMService` with configurable `AI_PROVIDER` (OpenAI GPT-4o or Gemini 2.0 Flash). Provider selected via organization-level settings at `/dashboard/settings/ai-providers`.
+
+---
 
 ## 4.5 RAG Knowledge Base
 
@@ -136,13 +138,15 @@ Processing pipeline:
     Document Upload
     → Text Extraction
     → Chunking
-    → Embeddings
-    → Vector Storage
+    → Embeddings (OpenAI or Gemini, configurable)
+    → Vector Storage (pgvector)
 
 This allows AI scripts to reference: - product details - pricing - case
 studies - company information
 
-------------------------------------------------------------------------
+**Implementation**: Embedding provider is configurable via `AI_PROVIDER` setting (OpenAI `text-embedding-3-small` or Gemini `text-embedding-004`). Dimensions auto-configured per provider. Settings managed per-organization with encrypted API keys.
+
+---
 
 ## 4.6 Voice Script Generation
 
@@ -156,7 +160,7 @@ Steps:
 
 Output formats: - MP3 - WAV
 
-------------------------------------------------------------------------
+---
 
 ## 4.7 Campaign Creation
 
@@ -173,7 +177,7 @@ Workflow:
     → Generate Voice
     → Launch Calls
 
-------------------------------------------------------------------------
+---
 
 ## 4.8 Call Provider Layer
 
@@ -185,7 +189,7 @@ The platform includes an abstraction layer for telephony providers.
 
 This allows switching providers without rewriting the system.
 
-------------------------------------------------------------------------
+---
 
 ## 4.9 Campaign Analytics
 
@@ -197,7 +201,7 @@ rate - conversion rate
 Dashboard visualizations: - call volume charts - engagement metrics -
 campaign comparison
 
-------------------------------------------------------------------------
+---
 
 # 5. Advanced Features (Future Versions)
 
@@ -229,7 +233,7 @@ Example rules:
     If lead hangs up early
     → send follow-up SMS
 
-------------------------------------------------------------------------
+---
 
 # 6. System Architecture
 
@@ -238,45 +242,59 @@ Example rules:
     Backend API
             ↓
     Core AI Services
-     ├ LLM Provider
+     ├ AI Provider Layer (configurable)
+     │  ├ EmbeddingProvider
+     │  │  ├ OpenAIEmbeddingProvider
+     │  │  └ GeminiEmbeddingProvider
+     │  └ LLMProvider
+     │     ├ OpenAILLMProvider
+     │     └ GeminiLLMProvider
      ├ RAG Engine
      ├ Voice Engine
      └ Campaign Engine
             ↓
     Infrastructure
-     ├ Database
-     ├ Vector Database
+     ├ Database (PostgreSQL + pgvector)
+     ├ Vector Database (pgvector HNSW)
      ├ File Storage
      └ Telephony Provider
 
-------------------------------------------------------------------------
+---
 
 # 7. Technology Stack
 
 ### Frontend
 
--   React
--   Next.js
--   TailwindCSS
+- React
+- Next.js
+- TailwindCSS
 
 ### Backend
 
--   Python
--   FastAPI
+- Python
+- FastAPI
 
 ### Database
 
--   PostgreSQL
+- PostgreSQL
 
 ### Vector Database
 
--   Chroma or Qdrant
+- pgvector (PostgreSQL extension, HNSW index)
 
 ### AI Layer
 
-    LLMProvider
-     ├ LocalProvider
-     └ CloudProvider
+    AIProvider (configurable via AI_PROVIDER setting)
+     ├ EmbeddingProvider
+     │  ├ OpenAIEmbeddingProvider (text-embedding-3-small)
+     │  └ GeminiEmbeddingProvider (text-embedding-004)
+     └ LLMProvider
+        ├ OpenAILLMProvider (GPT-4o, GPT-4o-mini)
+        └ GeminiLLMProvider (Gemini 2.0 Flash)
+
+    Per-organization settings stored in ai_provider_settings table
+    with Fernet-encrypted API keys. Frontend config at
+    /dashboard/settings/ai-providers.
 
 ### Voice Engine
 
@@ -288,7 +306,7 @@ Text‑to‑speech system for voice generation.
      ├ SIPProvider
      └ CloudProvider
 
-------------------------------------------------------------------------
+---
 
 # 8. Database Schema (Simplified)
 
@@ -334,64 +352,64 @@ Text‑to‑speech system for voice generation.
     content
     created_at
 
-------------------------------------------------------------------------
+---
 
 # 9. Security Considerations
 
--   password hashing
--   JWT authentication
--   API rate limiting
--   file upload validation
--   organization data isolation
+- password hashing
+- JWT authentication
+- API rate limiting
+- file upload validation
+- organization data isolation
 
-------------------------------------------------------------------------
+---
 
 # 10. Compliance Considerations
 
--   opt-out support
--   call recording disclosures
--   do-not-call filtering
+- opt-out support
+- call recording disclosures
+- do-not-call filtering
 
-------------------------------------------------------------------------
+---
 
 # 11. Development Roadmap
 
 ## Phase 1 -- Core Platform
 
--   authentication
--   organization system
--   lead management
--   script generator
--   voice generation
+- authentication
+- organization system
+- lead management
+- script generator
+- voice generation
 
 ## Phase 2 -- Campaign Engine
 
--   campaign creation
--   call provider integration
--   basic analytics
+- campaign creation
+- call provider integration
+- basic analytics
 
 ## Phase 3 -- Intelligence Layer
 
--   RAG knowledge base
--   document upload
--   personalized scripts
+- RAG knowledge base
+- document upload
+- personalized scripts
 
 ## Phase 4 -- Advanced AI
 
--   objection handling AI
--   campaign optimization
--   automation rules
+- objection handling AI
+- campaign optimization
+- automation rules
 
-------------------------------------------------------------------------
+---
 
 # 12. Success Metrics
 
--   campaigns created
--   call engagement rate
--   script generation usage
--   campaign completion rates
+- campaigns created
+- call engagement rate
+- script generation usage
+- campaign completion rates
 
-------------------------------------------------------------------------
+---
 
 # 13. Portfolio Value
 

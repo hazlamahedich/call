@@ -102,6 +102,27 @@ Key requirements:
 - `packages/compliance`: DNC/TCPA logic.
 - `packages/constants`: Shared error codes and registry.
 
+### AI Provider Abstraction
+
+The project uses a **configurable single-provider pattern** for both embeddings and LLM:
+
+- **Setting**: `AI_PROVIDER` in `config/settings.py` (`"openai"` or `"gemini"`)
+- **Embedding**: `services/embedding/providers/` — `EmbeddingProvider` ABC with `OpenAIEmbeddingProvider` and `GeminiEmbeddingProvider`, instantiated via `EmbeddingProviderFactory.create()`
+- **LLM**: `services/llm/providers/` — `LLMProvider` ABC with `OpenAILLMProvider` and `GeminiLLMProvider`, instantiated via `LLMProviderFactory.create()`
+- **Per-Org Overrides**: `models/ai_provider_settings.py` stores Fernet-encrypted API keys and model preferences per organization. Managed via `routers/ai_settings.py` and frontend at `/dashboard/settings/ai-providers`
+- **Dimension Config**: `AI_EMBEDDING_DIMENSIONS` in settings; `knowledge_chunk.py` uses `settings.AI_EMBEDDING_DIMENSIONS` instead of hardcoded values
+- **Adding a new provider**: Create a new `*_provider.py` in both `embedding/providers/` and `llm/providers/`, implement the ABC, register in the factory
+
+**Key files**:
+
+- `apps/api/config/settings.py` — `AI_PROVIDER`, `AI_EMBEDDING_MODEL`, `AI_EMBEDDING_DIMENSIONS`, `AI_LLM_MODEL`, etc.
+- `apps/api/services/embedding/` — Embedding provider abstraction
+- `apps/api/services/llm/` — LLM provider abstraction
+- `apps/api/models/ai_provider_settings.py` — Per-org config model
+- `apps/api/routers/ai_settings.py` — Settings API endpoints
+- `apps/web/src/actions/ai-providers.ts` — Frontend server actions
+- `packages/types/ai-provider.ts` — Shared TypeScript types
+
 ### Epic 2 Integration Notes
 
 - **Vapi Webhook Auth**: Epic 2 introduces Vapi telephony webhooks (server-to-server). These cannot use Clerk JWT. Design must support API-key or HMAC-based auth for `/webhooks/vapi/*` routes. Add Vapi routes to the auth middleware skip list (`SKIP_AUTH_PATHS` in `apps/api/middleware/auth.py`).

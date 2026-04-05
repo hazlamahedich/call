@@ -12,3 +12,4 @@ export * from "./vapi";
 export * from "./tts";
 export * from "./ui";
 export * from "./telemetry";
+export * from "./ai-provider";

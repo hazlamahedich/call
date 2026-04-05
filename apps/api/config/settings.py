@@ -1,5 +1,6 @@
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import Optional
 
 
 class Settings(BaseSettings):
@@ -37,33 +38,50 @@ class Settings(BaseSettings):
     TTS_SESSION_TTL_SEC: int = 3600
     TTS_CIRCUIT_OPEN_SEC: int = 30
 
-    # Preset Sample Settings (Story 2.6)
     PRESET_SAMPLE_TEXTS: dict[str, str] = {
         "sales": "Hi, this is Alex from TechCorp. I'm calling to show you how our platform can increase your sales by 30% in just 30 days.",
         "support": "Thank you for calling TechCorp support. I'm here to help you resolve any issues you're experiencing.",
         "marketing": "Hey there! I'm excited to tell you about our amazing new product that's changing the industry.",
     }
-    SAMPLE_CACHE_TTL_SECONDS: int = 86400  # 24 hours
+    SAMPLE_CACHE_TTL_SECONDS: int = 86400
     REDIS_URL: str = "redis://localhost:6379/0"
 
-    # Telemetry Queue Settings (Story 2.4)
     TELEMETRY_QUEUE_MAX_SIZE: int = 10000
     TELEMETRY_BATCH_SIZE: int = 100
     TELEMETRY_PUSH_TIMEOUT_MS: int = 2
     TELEMETRY_WORKER_ENABLED: bool = True
+
+    AI_PROVIDER: str = "openai"
+    AI_EMBEDDING_MODEL: str = "text-embedding-3-small"
+    AI_EMBEDDING_DIMENSIONS: int = 1536
+    AI_LLM_MODEL: str = "gpt-4o-mini"
+    AI_LLM_TEMPERATURE: float = 0.7
+    AI_LLM_MAX_TOKENS: int = 2048
+    OPENAI_API_KEY: str = ""
+    GEMINI_API_KEY: str = ""
 
     model_config = SettingsConfigDict(env_file=".env")
 
     @field_validator("REDIS_URL")
     @classmethod
     def validate_redis_url(cls, v: str) -> str:
-        """Validate Redis URL format for security."""
         if not v.startswith(("redis://", "rediss://")):
             raise ValueError(
                 'REDIS_URL must start with "redis://" or "rediss://" for TLS. '
-                'Example: redis://localhost:6379/0 or rediss://your-redis-server:6380/0'
+                "Example: redis://localhost:6379/0 or rediss://your-redis-server:6380/0"
             )
         return v
+
+    @model_validator(mode="after")
+    def auto_set_ai_provider_defaults(self) -> "Settings":
+        if self.AI_PROVIDER == "gemini":
+            if self.AI_EMBEDDING_MODEL == "text-embedding-3-small":
+                self.AI_EMBEDDING_MODEL = "gemini-embedding-001"
+            if self.AI_EMBEDDING_DIMENSIONS == 1536:
+                self.AI_EMBEDDING_DIMENSIONS = 3072
+            if self.AI_LLM_MODEL == "gpt-4o-mini":
+                self.AI_LLM_MODEL = "gemini-2.0-flash"
+        return self
 
 
 settings = Settings()

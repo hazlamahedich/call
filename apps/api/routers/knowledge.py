@@ -32,9 +32,8 @@ from services.ingestion import IngestionService, IngestionError
 from services.chunking import SemanticChunkingService
 from services.embedding import (
     EmbeddingService,
-    EMBEDDING_MODEL,
-    EMBEDDING_DIMENSIONS,
     MAX_BATCH_SIZE,
+    create_embedding_provider,
 )
 from services.knowledge_base_service import KnowledgeBaseService
 from services.tenant_helpers import require_tenant_resource
@@ -47,7 +46,6 @@ logger = logging.getLogger(__name__)
 
 UPLOAD_DIR = Path("uploads")
 MAX_FILE_SIZE = 50 * 1024 * 1024
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 BACKGROUND_TASK_TIMEOUT = 30 * 60
 MAX_BACKGROUND_TASKS = 10
 STALE_THRESHOLD_MINUTES = 30
@@ -77,10 +75,9 @@ def get_chunking_service() -> SemanticChunkingService:
 
 def get_embedding_service() -> EmbeddingService:
     global _embedding_service
-    if _embedding_service is None and OPENAI_API_KEY:
-        _embedding_service = EmbeddingService(api_key=OPENAI_API_KEY)
     if _embedding_service is None:
-        raise RuntimeError("Embedding service not configured")
+        provider = create_embedding_provider(settings)
+        _embedding_service = EmbeddingService(provider=provider)
     return _embedding_service
 
 
@@ -132,25 +129,27 @@ async def _process_ingestion(
         chunk_meta_list = []
         for i, chunk in enumerate(chunks):
             chunk_meta = chunking_service.enrich_chunk_metadata(chunk, i, metadata)
-            chunk_meta["embedding_model"] = EMBEDDING_MODEL
+            chunk_meta["embedding_model"] = embedding_service.provider.model_name
             chunk_meta["source_type"] = source_type
             if source_type == "pdf" and "page" in metadata:
                 chunk_meta["page"] = metadata["page"]
             chunk_meta_list.append(chunk_meta)
 
         all_embeddings = []
+        expected_dims = embedding_service.provider.dimensions
         for batch_start in range(0, len(chunks), MAX_BATCH_SIZE):
             batch_texts = chunks[batch_start : batch_start + MAX_BATCH_SIZE]
             batch_embeddings = await embedding_service.generate_embeddings_batch(
                 batch_texts
             )
             for emb in batch_embeddings:
-                if len(emb) != EMBEDDING_DIMENSIONS:
+                if len(emb) != expected_dims:
                     raise ValueError(
-                        f"Embedding dimension mismatch: expected {EMBEDDING_DIMENSIONS}, got {len(emb)}"
+                        f"Embedding dimension mismatch: expected {expected_dims}, got {len(emb)}"
                     )
             all_embeddings.extend(batch_embeddings)
 
+        current_model = embedding_service.provider.model_name
         inserted_count = 0
         for i, (chunk_text, embedding) in enumerate(zip(chunks, all_embeddings)):
             chunk_meta = chunk_meta_list[i]
@@ -168,7 +167,7 @@ async def _process_ingestion(
                     "chunk_index": i,
                     "content": chunk_text,
                     "embedding": str(embedding),
-                    "embedding_model": EMBEDDING_MODEL,
+                    "embedding_model": current_model,
                     "metadata": str(chunk_meta) if chunk_meta else None,
                 },
             )
