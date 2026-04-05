@@ -124,3 +124,15 @@ class UploadResponse(BaseModel):
     class Config:
         alias_generator = AliasGenerator(to_camel)
         populate_by_name = True
+
+
+class RetryResponse(BaseModel):
+    """Response schema for document retry."""
+
+    knowledgeBaseId: int = Field(alias="knowledge_base_id")
+    status: KnowledgeStatus
+    message: str = "Document retry initiated"
+
+    class Config:
+        alias_generator = AliasGenerator(to_camel)
+        populate_by_name = True

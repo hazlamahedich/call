@@ -9,7 +9,7 @@ import ipaddress
 import logging
 import socket
 from pathlib import Path
-from typing import Literal, Optional, Tuple
+from typing import Dict, List, Literal, Optional, Tuple
 from urllib.parse import urlparse
 
 import httpx
@@ -48,7 +48,7 @@ class IngestionService:
 
     def __init__(self):
         self.client = httpx.AsyncClient(
-            timeout=URL_FETCH_TIMEOUT,
+            timeout=httpx.Timeout(timeout=30.0, connect=10.0),
             follow_redirects=True,
             max_redirects=MAX_REDIRECTS,
         )
@@ -116,14 +116,28 @@ class IngestionService:
 
     @staticmethod
     def _extract_with_pdfplumber(file_path: str) -> Tuple[str, dict]:
-        text_parts = []
-        metadata = {"page_count": 0, "word_count": 0, "extraction_method": "pdfplumber"}
+        text_parts: List[str] = []
+        metadata: Dict = {
+            "page_count": 0,
+            "word_count": 0,
+            "extraction_method": "pdfplumber",
+            "pages": [],
+        }
         with pdfplumber.open(file_path) as pdf:
             metadata["page_count"] = len(pdf.pages)
-            for page in pdf.pages:
+            for page_num, page in enumerate(pdf.pages):
                 page_text = page.extract_text()
                 if page_text:
+                    start_char = sum(len(t) + 2 for t in text_parts)
                     text_parts.append(page_text)
+                    metadata["pages"].append(
+                        {
+                            "page": page_num + 1,
+                            "start_char": start_char,
+                            "end_char": start_char + len(page_text),
+                            "char_count": len(page_text),
+                        }
+                    )
         text = "\n\n".join(text_parts)
         metadata["word_count"] = len(text.split())
         return text, metadata
@@ -132,15 +146,29 @@ class IngestionService:
     def _extract_with_pypdf2(file_path: str) -> Tuple[str, dict]:
         import PyPDF2
 
-        text_parts = []
-        metadata = {"page_count": 0, "word_count": 0, "extraction_method": "PyPDF2"}
+        text_parts: List[str] = []
+        metadata: Dict = {
+            "page_count": 0,
+            "word_count": 0,
+            "extraction_method": "PyPDF2",
+            "pages": [],
+        }
         with open(file_path, "rb") as f:
             pdf_reader = PyPDF2.PdfReader(f)
             metadata["page_count"] = len(pdf_reader.pages)
-            for page in pdf_reader.pages:
+            for page_num, page in enumerate(pdf_reader.pages):
                 page_text = page.extract_text()
                 if page_text:
+                    start_char = sum(len(t) + 2 for t in text_parts)
                     text_parts.append(page_text)
+                    metadata["pages"].append(
+                        {
+                            "page": page_num + 1,
+                            "start_char": start_char,
+                            "end_char": start_char + len(page_text),
+                            "char_count": len(page_text),
+                        }
+                    )
         text = "\n\n".join(text_parts)
         metadata["word_count"] = len(text.split())
         return text, metadata
@@ -169,7 +197,7 @@ class IngestionService:
         if not self._is_valid_url(url):
             raise IngestionError("Invalid URL format", "INVALID_URL")
 
-        if self._is_internal_url(url):
+        if await self._is_internal_url_async(url):
             raise IngestionError(
                 "Internal URLs are not allowed",
                 "INTERNAL_URL_BLOCKED",
@@ -178,6 +206,21 @@ class IngestionService:
         try:
             response = await self.client.get(url)
             response.raise_for_status()
+
+            content_type = response.headers.get("content-type", "")
+            if content_type and not any(
+                ct in content_type.lower()
+                for ct in [
+                    "text/html",
+                    "text/plain",
+                    "application/json",
+                    "text/markdown",
+                ]
+            ):
+                raise IngestionError(
+                    f"Unsupported Content-Type: {content_type}",
+                    "UNSUPPORTED_CONTENT_TYPE",
+                )
 
             soup = BeautifulSoup(response.text, "html.parser")
             for element in soup(
@@ -224,6 +267,39 @@ class IngestionService:
         parsed = urlparse(url)
         return parsed.scheme in ("http", "https") and bool(parsed.hostname)
 
+    async def _is_internal_url_async(self, url: str) -> bool:
+        parsed = urlparse(url)
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+
+        try:
+            ip_obj = ipaddress.ip_address(hostname)
+            return any(ip_obj in net for net in BLOCKED_NETWORKS)
+        except ValueError:
+            pass
+
+        try:
+            addr_infos = await asyncio.to_thread(
+                socket.getaddrinfo,
+                hostname,
+                None,
+                socket.AF_UNSPEC,
+                socket.SOCK_STREAM,
+            )
+            for addr_info in addr_infos:
+                ip_str = addr_info[4][0]
+                try:
+                    ip_obj = ipaddress.ip_address(ip_str)
+                    if any(ip_obj in net for net in BLOCKED_NETWORKS):
+                        return True
+                except ValueError:
+                    continue
+        except (socket.gaierror, socket.herror):
+            pass
+
+        return False
+
     @staticmethod
     def _is_internal_url(url: str) -> bool:
         parsed = urlparse(url)
@@ -257,8 +333,12 @@ class IngestionService:
     async def validate_text(
         self, text: str, source_type: SourceType
     ) -> Tuple[bool, Optional[str]]:
-        if len(text) < MIN_TEXT_LENGTH:
-            return False, f"Text too short: {len(text)} chars (min {MIN_TEXT_LENGTH})"
+        stripped = text.strip()
+        if len(stripped) < MIN_TEXT_LENGTH:
+            return (
+                False,
+                f"Text too short: {len(stripped)} chars (min {MIN_TEXT_LENGTH})",
+            )
 
         try:
             text.encode("utf-8")

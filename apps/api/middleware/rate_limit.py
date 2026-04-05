@@ -37,29 +37,18 @@ class RateLimiter:
         self._lock = asyncio.Lock()
 
     async def check_rate_limit(self, org_id: str) -> bool:
-        """Check if request is within rate limit.
-
-        Args:
-            org_id: Organization ID to check
-
-        Returns:
-            True if request is allowed, False if rate limited
-        """
         async with self._lock:
             now = time.time()
             window_start = now - self.window_seconds
 
-            # Get request history for this org
             org_requests = self.requests[org_id]
 
-            # Remove requests outside the window
             org_requests[:] = [
                 (timestamp, count)
                 for timestamp, count in org_requests
                 if timestamp > window_start
             ]
 
-            # Count total requests in window
             total_requests = sum(count for _, count in org_requests)
 
             if total_requests >= self.max_requests:
@@ -74,12 +63,19 @@ class RateLimiter:
                 )
                 return False
 
-            # Add current request
-            # Group requests by second to reduce memory
             if org_requests and org_requests[-1][0] == now:
                 org_requests[-1] = (org_requests[-1][0], org_requests[-1][1] + 1)
             else:
                 org_requests.append((now, 1))
+
+            if len(self.requests) > 1000:
+                idle_orgs = [
+                    oid
+                    for oid, reqs in self.requests.items()
+                    if not reqs or reqs[-1][0] < window_start
+                ]
+                for oid in idle_orgs:
+                    del self.requests[oid]
 
             return True
 

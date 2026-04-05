@@ -78,8 +78,10 @@ class SemanticChunkingService:
         if len(chunks) > 1:
             last_chunk = chunks[-1]
             if not self.validate_chunk(last_chunk):
-                chunks[-2] = chunks[-2] + " " + last_chunk
-                chunks.pop()
+                merged = chunks[-2] + " " + last_chunk
+                if self._estimate_tokens(merged) <= MAX_CHUNK_SIZE:
+                    chunks[-2] = merged
+                    chunks.pop()
 
         logger.info(f"Split text into {len(chunks)} chunks")
         return chunks

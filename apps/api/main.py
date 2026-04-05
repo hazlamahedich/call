@@ -77,11 +77,6 @@ async def lifespan(app: FastAPI):
         telemetry_worker = TelemetryWorker(AsyncSessionLocal)
         await telemetry_queue.start_worker(telemetry_worker.process_batch)
 
-    # Recover stale processing records from crashes (Story 3.1)
-    from routers.knowledge import recover_stale_processing_records
-
-    await recover_stale_processing_records()
-
     # Recover stale processing knowledge base records (Story 3.1)
     try:
         from routers.knowledge import recover_stale_processing_records
@@ -93,6 +88,14 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
+    from routers.knowledge import get_ingestion_service
+
+    try:
+        svc = get_ingestion_service()
+        await svc.close()
+    except Exception:
+        pass
+
     await shutdown_tts()
 
     # Close cache strategy

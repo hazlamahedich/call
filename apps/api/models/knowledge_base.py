@@ -11,7 +11,7 @@ from sqlmodel import Field, SQLModel
 
 from models.base import TenantModel
 
-KnowledgeSourceType = Literal["pdf", "url", "text"]
+KnowledgeSourceType = Literal["pdf", "url", "text", "markdown"]
 KnowledgeStatus = Literal["processing", "ready", "failed"]
 
 
@@ -49,7 +49,8 @@ class KnowledgeBase(TenantModel, table=True):
         default=0, description="Number of chunks created from this document"
     )
     status: KnowledgeStatus = Field(
-        default="processing", description="Ingestion status: processing, ready, or failed"
+        default="processing",
+        description="Ingestion status: processing, ready, or failed",
     )
     error_message: Optional[str] = Field(
         default=None,

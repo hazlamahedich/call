@@ -46,7 +46,7 @@ export function KnowledgeIngestion({ onComplete }: KnowledgeIngestionProps) {
         clearInterval(pollingIntervalRef.current);
       }
     };
-  }, [documents]);
+  }, []);
 
   function startPolling() {
     if (pollingIntervalRef.current) {

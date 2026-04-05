@@ -47,9 +47,6 @@ class KnowledgeBaseService(TenantService[KnowledgeBase]):
         result = await session.execute(
             stmt.bindparams(content_hash=content_hash, org_id=org_id)
         )
-        result = await session.execute(
-            stmt.bindparams(content_hash=content_hash, org_id=org_id)
-        )
         row = result.first()
         if row is None:
             return None
@@ -79,7 +76,9 @@ class KnowledgeBaseService(TenantService[KnowledgeBase]):
             f"SELECT {self._select_cols} FROM {self.table_name} "
             "WHERE status = :status "
             "AND soft_delete = false "
-            "ORDER BY created_at DESC "
+            "ORDER BY "
+            "CASE status WHEN 'ready' THEN 1 WHEN 'processing' THEN 2 ELSE 3 END, "
+            "created_at DESC "
             "LIMIT :lim OFFSET :off"
         )
         result = await session.execute(
