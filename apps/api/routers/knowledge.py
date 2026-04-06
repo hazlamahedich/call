@@ -7,15 +7,17 @@ import asyncio
 import logging
 import os
 import re
+import time
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
 from database.session import AsyncSessionLocal, get_session as get_db
 from middleware.auth import AuthMiddleware
+from middleware.namespace_guard import verify_namespace_access
 from dependencies.org_context import get_current_org_id
 from models.knowledge_base import KnowledgeBase, KnowledgeSourceType, KnowledgeStatus
 from models.knowledge_chunk import KnowledgeChunk
@@ -37,9 +39,10 @@ from services.embedding import (
     create_embedding_provider,
 )
 from services.knowledge_base_service import KnowledgeBaseService
+from services.namespace_audit import NamespaceAuditService, AuditReport
 from services.tenant_helpers import require_tenant_resource
 
-from middleware.rate_limit import knowledge_upload_limiter
+from middleware.rate_limit import knowledge_upload_limiter, namespace_audit_limiter
 
 from config.settings import settings
 
@@ -345,6 +348,7 @@ async def _extract_text_from_file(
 
 @router.post("/upload", response_model=UploadResponse)
 async def upload_knowledge(
+    request: Request,
     file: Optional[UploadFile] = None,
     url: Optional[str] = None,
     text: Optional[str] = None,
@@ -352,7 +356,7 @@ async def upload_knowledge(
     session: AsyncSession = Depends(get_db),
     org_id: str = Depends(get_current_org_id),
 ):
-    org_id = token.org_id
+    org_id = await verify_namespace_access(session=session, org_id=org_id)
     if not _validate_org_id(org_id):
         raise HTTPException(
             status_code=400,
@@ -521,7 +525,7 @@ async def list_documents(
     session: AsyncSession = Depends(get_db),
     org_id: str = Depends(get_current_org_id),
 ):
-    org_id = token.org_id
+    org_id = await verify_namespace_access(session=session, org_id=org_id)
     await _set_rls_context(session, org_id)
 
     kb_service = get_kb_service()
@@ -531,9 +535,9 @@ async def list_documents(
         "SELECT id, org_id, title, source_type, source_url, file_path, file_storage_url, "
         "content_hash, chunk_count, status, error_message, metadata, created_at, updated_at, soft_delete "
         "FROM knowledge_bases "
-        "WHERE soft_delete = false "
+        "WHERE org_id = :org_id AND soft_delete = false "
     )
-    params = {"lim": page_size, "off": offset}
+    params = {"lim": page_size, "off": offset, "org_id": org_id}
 
     if status_filter:
         stmt = text(
@@ -552,8 +556,10 @@ async def list_documents(
             "LIMIT :lim OFFSET :off"
         )
 
-    count_stmt = text("SELECT COUNT(*) FROM knowledge_bases WHERE soft_delete = false ")
-    count_params = {}
+    count_stmt = text(
+        "SELECT COUNT(*) FROM knowledge_bases WHERE org_id = :org_id AND soft_delete = false "
+    )
+    count_params = {"org_id": org_id}
     if status_filter:
         count_stmt = text(str(count_stmt) + "AND status = :status_filter")
         count_params["status_filter"] = status_filter
@@ -596,10 +602,13 @@ async def list_documents(
 @router.get("/documents/{document_id}", response_model=KnowledgeBaseResponse)
 async def get_document(
     document_id: int,
+    request: Request,
     session: AsyncSession = Depends(get_db),
     org_id: str = Depends(get_current_org_id),
 ):
-    org_id = token.org_id
+    org_id = await verify_namespace_access(
+        resource_id=document_id, request=request, session=session, org_id=org_id
+    )
     await _set_rls_context(session, org_id)
 
     kb_service = get_kb_service()
@@ -628,10 +637,13 @@ async def get_document(
 @router.delete("/documents/{document_id}")
 async def delete_document(
     document_id: int,
+    request: Request,
     session: AsyncSession = Depends(get_db),
     org_id: str = Depends(get_current_org_id),
 ):
-    org_id = token.org_id
+    org_id = await verify_namespace_access(
+        resource_id=document_id, request=request, session=session, org_id=org_id
+    )
     await _set_rls_context(session, org_id)
 
     kb_service = get_kb_service()
@@ -672,15 +684,21 @@ async def delete_document(
 
 @router.post("/search", response_model=KnowledgeSearchResponse)
 async def search_knowledge(
-    request: KnowledgeSearchRequest,
+    request_body: KnowledgeSearchRequest,
+    request: Request,
     session: AsyncSession = Depends(get_db),
     org_id: str = Depends(get_current_org_id),
 ):
-    org_id = token.org_id
+    guard_start = time.monotonic()
+    org_id = await verify_namespace_access(session=session, org_id=org_id)
+    guard_overhead = (time.monotonic() - guard_start) * 1000
+
     await _set_rls_context(session, org_id)
 
     embedding_service = get_embedding_service()
-    query_embedding = await embedding_service.generate_embedding(request.query)
+    query_embedding = await embedding_service.generate_embedding(request_body.query)
+
+    threshold = settings.RAG_SIMILARITY_THRESHOLD
 
     result = await session.execute(
         text(
@@ -692,13 +710,15 @@ async def search_knowledge(
             "AND kc.soft_delete = false "
             "AND kb.status = 'ready' "
             "AND kb.soft_delete = false "
+            "AND 1 - (kc.embedding <=> :query_embedding::vector) > :threshold "
             "ORDER BY kc.embedding <=> :query_embedding::vector "
             "LIMIT :top_k"
         ),
         {
             "query_embedding": str(query_embedding),
             "org_id": org_id,
-            "top_k": request.top_k,
+            "top_k": request_body.top_k,
+            "threshold": threshold,
         },
     )
     rows = result.fetchall()
@@ -718,17 +738,21 @@ async def search_knowledge(
     return KnowledgeSearchResponse(
         results=results,
         total=len(results),
-        query=request.query,
+        query=request_body.query,
+        guard_overhead_ms=round(guard_overhead, 2),
     )
 
 
 @router.post("/documents/{document_id}/retry", response_model=RetryResponse)
 async def retry_document(
     document_id: int,
+    request: Request,
     session: AsyncSession = Depends(get_db),
     org_id: str = Depends(get_current_org_id),
 ):
-    org_id = token.org_id
+    org_id = await verify_namespace_access(
+        resource_id=document_id, request=request, session=session, org_id=org_id
+    )
     await _set_rls_context(session, org_id)
 
     kb_service = get_kb_service()
@@ -824,3 +848,49 @@ async def retry_document(
         status=KnowledgeStatus.processing,
         message="Document retry initiated",
     )
+
+
+_audit_service: Optional[NamespaceAuditService] = None
+
+
+def get_audit_service() -> NamespaceAuditService:
+    global _audit_service
+    if _audit_service is None:
+        _audit_service = NamespaceAuditService()
+    return _audit_service
+
+
+@router.post("/audit/isolation", response_model=AuditReport)
+async def audit_isolation(
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+    org_id: str = Depends(get_current_org_id),
+):
+    allowed = await namespace_audit_limiter.check_rate_limit(org_id)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "code": "RATE_LIMIT_EXCEEDED",
+                "message": "Audit rate limit exceeded. Max 1 audit per org per 5 minutes.",
+            },
+        )
+
+    await session.execute(
+        text("SELECT set_config('app.is_platform_admin', 'true', false)")
+    )
+
+    audit_service = get_audit_service()
+    report = await audit_service.run_isolation_audit(session)
+
+    logger.info(
+        "Namespace isolation audit completed",
+        extra={
+            "org_id": org_id,
+            "total_checks": report.total_checks,
+            "passed": report.passed,
+            "failed": report.failed,
+        },
+    )
+
+    return report

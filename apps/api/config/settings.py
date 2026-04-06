@@ -60,6 +60,15 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
 
+    RAG_SIMILARITY_THRESHOLD: float = 0.7
+    NAMESPACE_GUARD_ENABLED: bool = True
+    NAMESPACE_AUDIT_MAX_PAIRS: int = 100
+
+    @field_validator("RAG_SIMILARITY_THRESHOLD")
+    @classmethod
+    def validate_similarity_threshold(cls, v: float) -> float:
+        return max(0.0, min(1.0, v))
+
     model_config = SettingsConfigDict(env_file=".env")
 
     @field_validator("REDIS_URL")

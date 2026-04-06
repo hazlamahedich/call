@@ -46,6 +46,35 @@ export interface KnowledgeSearchResponse {
   results: KnowledgeSearchResult[];
   total: number;
   query: string;
+  guardOverheadMs?: number;
+}
+
+function isNamespaceViolation(detail: unknown): boolean {
+  if (typeof detail === "object" && detail !== null) {
+    const obj = detail as Record<string, unknown>;
+    return obj.code === "NAMESPACE_VIOLATION";
+  }
+  return false;
+}
+
+function extractErrorMessage(
+  response: Response,
+  body: unknown,
+  fallback: string,
+): string {
+  if (response.status === 403) {
+    const detail = body;
+    if (isNamespaceViolation(detail)) {
+      return "Access denied: This resource belongs to a different organization.";
+    }
+    return "You do not have permission to access this resource.";
+  }
+  if (typeof body === "object" && body !== null) {
+    const obj = body as Record<string, unknown>;
+    if (typeof obj.detail === "string") return obj.detail;
+    if (typeof obj.message === "string") return obj.message;
+  }
+  return fallback;
 }
 
 export async function uploadKnowledgeFile(formData: FormData) {
@@ -54,7 +83,7 @@ export async function uploadKnowledgeFile(formData: FormData) {
   if (!token) return { error: "Not authenticated" };
 
   try {
-    const response = await fetch(`${API_URL}/api/v1/knowledge/upload`, {
+    const response = await fetch(`${API_URL}/api/knowledge/upload`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -63,8 +92,8 @@ export async function uploadKnowledgeFile(formData: FormData) {
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      return { error: error.detail || "Upload failed" };
+      const body = await response.json();
+      return { error: extractErrorMessage(response, body, "Upload failed") };
     }
 
     const data: UploadResponse = await response.json();
@@ -80,7 +109,7 @@ export async function addKnowledgeUrl(url: string, title?: string) {
   if (!token) return { error: "Not authenticated" };
 
   try {
-    const response = await fetch(`${API_URL}/api/v1/knowledge/upload`, {
+    const response = await fetch(`${API_URL}/api/knowledge/upload`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -90,8 +119,10 @@ export async function addKnowledgeUrl(url: string, title?: string) {
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      return { error: error.detail || "Failed to add URL" };
+      const body = await response.json();
+      return {
+        error: extractErrorMessage(response, body, "Failed to add URL"),
+      };
     }
 
     const data: UploadResponse = await response.json();
@@ -107,7 +138,7 @@ export async function addKnowledgeText(text: string, title?: string) {
   if (!token) return { error: "Not authenticated" };
 
   try {
-    const response = await fetch(`${API_URL}/api/v1/knowledge/upload`, {
+    const response = await fetch(`${API_URL}/api/knowledge/upload`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -117,8 +148,10 @@ export async function addKnowledgeText(text: string, title?: string) {
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      return { error: error.detail || "Failed to add text" };
+      const body = await response.json();
+      return {
+        error: extractErrorMessage(response, body, "Failed to add text"),
+      };
     }
 
     const data: UploadResponse = await response.json();
@@ -131,7 +164,7 @@ export async function addKnowledgeText(text: string, title?: string) {
 export async function listKnowledgeDocuments(
   status?: "processing" | "ready" | "failed",
   page = 1,
-  pageSize = 20
+  pageSize = 20,
 ) {
   const { getToken } = await auth();
   const token = await getToken();
@@ -148,23 +181,29 @@ export async function listKnowledgeDocuments(
     }
 
     const response = await fetch(
-      `${API_URL}/api/v1/knowledge/documents?${params}`,
+      `${API_URL}/api/knowledge/documents?${params}`,
       {
         headers: {
           Authorization: `Bearer ${token}`,
         },
-      }
+      },
     );
 
     if (!response.ok) {
-      const error = await response.json();
-      return { error: error.detail || "Failed to list documents", data: null };
+      const body = await response.json();
+      return {
+        error: extractErrorMessage(response, body, "Failed to list documents"),
+        data: null,
+      };
     }
 
     const data: DocumentListResponse = await response.json();
     return { data, error: null };
   } catch (error) {
-    return { error: "Failed to list documents: " + (error as Error).message, data: null };
+    return {
+      error: "Failed to list documents: " + (error as Error).message,
+      data: null,
+    };
   }
 }
 
@@ -174,7 +213,7 @@ export async function deleteKnowledgeDocument(id: number) {
   if (!token) return { error: "Not authenticated" };
 
   try {
-    const response = await fetch(`${API_URL}/api/v1/knowledge/documents/${id}`, {
+    const response = await fetch(`${API_URL}/api/knowledge/documents/${id}`, {
       method: "DELETE",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -182,8 +221,10 @@ export async function deleteKnowledgeDocument(id: number) {
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      return { error: error.detail || "Failed to delete document" };
+      const body = await response.json();
+      return {
+        error: extractErrorMessage(response, body, "Failed to delete document"),
+      };
     }
 
     return { error: null };
@@ -198,7 +239,7 @@ export async function searchKnowledge(query: string, topK = 5) {
   if (!token) return { error: "Not authenticated", data: null };
 
   try {
-    const response = await fetch(`${API_URL}/api/v1/knowledge/search`, {
+    const response = await fetch(`${API_URL}/api/knowledge/search`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -208,8 +249,11 @@ export async function searchKnowledge(query: string, topK = 5) {
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      return { error: error.detail || "Search failed", data: null };
+      const body = await response.json();
+      return {
+        error: extractErrorMessage(response, body, "Search failed"),
+        data: null,
+      };
     }
 
     const data: KnowledgeSearchResponse = await response.json();

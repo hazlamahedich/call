@@ -107,6 +107,7 @@ class RateLimiter:
 # Preset sample generation: 10 requests per minute per tenant
 preset_sample_limiter = RateLimiter(max_requests=10, window_seconds=60)
 knowledge_upload_limiter = RateLimiter(max_requests=20, window_seconds=60)
+namespace_audit_limiter = RateLimiter(max_requests=1, window_seconds=300)
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
