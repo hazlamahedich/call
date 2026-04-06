@@ -28,6 +28,7 @@ from schemas.knowledge import (
     KnowledgeSearchRequest,
     KnowledgeSearchResponse,
     DocumentListResponse,
+    NamespaceViolationResponse,
     UploadResponse,
     RetryResponse,
 )
@@ -525,6 +526,13 @@ async def list_documents(
     session: AsyncSession = Depends(get_db),
     org_id: str = Depends(get_current_org_id),
 ):
+    if page < 1:
+        raise HTTPException(status_code=400, detail="page must be >= 1")
+    if page_size < 1 or page_size > 100:
+        raise HTTPException(
+            status_code=400, detail="page_size must be between 1 and 100"
+        )
+
     org_id = await verify_namespace_access(session=session, org_id=org_id)
     await _set_rls_context(session, org_id)
 
@@ -599,7 +607,11 @@ async def list_documents(
     )
 
 
-@router.get("/documents/{document_id}", response_model=KnowledgeBaseResponse)
+@router.get(
+    "/documents/{document_id}",
+    response_model=KnowledgeBaseResponse,
+    responses={403: {"model": NamespaceViolationResponse}},
+)
 async def get_document(
     document_id: int,
     request: Request,
@@ -634,7 +646,10 @@ async def get_document(
     )
 
 
-@router.delete("/documents/{document_id}")
+@router.delete(
+    "/documents/{document_id}",
+    responses={403: {"model": NamespaceViolationResponse}},
+)
 async def delete_document(
     document_id: int,
     request: Request,
@@ -682,7 +697,11 @@ async def delete_document(
     return {"message": "Document deleted successfully"}
 
 
-@router.post("/search", response_model=KnowledgeSearchResponse)
+@router.post(
+    "/search",
+    response_model=KnowledgeSearchResponse,
+    responses={403: {"model": NamespaceViolationResponse}},
+)
 async def search_knowledge(
     request_body: KnowledgeSearchRequest,
     request: Request,
@@ -692,6 +711,12 @@ async def search_knowledge(
     guard_start = time.monotonic()
     org_id = await verify_namespace_access(session=session, org_id=org_id)
     guard_overhead = (time.monotonic() - guard_start) * 1000
+
+    logger.debug(
+        "Namespace guard overhead: %.2fms for org %s",
+        guard_overhead,
+        org_id,
+    )
 
     await _set_rls_context(session, org_id)
 
@@ -739,11 +764,14 @@ async def search_knowledge(
         results=results,
         total=len(results),
         query=request_body.query,
-        guard_overhead_ms=round(guard_overhead, 2),
     )
 
 
-@router.post("/documents/{document_id}/retry", response_model=RetryResponse)
+@router.post(
+    "/documents/{document_id}/retry",
+    response_model=RetryResponse,
+    responses={403: {"model": NamespaceViolationResponse}},
+)
 async def retry_document(
     document_id: int,
     request: Request,
@@ -866,6 +894,17 @@ async def audit_isolation(
     session: AsyncSession = Depends(get_db),
     org_id: str = Depends(get_current_org_id),
 ):
+    is_admin = (
+        request.state.user_role == "platform_admin"
+        if hasattr(request.state, "user_role")
+        else False
+    )
+    if not is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "FORBIDDEN", "message": "Platform admin access required"},
+        )
+
     allowed = await namespace_audit_limiter.check_rate_limit(org_id)
     if not allowed:
         raise HTTPException(
@@ -876,12 +915,19 @@ async def audit_isolation(
             },
         )
 
-    await session.execute(
-        text("SELECT set_config('app.is_platform_admin', 'true', false)")
-    )
+    audit_session = AsyncSessionLocal()
+    try:
+        await audit_session.execute(
+            text("SELECT set_config('app.is_platform_admin', 'true', false)")
+        )
 
-    audit_service = get_audit_service()
-    report = await audit_service.run_isolation_audit(session)
+        audit_service = get_audit_service()
+        report = await audit_service.run_isolation_audit(audit_session)
+    finally:
+        try:
+            await audit_session.close()
+        except Exception:
+            pass
 
     logger.info(
         "Namespace isolation audit completed",

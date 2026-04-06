@@ -301,8 +301,24 @@ class TestNamespaceGuardAC5:
         assert report.pairs_checked == 1
 
     async def test_3_2_020_given_audit_endpoint_when_non_admin_then_403(self):
-        """[3.2-UNIT-020] Non-admin audit access is handled by router."""
-        assert True
+        """[3.2-UNIT-020] Non-admin audit access returns 403 from router."""
+        from fastapi import HTTPException
+        from routers.knowledge import audit_isolation
+
+        mock_request = MagicMock()
+        mock_request.state.user_role = "regular_user"
+
+        session = MagicMock(spec=AsyncSession)
+
+        with pytest.raises(HTTPException) as exc_info:
+            await audit_isolation(
+                request=mock_request,
+                session=session,
+                org_id="org-non-admin",
+            )
+        assert exc_info.value.status_code == 403
+        detail = exc_info.value.detail
+        assert detail["code"] == "FORBIDDEN"
 
     async def test_3_2_021_given_audit_results_then_all_pairs_reported(self):
         """[3.2-UNIT-021] Report contains all tenant pair combinations."""
@@ -379,8 +395,13 @@ class TestNamespaceGuardAC5:
 
 @pytest.mark.asyncio
 class TestNamespaceGuardAC6:
+    @pytest.mark.integration
     async def test_3_2_026_given_search_with_guard_then_latency_under_200ms(self):
-        """[3.2-UNIT-026] Total guard latency stays well under 200ms."""
+        """[3.2-UNIT-026] Total guard latency stays well under 200ms.
+
+        NOTE: This test uses mock sessions. For a true performance benchmark
+        with 500+ chunks, run as an integration test against a real PostgreSQL DB.
+        """
         session = _mock_session_with_resource("org-perf")
         start = time.monotonic()
         for _ in range(50):
@@ -393,8 +414,13 @@ class TestNamespaceGuardAC6:
         elapsed_ms = (time.monotonic() - start) * 1000 / 50
         assert elapsed_ms < 200, f"Average latency {elapsed_ms:.2f}ms exceeds 200ms"
 
+    @pytest.mark.integration
     async def test_3_2_027_given_guard_check_then_overhead_under_5ms(self):
-        """[3.2-UNIT-027] Guard overhead specifically under 5ms."""
+        """[3.2-UNIT-027] Guard overhead specifically under 5ms.
+
+        NOTE: This test uses mock sessions. For a true performance benchmark
+        with 500+ chunks, run as an integration test against a real PostgreSQL DB.
+        """
         session = _mock_session()
         start = time.monotonic()
         for _ in range(100):
@@ -436,13 +462,14 @@ class TestNamespaceSchemas:
         resp = NamespaceViolationResponse(error=err)
         assert resp.error.code == "NAMESPACE_VIOLATION"
 
-    async def test_search_response_has_guard_overhead(self):
+    async def test_search_response_schema(self):
         from schemas.knowledge import KnowledgeSearchResponse
 
         resp = KnowledgeSearchResponse(
             results=[],
             total=0,
             query="test",
-            guardOverheadMs=1.23,
         )
-        assert resp.guardOverheadMs == 1.23
+        assert resp.total == 0
+        assert resp.query == "test"
+        assert resp.results == []

@@ -99,11 +99,6 @@ class KnowledgeSearchResponse(BaseModel):
     results: List[KnowledgeSearchResult]
     total: int
     query: str
-    guardOverheadMs: float = Field(
-        default=0.0,
-        alias="guard_overhead_ms",
-        description="Namespace guard overhead in ms",
-    )
 
     class Config:
         alias_generator = AliasGenerator(to_camel)

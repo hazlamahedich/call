@@ -1,6 +1,10 @@
+import logging
+
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
+
+_logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -67,7 +71,19 @@ class Settings(BaseSettings):
     @field_validator("RAG_SIMILARITY_THRESHOLD")
     @classmethod
     def validate_similarity_threshold(cls, v: float) -> float:
-        return max(0.0, min(1.0, v))
+        clamped = max(0.0, min(1.0, v))
+        if clamped != v:
+            _logger.warning(
+                "RAG_SIMILARITY_THRESHOLD clamped from %s to %s", v, clamped
+            )
+        return clamped
+
+    @field_validator("NAMESPACE_AUDIT_MAX_PAIRS")
+    @classmethod
+    def validate_audit_max_pairs(cls, v: int) -> int:
+        if v < 1:
+            raise ValueError("NAMESPACE_AUDIT_MAX_PAIRS must be >= 1")
+        return v
 
     model_config = SettingsConfigDict(env_file=".env")
 

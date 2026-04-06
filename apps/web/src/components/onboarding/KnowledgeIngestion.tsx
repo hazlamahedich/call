@@ -23,18 +23,17 @@ export function KnowledgeIngestion({ onComplete }: KnowledgeIngestionProps) {
   const [loading, setLoading] = React.useState(true);
   const [uploading, setUploading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [errorCode, setErrorCode] = React.useState<string | null>(null);
   const [successMessage, setSuccessMessage] = React.useState<string | null>(
     null,
   );
 
-  // Form states
   const [url, setUrl] = React.useState("");
   const [urlTitle, setUrlTitle] = React.useState("");
   const [text, setText] = React.useState("");
   const [textTitle, setTextTitle] = React.useState("");
   const [file, setFile] = React.useState<File | null>(null);
 
-  // Polling for status updates
   const pollingIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
 
   React.useEffect(() => {
@@ -63,11 +62,13 @@ export function KnowledgeIngestion({ onComplete }: KnowledgeIngestionProps) {
   async function loadDocuments(silent = false) {
     if (!silent) setLoading(true);
     setError(null);
+    setErrorCode(null);
 
     const result = await listKnowledgeDocuments();
 
     if (result.error && !silent) {
       setError(result.error);
+      if ("errorCode" in result) setErrorCode(result.errorCode ?? null);
     } else if (result.data) {
       setDocuments(result.data.items);
     }
@@ -81,6 +82,7 @@ export function KnowledgeIngestion({ onComplete }: KnowledgeIngestionProps) {
 
     setUploading(true);
     setError(null);
+    setErrorCode(null);
     setSuccessMessage(null);
 
     const formData = new FormData();
@@ -90,6 +92,7 @@ export function KnowledgeIngestion({ onComplete }: KnowledgeIngestionProps) {
 
     if (result.error) {
       setError(result.error);
+      if ("errorCode" in result) setErrorCode(result.errorCode ?? null);
     } else if (result.data) {
       setSuccessMessage("File uploaded successfully");
       setFile(null);
@@ -109,12 +112,14 @@ export function KnowledgeIngestion({ onComplete }: KnowledgeIngestionProps) {
 
     setUploading(true);
     setError(null);
+    setErrorCode(null);
     setSuccessMessage(null);
 
     const result = await addKnowledgeUrl(url, urlTitle || undefined);
 
     if (result.error) {
       setError(result.error);
+      if ("errorCode" in result) setErrorCode(result.errorCode ?? null);
     } else if (result.data) {
       setSuccessMessage("URL added successfully");
       setUrl("");
@@ -135,12 +140,14 @@ export function KnowledgeIngestion({ onComplete }: KnowledgeIngestionProps) {
 
     setUploading(true);
     setError(null);
+    setErrorCode(null);
     setSuccessMessage(null);
 
     const result = await addKnowledgeText(text, textTitle || undefined);
 
     if (result.error) {
       setError(result.error);
+      if ("errorCode" in result) setErrorCode(result.errorCode ?? null);
     } else if (result.data) {
       setSuccessMessage("Text added successfully");
       setText("");
@@ -157,11 +164,13 @@ export function KnowledgeIngestion({ onComplete }: KnowledgeIngestionProps) {
     }
 
     setError(null);
+    setErrorCode(null);
 
     const result = await deleteKnowledgeDocument(id);
 
     if (result.error) {
       setError(result.error);
+      if ("errorCode" in result) setErrorCode(result.errorCode ?? null);
     } else {
       setSuccessMessage("Document deleted successfully");
       loadDocuments(true);
@@ -193,9 +202,10 @@ export function KnowledgeIngestion({ onComplete }: KnowledgeIngestionProps) {
     );
   }
 
+  const isNamespaceError = errorCode === "NAMESPACE_VIOLATION";
+
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
         <h2 className="text-2xl font-bold text-gray-900">Knowledge Base</h2>
         <p className="text-sm text-gray-500 mt-1">
@@ -203,18 +213,15 @@ export function KnowledgeIngestion({ onComplete }: KnowledgeIngestionProps) {
         </p>
       </div>
 
-      {/* Alerts */}
       {error && (
         <div
           className={cn(
             "rounded-md p-4",
-            error.includes("different organization")
-              ? "bg-amber-50"
-              : "bg-red-50",
+            isNamespaceError ? "bg-amber-50" : "bg-red-50",
           )}
         >
           <div className="flex">
-            {error.includes("different organization") && (
+            {isNamespaceError && (
               <svg
                 className="h-5 w-5 text-amber-400 mr-2 shrink-0"
                 viewBox="0 0 20 20"
@@ -230,9 +237,7 @@ export function KnowledgeIngestion({ onComplete }: KnowledgeIngestionProps) {
             <p
               className={cn(
                 "text-sm",
-                error.includes("different organization")
-                  ? "text-amber-800"
-                  : "text-red-800",
+                isNamespaceError ? "text-amber-800" : "text-red-800",
               )}
             >
               {error}
@@ -247,7 +252,6 @@ export function KnowledgeIngestion({ onComplete }: KnowledgeIngestionProps) {
         </div>
       )}
 
-      {/* Tabs */}
       <div className="border-b border-gray-200">
         <nav className="-mb-px flex space-x-8">
           {[
@@ -271,7 +275,6 @@ export function KnowledgeIngestion({ onComplete }: KnowledgeIngestionProps) {
         </nav>
       </div>
 
-      {/* Tab Content */}
       <div className="bg-white shadow rounded-lg p-6">
         {activeTab === "file" && (
           <form onSubmit={handleFileUpload} className="space-y-4">
@@ -404,7 +407,6 @@ export function KnowledgeIngestion({ onComplete }: KnowledgeIngestionProps) {
         )}
       </div>
 
-      {/* Documents List */}
       <div className="bg-white shadow rounded-lg">
         <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
           <h3 className="text-lg leading-6 font-medium text-gray-900">

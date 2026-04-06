@@ -1,6 +1,10 @@
 "use server";
 
 import { auth } from "@clerk/nextjs/server";
+import type {
+  KnowledgeSearchResponse,
+  KnowledgeSearchResult,
+} from "@call/types/knowledge";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
@@ -34,47 +38,47 @@ export interface UploadResponse {
   message: string;
 }
 
-export interface KnowledgeSearchResult {
-  chunkId: number;
-  knowledgeBaseId: number;
-  content: string;
-  metadata?: Record<string, unknown>;
-  similarity: number;
-}
-
-export interface KnowledgeSearchResponse {
-  results: KnowledgeSearchResult[];
-  total: number;
-  query: string;
-  guardOverheadMs?: number;
-}
-
 function isNamespaceViolation(detail: unknown): boolean {
   if (typeof detail === "object" && detail !== null) {
     const obj = detail as Record<string, unknown>;
-    return obj.code === "NAMESPACE_VIOLATION";
+    if (obj.code === "NAMESPACE_VIOLATION") return true;
+    if (typeof obj.detail === "object" && obj.detail !== null) {
+      const inner = obj.detail as Record<string, unknown>;
+      if (inner.code === "NAMESPACE_VIOLATION") return true;
+    }
   }
   return false;
 }
 
-function extractErrorMessage(
+function extractErrorDetail(
   response: Response,
   body: unknown,
-  fallback: string,
-): string {
+): { message: string; code?: string } {
   if (response.status === 403) {
     const detail = body;
     if (isNamespaceViolation(detail)) {
-      return "Access denied: This resource belongs to a different organization.";
+      return {
+        message:
+          "Access denied: This resource belongs to a different organization.",
+        code: "NAMESPACE_VIOLATION",
+      };
     }
-    return "You do not have permission to access this resource.";
+    return { message: "You do not have permission to access this resource." };
   }
   if (typeof body === "object" && body !== null) {
     const obj = body as Record<string, unknown>;
-    if (typeof obj.detail === "string") return obj.detail;
-    if (typeof obj.message === "string") return obj.message;
+    if (typeof obj.detail === "string") return { message: obj.detail };
+    if (typeof obj.detail === "object" && obj.detail !== null) {
+      const inner = obj.detail as Record<string, unknown>;
+      if (typeof inner.message === "string")
+        return {
+          message: inner.message,
+          code: inner.code as string | undefined,
+        };
+    }
+    if (typeof obj.message === "string") return { message: obj.message };
   }
-  return fallback;
+  return { message: "Request failed" };
 }
 
 export async function uploadKnowledgeFile(formData: FormData) {
@@ -93,7 +97,8 @@ export async function uploadKnowledgeFile(formData: FormData) {
 
     if (!response.ok) {
       const body = await response.json();
-      return { error: extractErrorMessage(response, body, "Upload failed") };
+      const { message, code } = extractErrorDetail(response, body);
+      return { error: message, errorCode: code ?? null };
     }
 
     const data: UploadResponse = await response.json();
@@ -120,9 +125,8 @@ export async function addKnowledgeUrl(url: string, title?: string) {
 
     if (!response.ok) {
       const body = await response.json();
-      return {
-        error: extractErrorMessage(response, body, "Failed to add URL"),
-      };
+      const { message, code } = extractErrorDetail(response, body);
+      return { error: message, errorCode: code ?? null };
     }
 
     const data: UploadResponse = await response.json();
@@ -149,9 +153,8 @@ export async function addKnowledgeText(text: string, title?: string) {
 
     if (!response.ok) {
       const body = await response.json();
-      return {
-        error: extractErrorMessage(response, body, "Failed to add text"),
-      };
+      const { message, code } = extractErrorDetail(response, body);
+      return { error: message, errorCode: code ?? null };
     }
 
     const data: UploadResponse = await response.json();
@@ -191,10 +194,8 @@ export async function listKnowledgeDocuments(
 
     if (!response.ok) {
       const body = await response.json();
-      return {
-        error: extractErrorMessage(response, body, "Failed to list documents"),
-        data: null,
-      };
+      const { message, code } = extractErrorDetail(response, body);
+      return { error: message, errorCode: code ?? null, data: null };
     }
 
     const data: DocumentListResponse = await response.json();
@@ -222,9 +223,8 @@ export async function deleteKnowledgeDocument(id: number) {
 
     if (!response.ok) {
       const body = await response.json();
-      return {
-        error: extractErrorMessage(response, body, "Failed to delete document"),
-      };
+      const { message, code } = extractErrorDetail(response, body);
+      return { error: message, errorCode: code ?? null };
     }
 
     return { error: null };
@@ -250,10 +250,8 @@ export async function searchKnowledge(query: string, topK = 5) {
 
     if (!response.ok) {
       const body = await response.json();
-      return {
-        error: extractErrorMessage(response, body, "Search failed"),
-        data: null,
-      };
+      const { message, code } = extractErrorDetail(response, body);
+      return { error: message, errorCode: code ?? null, data: null };
     }
 
     const data: KnowledgeSearchResponse = await response.json();

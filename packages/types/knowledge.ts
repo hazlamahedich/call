@@ -5,7 +5,7 @@ export interface NamespaceViolation {
 }
 
 export interface KnowledgeSearchResult {
-  id: number;
+  chunkId: number;
   knowledgeBaseId: number;
   content: string;
   similarity: number;
@@ -15,8 +15,7 @@ export interface KnowledgeSearchResult {
 export interface KnowledgeSearchResponse {
   results: KnowledgeSearchResult[];
   query: string;
-  totalResults: number;
-  guardOverheadMs: number;
+  total: number;
 }
 
 export interface IsolationAuditCheck {
