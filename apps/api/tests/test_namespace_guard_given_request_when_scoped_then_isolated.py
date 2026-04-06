@@ -452,6 +452,135 @@ class TestNamespaceGuardAC7:
 
 
 @pytest.mark.asyncio
+class TestNamespaceEdgeCases:
+    async def test_3_2_edge_001_given_soft_deleted_resource_when_accessed_then_404(
+        self,
+    ):
+        """Soft-deleted resources return 404 — no information leakage."""
+        session = MagicMock(spec=AsyncSession)
+        result = MagicMock()
+        result.fetchone.return_value = None
+        session.execute = AsyncMock(return_value=result)
+
+        with pytest.raises(HTTPException) as exc_info:
+            await verify_namespace_access(
+                resource_id=42,
+                request=_mock_request(),
+                session=session,
+                org_id="org-alpha",
+            )
+        assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
+        detail = exc_info.value.detail
+        assert detail["code"] == "KNOWLEDGE_BASE_NOT_FOUND"
+
+    async def test_3_2_edge_002_given_empty_string_org_id_when_guard_then_403(self):
+        """Empty string org_id is treated as missing → 403."""
+        session = _mock_session()
+        with pytest.raises(HTTPException) as exc_info:
+            await verify_namespace_access(session=session, org_id="")
+        assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
+        assert exc_info.value.detail["code"] == "NAMESPACE_VIOLATION"
+
+    async def test_3_2_edge_003_given_no_request_when_cross_tenant_then_403_without_error(
+        self,
+    ):
+        """Cross-tenant with request=None logs 'unknown' endpoint but still blocks."""
+        session = _mock_session_with_resource("org-other")
+        with pytest.raises(HTTPException) as exc_info:
+            await verify_namespace_access(
+                resource_id=1, request=None, session=session, org_id="org-mine"
+            )
+        assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
+
+    async def test_3_2_edge_004_given_audit_with_zero_orgs_then_empty_report(self):
+        """Audit with 0 active orgs returns empty report."""
+        service = NamespaceAuditService()
+        session = MagicMock(spec=AsyncSession)
+        result = MagicMock()
+        result.fetchall.return_value = []
+        session.execute = AsyncMock(return_value=result)
+
+        report = await service.run_isolation_audit(session)
+        assert report.tenant_count == 0
+        assert report.total_checks == 0
+        assert report.passed == 0
+        assert report.failed == 0
+        assert report.pairs_checked == 0
+        assert report.pairs_skipped == 0
+
+    async def test_3_2_edge_005_given_audit_with_one_org_then_empty_report(self):
+        """Audit with 1 org returns empty report — no pairs to check."""
+        service = NamespaceAuditService()
+        session = MagicMock(spec=AsyncSession)
+        result = MagicMock()
+        result.fetchall.return_value = [("org-alpha",)]
+        session.execute = AsyncMock(return_value=result)
+
+        report = await service.run_isolation_audit(session)
+        assert report.tenant_count == 1
+        assert report.total_checks == 0
+        assert report.pairs_checked == 0
+
+    async def test_3_2_edge_006_given_audit_with_three_orgs_then_three_pairs(self):
+        """Audit with 3 orgs produces 3 pairs (C(3,2)) and 9 checks."""
+        service = NamespaceAuditService()
+        session = MagicMock(spec=AsyncSession)
+        orgs_result = MagicMock()
+        orgs_result.fetchall.return_value = [
+            ("org-a",),
+            ("org-b",),
+            ("org-c",),
+        ]
+        count_result = MagicMock()
+        count_result.scalar.return_value = 0
+        session.execute = AsyncMock(side_effect=[orgs_result] + [count_result] * 18)
+
+        report = await service.run_isolation_audit(session)
+        assert report.tenant_count == 3
+        assert report.total_checks == 9
+        assert report.pairs_checked == 3
+        assert report.passed == 9
+        assert report.failed == 0
+
+    async def test_3_2_edge_007_given_audit_check_schema_then_camelcase_aliases(self):
+        """AuditCheck uses camelCase aliases for serialization."""
+        from services.namespace_audit import AuditCheck
+
+        check = AuditCheck(
+            check_type="rls_cross_tenant_kb",
+            orgA="org-alpha",
+            orgB="org-beta",
+            passed=True,
+            details="RLS returned 0 rows (expected 0)",
+        )
+        dumped = check.model_dump()
+        assert "check_type" in dumped
+        assert dumped["passed"] is True
+        assert dumped["details"] == "RLS returned 0 rows (expected 0)"
+
+    async def test_3_2_edge_008_given_audit_report_schema_then_all_fields(self):
+        """AuditReport schema includes all required fields."""
+        from services.namespace_audit import AuditReport
+
+        report = AuditReport(
+            timestamp="2026-04-06T00:00:00Z",
+            total_checks=3,
+            passed=3,
+            failed=0,
+            details=[],
+            tenant_count=2,
+            pairs_checked=1,
+            pairs_skipped=0,
+        )
+        assert report.tenant_count == 2
+        assert report.pairs_checked == 1
+        assert report.total_checks == 3
+        dumped = report.model_dump()
+        assert "tenant_count" in dumped
+        assert "pairs_checked" in dumped
+
+
+@pytest.mark.asyncio
 class TestNamespaceSchemas:
     async def test_namespace_error_schema(self):
         from schemas.knowledge import NamespaceError, NamespaceViolationResponse

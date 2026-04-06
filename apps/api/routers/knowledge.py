@@ -742,7 +742,7 @@ async def search_knowledge(
         {
             "query_embedding": str(query_embedding),
             "org_id": org_id,
-            "top_k": request_body.top_k,
+            "top_k": request_body.topK,
             "threshold": threshold,
         },
     )
