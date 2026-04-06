@@ -37,3 +37,7 @@ class Agent(TenantModel, table=True):
         default=0.7,
         description="Voice expressiveness (0.0-1.0)",
     )
+    grounding_config: Optional[dict] = Field(default=None)
+    system_prompt_template: Optional[str] = Field(default=None)
+    config_version: int = Field(default=1)
+    knowledge_base_ids: Optional[dict] = Field(default=None)

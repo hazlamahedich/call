@@ -18,6 +18,7 @@ from routers import (
     agent_management,
     knowledge,
     ai_settings,
+    scripts,
 )
 from routers.ws_transcript import router as ws_transcript_router
 from middleware.auth import AuthMiddleware
@@ -140,3 +141,4 @@ app.include_router(recommendations.router, prefix="/api/v1", tags=["Recommendati
 app.include_router(agent_management.router, prefix="/api/v1", tags=["Agent Management"])
 app.include_router(knowledge.router, prefix="/api/v1", tags=["Knowledge Base"])
 app.include_router(ai_settings.router, prefix="/api/v1", tags=["AI Provider Settings"])
+app.include_router(scripts.router, prefix="/api/v1/scripts", tags=["Scripts"])

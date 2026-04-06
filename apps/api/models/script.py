@@ -12,3 +12,4 @@ class Script(TenantModel, table=True):
     content: str = Field(default="")
     version: int = Field(default=1)
     script_context: str = Field(default="")
+    grounding_mode: Optional[str] = Field(default=None, max_length=20)

@@ -4,8 +4,6 @@ from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
 
-_logger = logging.getLogger(__name__)
-
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "AI Cold Caller API"
@@ -64,6 +62,35 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
 
+    COST_TRACKING_ENABLED: bool = True
+    LLM_MAX_RETRIES: int = 2
+    LLM_RETRY_BACKOFF_BASE: float = 1.0
+    TOKEN_RESERVATION: int = 512
+    GROUNDING_MIN_CONFIDENCE: float = 0.5
+    GROUNDING_DEFAULT_MODE: str = "strict"
+    GROUNDING_MAX_SOURCE_CHUNKS: int = 5
+    SCRIPT_GENERATION_CACHE_TTL: int = 300
+
+    @field_validator("GROUNDING_MIN_CONFIDENCE")
+    @classmethod
+    def validate_min_confidence(cls, v: float) -> float:
+        import logging as _logging
+
+        _log = _logging.getLogger(__name__)
+        clamped = max(0.0, min(1.0, v))
+        if clamped != v:
+            _log.warning("GROUNDING_MIN_CONFIDENCE clamped from %s to %s", v, clamped)
+        return clamped
+
+    @field_validator("GROUNDING_DEFAULT_MODE")
+    @classmethod
+    def validate_grounding_mode(cls, v: str) -> str:
+        if v not in ("strict", "balanced", "creative"):
+            raise ValueError(
+                "GROUNDING_DEFAULT_MODE must be strict, balanced, or creative"
+            )
+        return v
+
     RAG_SIMILARITY_THRESHOLD: float = 0.7
     NAMESPACE_GUARD_ENABLED: bool = True
     NAMESPACE_AUDIT_MAX_PAIRS: int = 100
@@ -71,11 +98,12 @@ class Settings(BaseSettings):
     @field_validator("RAG_SIMILARITY_THRESHOLD")
     @classmethod
     def validate_similarity_threshold(cls, v: float) -> float:
+        import logging as _logging
+
+        _log = _logging.getLogger(__name__)
         clamped = max(0.0, min(1.0, v))
         if clamped != v:
-            _logger.warning(
-                "RAG_SIMILARITY_THRESHOLD clamped from %s to %s", v, clamped
-            )
+            _log.warning("RAG_SIMILARITY_THRESHOLD clamped from %s to %s", v, clamped)
         return clamped
 
     @field_validator("NAMESPACE_AUDIT_MAX_PAIRS")

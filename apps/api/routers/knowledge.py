@@ -40,6 +40,7 @@ from services.embedding import (
     create_embedding_provider,
 )
 from services.knowledge_base_service import KnowledgeBaseService
+from services.knowledge_search import search_knowledge_chunks
 from services.namespace_audit import NamespaceAuditService, AuditReport
 from services.tenant_helpers import require_tenant_resource
 
@@ -723,42 +724,12 @@ async def search_knowledge(
     embedding_service = get_embedding_service()
     query_embedding = await embedding_service.generate_embedding(request_body.query)
 
-    threshold = settings.RAG_SIMILARITY_THRESHOLD
-
-    result = await session.execute(
-        text(
-            "SELECT kc.id, kc.knowledge_base_id, kc.content, kc.metadata, "
-            "1 - (kc.embedding <=> :query_embedding::vector) AS similarity "
-            "FROM knowledge_chunks kc "
-            "JOIN knowledge_bases kb ON kc.knowledge_base_id = kb.id "
-            "WHERE kc.org_id = :org_id "
-            "AND kc.soft_delete = false "
-            "AND kb.status = 'ready' "
-            "AND kb.soft_delete = false "
-            "AND 1 - (kc.embedding <=> :query_embedding::vector) > :threshold "
-            "ORDER BY kc.embedding <=> :query_embedding::vector "
-            "LIMIT :top_k"
-        ),
-        {
-            "query_embedding": str(query_embedding),
-            "org_id": org_id,
-            "top_k": request_body.topK,
-            "threshold": threshold,
-        },
+    results = await search_knowledge_chunks(
+        session=session,
+        query_embedding=query_embedding,
+        org_id=org_id,
+        max_chunks=request_body.topK,
     )
-    rows = result.fetchall()
-
-    results = []
-    for row in rows:
-        results.append(
-            {
-                "chunk_id": row[0],
-                "knowledge_base_id": row[1],
-                "content": row[2],
-                "metadata": row[3],
-                "similarity": float(row[4]),
-            }
-        )
 
     return KnowledgeSearchResponse(
         results=results,
@@ -891,7 +862,6 @@ def get_audit_service() -> NamespaceAuditService:
 @router.post("/audit/isolation", response_model=AuditReport)
 async def audit_isolation(
     request: Request,
-    session: AsyncSession = Depends(get_db),
     org_id: str = Depends(get_current_org_id),
 ):
     is_admin = (
@@ -905,22 +875,19 @@ async def audit_isolation(
             detail={"code": "FORBIDDEN", "message": "Platform admin access required"},
         )
 
-    allowed = await namespace_audit_limiter.check_rate_limit(org_id)
+    client_key = request.client.host if request.client else org_id
+    allowed = await namespace_audit_limiter.check_rate_limit(client_key)
     if not allowed:
         raise HTTPException(
             status_code=429,
             detail={
                 "code": "RATE_LIMIT_EXCEEDED",
-                "message": "Audit rate limit exceeded. Max 1 audit per org per 5 minutes.",
+                "message": "Audit rate limit exceeded. Max 1 per source per 5 minutes.",
             },
         )
 
     audit_session = AsyncSessionLocal()
     try:
-        await audit_session.execute(
-            text("SELECT set_config('app.is_platform_admin', 'true', false)")
-        )
-
         audit_service = get_audit_service()
         report = await audit_service.run_isolation_audit(audit_session)
     finally:
