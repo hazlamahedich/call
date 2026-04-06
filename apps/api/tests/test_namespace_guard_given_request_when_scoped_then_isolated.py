@@ -6,6 +6,7 @@ across all knowledge base endpoints, with structured error responses.
 
 import pytest
 import time
+import uuid
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -18,8 +19,12 @@ from services.namespace_audit import NamespaceAuditService
 from config.settings import settings
 
 
-def _make_row(org_id="org-alpha"):
-    return (org_id,)
+def _unique_org(label="org"):
+    return f"{label}-{uuid.uuid4().hex[:8]}"
+
+
+def _make_row(org_id=None):
+    return (org_id or _unique_org("org"),)
 
 
 def _mock_session(resource_org_id=None):
@@ -33,10 +38,11 @@ def _mock_session(resource_org_id=None):
     return session
 
 
-def _mock_session_with_resource(resource_org_id="org-alpha"):
+def _mock_session_with_resource(resource_org_id=None):
+    org = resource_org_id or _unique_org("org")
     session = MagicMock(spec=AsyncSession)
     result = MagicMock()
-    result.fetchone.return_value = _make_row(resource_org_id)
+    result.fetchone.return_value = _make_row(org)
     session.execute = AsyncMock(return_value=result)
     return session
 
@@ -47,79 +53,115 @@ def _mock_request(path="/api/knowledge/documents/1"):
     return request
 
 
+def _audit_execute_factory(org_ids, cross_tenant_count=0):
+    def execute(stmt, params=None):
+        sql = str(stmt).lower()
+        if "distinct org_id" in sql:
+            result = MagicMock()
+            result.fetchall.return_value = [(oid,) for oid in org_ids]
+            return result
+        if "set_config" in sql:
+            return MagicMock()
+        result = MagicMock()
+        result.scalar.return_value = cross_tenant_count
+        return result
+
+    return execute
+
+
 @pytest.mark.asyncio
+@pytest.mark.p0
 class TestNamespaceGuardCore:
     async def test_3_2_000_given_upload_endpoint_when_called_then_org_id_from_jwt(self):
         """[3.2-UNIT-000] org_id comes from Depends(get_current_org_id), not token.org_id."""
+        org = _unique_org("jwt")
         session = _mock_session()
-        org_id = await verify_namespace_access(session=session, org_id="org-from-jwt")
-        assert org_id == "org-from-jwt"
+        org_id = await verify_namespace_access(session=session, org_id=org)
+        assert org_id == org
+        session.execute.assert_not_called()
 
     async def test_3_2_000a_given_list_documents_when_called_then_org_id_from_jwt(self):
         """[3.2-UNIT-000a] list_documents uses org_id from JWT."""
+        org = _unique_org("jwt")
         session = _mock_session()
-        org_id = await verify_namespace_access(session=session, org_id="org-list-jwt")
-        assert org_id == "org-list-jwt"
+        org_id = await verify_namespace_access(session=session, org_id=org)
+        assert org_id == org
+        session.execute.assert_not_called()
 
-    async def test_3_2_000b_given_get_document_when_called_then_org_id_from_jwt(self):
+    async def test_3_2_000b_given_get_document_when_called_then_org_id_from_jwt(
+        self,
+    ):
         """[3.2-UNIT-000b] get_document uses org_id from JWT."""
-        session = _mock_session_with_resource("org-jwt-owner")
+        org = _unique_org("jwt")
+        session = _mock_session_with_resource(org)
         org_id = await verify_namespace_access(
             resource_id=42,
             request=_mock_request(),
             session=session,
-            org_id="org-jwt-owner",
+            org_id=org,
         )
-        assert org_id == "org-jwt-owner"
+        assert org_id == org
+        assert session.execute.call_count == 1
 
     async def test_3_2_000c_given_delete_endpoint_when_called_then_org_id_from_jwt(
         self,
     ):
         """[3.2-UNIT-000c] delete uses org_id from JWT."""
-        session = _mock_session_with_resource("org-jwt-delete")
+        org = _unique_org("jwt")
+        session = _mock_session_with_resource(org)
         org_id = await verify_namespace_access(
             resource_id=10,
             request=_mock_request(),
             session=session,
-            org_id="org-jwt-delete",
+            org_id=org,
         )
-        assert org_id == "org-jwt-delete"
+        assert org_id == org
+        assert session.execute.call_count == 1
 
     async def test_3_2_000d_given_search_endpoint_when_called_then_org_id_from_jwt(
         self,
     ):
         """[3.2-UNIT-000d] search uses org_id from JWT."""
+        org = _unique_org("jwt")
         session = _mock_session()
-        org_id = await verify_namespace_access(session=session, org_id="org-search-jwt")
-        assert org_id == "org-search-jwt"
+        org_id = await verify_namespace_access(session=session, org_id=org)
+        assert org_id == org
+        session.execute.assert_not_called()
 
     async def test_3_2_000e_given_retry_endpoint_when_called_then_org_id_from_jwt(self):
         """[3.2-UNIT-000e] retry uses org_id from JWT."""
-        session = _mock_session_with_resource("org-jwt-retry")
+        org = _unique_org("jwt")
+        session = _mock_session_with_resource(org)
         org_id = await verify_namespace_access(
             resource_id=7,
             request=_mock_request(),
             session=session,
-            org_id="org-jwt-retry",
+            org_id=org,
         )
-        assert org_id == "org-jwt-retry"
+        assert org_id == org
+        assert session.execute.call_count == 1
 
 
 @pytest.mark.asyncio
+@pytest.mark.p1
 class TestNamespaceGuardAC1:
     async def test_3_2_001_given_valid_org_id_when_searching_then_only_own_vectors(
         self,
     ):
         """[3.2-UNIT-001] Valid org_id returns own resources only."""
+        org = _unique_org("org")
         session = _mock_session()
-        org_id = await verify_namespace_access(session=session, org_id="org-alpha")
-        assert org_id == "org-alpha"
+        org_id = await verify_namespace_access(session=session, org_id=org)
+        assert org_id == org
+        session.execute.assert_not_called()
 
     async def test_3_2_002_given_org_with_no_docs_when_searching_then_empty(self):
         """[3.2-UNIT-002] Empty org gets empty guard pass-through."""
+        org = _unique_org("org")
         session = _mock_session()
-        org_id = await verify_namespace_access(session=session, org_id="org-empty")
-        assert org_id == "org-empty"
+        org_id = await verify_namespace_access(session=session, org_id=org)
+        assert org_id == org
+        session.execute.assert_not_called()
 
     async def test_3_2_003_given_similarity_threshold_when_searching_then_filtered(
         self,
@@ -131,10 +173,11 @@ class TestNamespaceGuardAC1:
 
     async def test_3_2_004_given_search_query_then_guard_overhead_under_5ms(self):
         """[3.2-UNIT-004] Guard overhead is <5ms."""
+        org = _unique_org("org")
         session = _mock_session()
         start = time.monotonic()
         for _ in range(100):
-            await verify_namespace_access(session=session, org_id="org-perf")
+            await verify_namespace_access(session=session, org_id=org)
         elapsed_ms = (time.monotonic() - start) * 1000 / 100
         assert elapsed_ms < 5.0, f"Guard overhead {elapsed_ms:.2f}ms exceeds 5ms"
 
@@ -142,28 +185,32 @@ class TestNamespaceGuardAC1:
         self,
     ):
         """[3.2-UNIT-005] Guard disabled still returns org_id."""
+        org = _unique_org("org")
         with patch.object(settings, "NAMESPACE_GUARD_ENABLED", False):
-            session = _mock_session_with_resource("org-other")
+            session = _mock_session_with_resource(_unique_org("other"))
             org_id = await verify_namespace_access(
                 resource_id=99,
                 request=_mock_request(),
                 session=session,
-                org_id="org-mine",
+                org_id=org,
             )
-            assert org_id == "org-mine"
+            assert org_id == org
 
 
 @pytest.mark.asyncio
+@pytest.mark.p0
 class TestNamespaceGuardAC2:
     async def test_3_2_006_given_org_a_token_when_requesting_org_b_doc_then_403(self):
         """[3.2-UNIT-006] Cross-tenant document access returns 403."""
-        session = _mock_session_with_resource("org-beta")
+        org_a = _unique_org("org")
+        org_b = _unique_org("org")
+        session = _mock_session_with_resource(org_b)
         with pytest.raises(HTTPException) as exc_info:
             await verify_namespace_access(
                 resource_id=42,
                 request=_mock_request(),
                 session=session,
-                org_id="org-alpha",
+                org_id=org_a,
             )
         assert exc_info.value.status_code == 403
         detail = exc_info.value.detail
@@ -171,31 +218,37 @@ class TestNamespaceGuardAC2:
 
     async def test_3_2_007_given_org_a_token_when_deleting_org_b_doc_then_403(self):
         """[3.2-UNIT-007] Cross-tenant delete returns 403."""
-        session = _mock_session_with_resource("org-beta")
+        org_a = _unique_org("org")
+        org_b = _unique_org("org")
+        session = _mock_session_with_resource(org_b)
         with pytest.raises(HTTPException) as exc_info:
             await verify_namespace_access(
                 resource_id=10,
                 request=_mock_request("/api/knowledge/documents/10"),
                 session=session,
-                org_id="org-alpha",
+                org_id=org_a,
             )
         assert exc_info.value.status_code == 403
 
     async def test_3_2_008_given_org_a_token_when_retrying_org_b_doc_then_403(self):
         """[3.2-UNIT-008] Cross-tenant retry returns 403."""
-        session = _mock_session_with_resource("org-beta")
+        org_a = _unique_org("org")
+        org_b = _unique_org("org")
+        session = _mock_session_with_resource(org_b)
         with pytest.raises(HTTPException) as exc_info:
             await verify_namespace_access(
                 resource_id=5,
                 request=_mock_request("/api/knowledge/documents/5/retry"),
                 session=session,
-                org_id="org-alpha",
+                org_id=org_a,
             )
         assert exc_info.value.status_code == 403
 
     async def test_3_2_009_given_cross_tenant_attempt_then_structured_log(self):
         """[3.2-UNIT-009] Violation attempt is logged with structured fields."""
-        session = _mock_session_with_resource("org-beta")
+        org_a = _unique_org("org")
+        org_b = _unique_org("org")
+        session = _mock_session_with_resource(org_b)
         with (
             patch("middleware.namespace_guard.logger") as mock_logger,
             pytest.raises(HTTPException),
@@ -204,25 +257,26 @@ class TestNamespaceGuardAC2:
                 resource_id=42,
                 request=_mock_request(),
                 session=session,
-                org_id="org-alpha",
+                org_id=org_a,
             )
         mock_logger.warning.assert_called_once()
         call_kwargs = mock_logger.warning.call_args
         extra = call_kwargs.kwargs.get("extra") or call_kwargs[1].get("extra", {})
         assert extra["code"] == "NAMESPACE_VIOLATION"
-        assert extra["org_id"] == "org-alpha"
+        assert extra["org_id"] == org_a
         assert extra["attempted_resource_id"] == 42
-        assert extra["resource_owner_org_id"] == "org-beta"
+        assert extra["resource_owner_org_id"] == org_b
 
     async def test_3_2_010_given_nonexistent_doc_id_when_requesting_then_404(self):
         """[3.2-UNIT-010] Non-existent document returns 404, not 403."""
+        org = _unique_org("org")
         session = _mock_session(resource_org_id=None)
         with pytest.raises(HTTPException) as exc_info:
             await verify_namespace_access(
                 resource_id=999,
                 request=_mock_request(),
                 session=session,
-                org_id="org-alpha",
+                org_id=org,
             )
         assert exc_info.value.status_code == 404
         detail = exc_info.value.detail
@@ -230,6 +284,7 @@ class TestNamespaceGuardAC2:
 
 
 @pytest.mark.asyncio
+@pytest.mark.p2
 class TestNamespaceGuardAC3:
     async def test_3_2_011_given_threshold_07_then_only_similar_above(self):
         """[3.2-UNIT-011] Default threshold 0.7 filters low-similarity results."""
@@ -257,6 +312,7 @@ class TestNamespaceGuardAC3:
 
 
 @pytest.mark.asyncio
+@pytest.mark.p1
 class TestNamespaceGuardAC4:
     async def test_3_2_016_given_upload_without_org_id_then_403(self):
         """[3.2-UNIT-016] Missing org_id returns 403."""
@@ -268,18 +324,23 @@ class TestNamespaceGuardAC4:
 
     async def test_3_2_017_given_list_docs_then_only_own_org_returned(self):
         """[3.2-UNIT-017] Collection endpoints return org_id for filtering."""
+        org = _unique_org("org")
         session = _mock_session()
-        org_id = await verify_namespace_access(session=session, org_id="org-list")
-        assert org_id == "org-list"
+        org_id = await verify_namespace_access(session=session, org_id=org)
+        assert org_id == org
+        session.execute.assert_not_called()
 
     async def test_3_2_018_given_search_request_then_guard_runs_first(self):
         """[3.2-UNIT-018] Guard executes before business logic (returns org_id)."""
+        org = _unique_org("org")
         session = _mock_session()
-        org_id = await verify_namespace_access(session=session, org_id="org-search")
-        assert org_id == "org-search"
+        org_id = await verify_namespace_access(session=session, org_id=org)
+        assert org_id == org
+        session.execute.assert_not_called()
 
 
 @pytest.mark.asyncio
+@pytest.mark.p1
 class TestNamespaceGuardAC5:
     async def test_3_2_019_given_two_tenants_when_audit_then_cross_tenant_returns_0(
         self,
@@ -287,12 +348,11 @@ class TestNamespaceGuardAC5:
         """[3.2-UNIT-019] Audit verifies cross-tenant isolation."""
         service = NamespaceAuditService()
         session = MagicMock(spec=AsyncSession)
-        orgs_result = MagicMock()
-        orgs_result.fetchall.return_value = [("org-a",), ("org-b",)]
-        count_result = MagicMock()
-        count_result.scalar.return_value = 0
-        # 1 orgs query + 1 pair × (1 set_config + 1 count) × 3 checks = 1 + 6 = 7
-        session.execute = AsyncMock(side_effect=[orgs_result] + [count_result] * 7)
+        session.execute = AsyncMock(
+            side_effect=_audit_execute_factory(
+                [_unique_org("org"), _unique_org("org")], cross_tenant_count=0
+            )
+        )
 
         report = await service.run_isolation_audit(session)
         assert report.passed == report.total_checks
@@ -305,6 +365,8 @@ class TestNamespaceGuardAC5:
         from fastapi import HTTPException
         from routers.knowledge import audit_isolation
 
+        org = _unique_org("org")
+
         mock_request = MagicMock()
         mock_request.state.user_role = "regular_user"
 
@@ -314,7 +376,7 @@ class TestNamespaceGuardAC5:
             await audit_isolation(
                 request=mock_request,
                 session=session,
-                org_id="org-non-admin",
+                org_id=org,
             )
         assert exc_info.value.status_code == 403
         detail = exc_info.value.detail
@@ -323,13 +385,11 @@ class TestNamespaceGuardAC5:
     async def test_3_2_021_given_audit_results_then_all_pairs_reported(self):
         """[3.2-UNIT-021] Report contains all tenant pair combinations."""
         service = NamespaceAuditService()
+        org_ids = [_unique_org("org") for _ in range(3)]
         session = MagicMock(spec=AsyncSession)
-        orgs_result = MagicMock()
-        orgs_result.fetchall.return_value = [("org-a",), ("org-b",), ("org-c",)]
-        count_result = MagicMock()
-        count_result.scalar.return_value = 0
-        # 3 orgs → 3 pairs × 3 checks × 2 queries each = 18 + 1 orgs query = 19
-        session.execute = AsyncMock(side_effect=[orgs_result] + [count_result] * 19)
+        session.execute = AsyncMock(
+            side_effect=_audit_execute_factory(org_ids, cross_tenant_count=0)
+        )
 
         report = await service.run_isolation_audit(session)
         assert report.tenant_count == 3
@@ -339,9 +399,9 @@ class TestNamespaceGuardAC5:
         """[3.2-UNIT-022] Processing docs excluded from audit."""
         service = NamespaceAuditService()
         session = MagicMock(spec=AsyncSession)
-        orgs_result = MagicMock()
-        orgs_result.fetchall.return_value = []
-        session.execute = AsyncMock(return_value=orgs_result)
+        session.execute = AsyncMock(
+            side_effect=_audit_execute_factory([], cross_tenant_count=0)
+        )
 
         report = await service.run_isolation_audit(session)
         assert report.total_checks == 0
@@ -350,22 +410,11 @@ class TestNamespaceGuardAC5:
     async def test_3_2_023_given_many_pairs_when_audit_then_limited(self):
         """[3.2-UNIT-023] Audit limited to NAMESPACE_AUDIT_MAX_PAIRS."""
         service = NamespaceAuditService()
+        many_orgs = [_unique_org("org") for _ in range(20)]
         session = MagicMock(spec=AsyncSession)
-        many_orgs = [(f"org-{i}",) for i in range(20)]
-        orgs_result = MagicMock()
-        orgs_result.fetchall.return_value = many_orgs
-        count_result = MagicMock()
-        count_result.scalar.return_value = 0
-        call_count = 0
-
-        async def _mock_execute(*args, **kwargs):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                return orgs_result
-            return count_result
-
-        session.execute = AsyncMock(side_effect=_mock_execute)
+        session.execute = AsyncMock(
+            side_effect=_audit_execute_factory(many_orgs, cross_tenant_count=0)
+        )
 
         report = await service.run_isolation_audit(session)
         assert report.pairs_checked <= settings.NAMESPACE_AUDIT_MAX_PAIRS
@@ -381,19 +430,18 @@ class TestNamespaceGuardAC5:
     async def test_3_2_025_given_broken_rls_when_audit_then_reports_failed(self):
         """[3.2-UNIT-025] Audit detects real RLS failures."""
         service = NamespaceAuditService()
+        org_ids = [_unique_org("org"), _unique_org("org")]
         session = MagicMock(spec=AsyncSession)
-        orgs_result = MagicMock()
-        orgs_result.fetchall.return_value = [("org-a",), ("org-b",)]
-        count_result = MagicMock()
-        count_result.scalar.return_value = 5
-        # 1 orgs query + 1 pair × 3 checks × 2 queries = 7
-        session.execute = AsyncMock(side_effect=[orgs_result] + [count_result] * 7)
+        session.execute = AsyncMock(
+            side_effect=_audit_execute_factory(org_ids, cross_tenant_count=5)
+        )
 
         report = await service.run_isolation_audit(session)
         assert report.failed > 0
 
 
 @pytest.mark.asyncio
+@pytest.mark.p2
 class TestNamespaceGuardAC6:
     @pytest.mark.integration
     async def test_3_2_026_given_search_with_guard_then_latency_under_200ms(self):
@@ -402,14 +450,15 @@ class TestNamespaceGuardAC6:
         NOTE: This test uses mock sessions. For a true performance benchmark
         with 500+ chunks, run as an integration test against a real PostgreSQL DB.
         """
-        session = _mock_session_with_resource("org-perf")
+        org = _unique_org("org")
+        session = _mock_session_with_resource(org)
         start = time.monotonic()
         for _ in range(50):
             await verify_namespace_access(
                 resource_id=1,
                 request=_mock_request(),
                 session=session,
-                org_id="org-perf",
+                org_id=org,
             )
         elapsed_ms = (time.monotonic() - start) * 1000 / 50
         assert elapsed_ms < 200, f"Average latency {elapsed_ms:.2f}ms exceeds 200ms"
@@ -421,42 +470,48 @@ class TestNamespaceGuardAC6:
         NOTE: This test uses mock sessions. For a true performance benchmark
         with 500+ chunks, run as an integration test against a real PostgreSQL DB.
         """
+        org = _unique_org("org")
         session = _mock_session()
         start = time.monotonic()
         for _ in range(100):
-            await verify_namespace_access(session=session, org_id="org-perf")
+            await verify_namespace_access(session=session, org_id=org)
         elapsed_ms = (time.monotonic() - start) * 1000 / 100
         assert elapsed_ms < 5.0, f"Guard overhead {elapsed_ms:.2f}ms exceeds 5ms"
 
 
 @pytest.mark.asyncio
+@pytest.mark.p1
 class TestNamespaceGuardAC7:
     async def test_3_2_028_given_flag_off_cross_tenant_then_no_403(self):
         """[3.2-UNIT-028] Flag off skips ownership check — no 403 for cross-tenant."""
+        org = _unique_org("org")
         with patch.object(settings, "NAMESPACE_GUARD_ENABLED", False):
-            session = _mock_session_with_resource("org-other")
+            session = _mock_session_with_resource(_unique_org("other"))
             org_id = await verify_namespace_access(
                 resource_id=42,
                 request=_mock_request(),
                 session=session,
-                org_id="org-mine",
+                org_id=org,
             )
-            assert org_id == "org-mine"
+            assert org_id == org
 
     async def test_3_2_029_given_flag_off_list_docs_then_own_org_only(self):
         """[3.2-UNIT-029] Flag off still uses org_id for collection queries."""
+        org = _unique_org("org")
         with patch.object(settings, "NAMESPACE_GUARD_ENABLED", False):
             session = _mock_session()
-            org_id = await verify_namespace_access(session=session, org_id="org-filter")
-            assert org_id == "org-filter"
+            org_id = await verify_namespace_access(session=session, org_id=org)
+            assert org_id == org
 
 
 @pytest.mark.asyncio
+@pytest.mark.p1
 class TestNamespaceEdgeCases:
     async def test_3_2_edge_001_given_soft_deleted_resource_when_accessed_then_404(
         self,
     ):
         """Soft-deleted resources return 404 — no information leakage."""
+        org = _unique_org("org")
         session = MagicMock(spec=AsyncSession)
         result = MagicMock()
         result.fetchone.return_value = None
@@ -467,7 +522,7 @@ class TestNamespaceEdgeCases:
                 resource_id=42,
                 request=_mock_request(),
                 session=session,
-                org_id="org-alpha",
+                org_id=org,
             )
         assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
         detail = exc_info.value.detail
@@ -485,10 +540,11 @@ class TestNamespaceEdgeCases:
         self,
     ):
         """Cross-tenant with request=None logs 'unknown' endpoint but still blocks."""
-        session = _mock_session_with_resource("org-other")
+        org = _unique_org("org")
+        session = _mock_session_with_resource(_unique_org("other"))
         with pytest.raises(HTTPException) as exc_info:
             await verify_namespace_access(
-                resource_id=1, request=None, session=session, org_id="org-mine"
+                resource_id=1, request=None, session=session, org_id=org
             )
         assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
 
@@ -496,9 +552,9 @@ class TestNamespaceEdgeCases:
         """Audit with 0 active orgs returns empty report."""
         service = NamespaceAuditService()
         session = MagicMock(spec=AsyncSession)
-        result = MagicMock()
-        result.fetchall.return_value = []
-        session.execute = AsyncMock(return_value=result)
+        session.execute = AsyncMock(
+            side_effect=_audit_execute_factory([], cross_tenant_count=0)
+        )
 
         report = await service.run_isolation_audit(session)
         assert report.tenant_count == 0
@@ -511,10 +567,11 @@ class TestNamespaceEdgeCases:
     async def test_3_2_edge_005_given_audit_with_one_org_then_empty_report(self):
         """Audit with 1 org returns empty report — no pairs to check."""
         service = NamespaceAuditService()
+        org_id = _unique_org("org")
         session = MagicMock(spec=AsyncSession)
-        result = MagicMock()
-        result.fetchall.return_value = [("org-alpha",)]
-        session.execute = AsyncMock(return_value=result)
+        session.execute = AsyncMock(
+            side_effect=_audit_execute_factory([org_id], cross_tenant_count=0)
+        )
 
         report = await service.run_isolation_audit(session)
         assert report.tenant_count == 1
@@ -524,16 +581,11 @@ class TestNamespaceEdgeCases:
     async def test_3_2_edge_006_given_audit_with_three_orgs_then_three_pairs(self):
         """Audit with 3 orgs produces 3 pairs (C(3,2)) and 9 checks."""
         service = NamespaceAuditService()
+        org_ids = [_unique_org("org") for _ in range(3)]
         session = MagicMock(spec=AsyncSession)
-        orgs_result = MagicMock()
-        orgs_result.fetchall.return_value = [
-            ("org-a",),
-            ("org-b",),
-            ("org-c",),
-        ]
-        count_result = MagicMock()
-        count_result.scalar.return_value = 0
-        session.execute = AsyncMock(side_effect=[orgs_result] + [count_result] * 18)
+        session.execute = AsyncMock(
+            side_effect=_audit_execute_factory(org_ids, cross_tenant_count=0)
+        )
 
         report = await service.run_isolation_audit(session)
         assert report.tenant_count == 3
@@ -546,10 +598,12 @@ class TestNamespaceEdgeCases:
         """AuditCheck uses camelCase aliases for serialization."""
         from services.namespace_audit import AuditCheck
 
+        org_a = _unique_org("org")
+        org_b = _unique_org("org")
         check = AuditCheck(
             check_type="rls_cross_tenant_kb",
-            orgA="org-alpha",
-            orgB="org-beta",
+            orgA=org_a,
+            orgB=org_b,
             passed=True,
             details="RLS returned 0 rows (expected 0)",
         )
@@ -581,6 +635,7 @@ class TestNamespaceEdgeCases:
 
 
 @pytest.mark.asyncio
+@pytest.mark.p2
 class TestNamespaceSchemas:
     async def test_namespace_error_schema(self):
         from schemas.knowledge import NamespaceError, NamespaceViolationResponse

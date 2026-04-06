@@ -4,6 +4,17 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "p0: Critical path tests (smoke)")
+    config.addinivalue_line("markers", "p1: High priority tests")
+    config.addinivalue_line("markers", "p2: Medium priority tests")
+    config.addinivalue_line(
+        "markers", "integration: Integration tests requiring external resources"
+    )
+
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
