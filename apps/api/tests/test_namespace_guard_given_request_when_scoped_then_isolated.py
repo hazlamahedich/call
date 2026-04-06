@@ -370,12 +370,9 @@ class TestNamespaceGuardAC5:
         mock_request = MagicMock()
         mock_request.state.user_role = "regular_user"
 
-        session = MagicMock(spec=AsyncSession)
-
         with pytest.raises(HTTPException) as exc_info:
             await audit_isolation(
                 request=mock_request,
-                session=session,
                 org_id=org,
             )
         assert exc_info.value.status_code == 403
