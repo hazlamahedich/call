@@ -40,4 +40,4 @@ class Agent(TenantModel, table=True):
     grounding_config: Optional[dict] = Field(default=None)
     system_prompt_template: Optional[str] = Field(default=None)
     config_version: int = Field(default=1)
-    knowledge_base_ids: Optional[dict] = Field(default=None)
+    knowledge_base_ids: Optional[list] = Field(default=None)

@@ -1,11 +1,9 @@
-"""Grounding service for computing grounding confidence scores.
+"""Script generation service with RAG pipeline, grounding, and confidence scoring.
 
-Computes n-gram overlap between response text and source chunk content.
-
-Uses bigram + unigram overlap between response text and source chunks, weighted combination of chunk coverage,
-average similarity, and attribution ratio.
+Orchestrates: retrieve → ground → generate → validate → cache.
 """
 
+import asyncio
 from dataclasses import dataclass
 import hashlib
 import json
@@ -17,7 +15,6 @@ from sqlalchemy import text
 
 from services.knowledge_search import search_knowledge_chunks
 from services.grounding import GroundingService, GroundingResult
-from services.llm.providers.factory import create_llm_provider
 from services.llm.service import LLMService
 
 from config.settings import settings
@@ -123,11 +120,14 @@ class ScriptGenerationService:
 
         cached = await self._check_cache(query, org_id, agent_id)
         if cached:
-            cached_data = json.loads(cached)
-            latency_ms = (time.monotonic() - start) * 1000
-            cached_data["latency_ms"] = latency_ms
-            cached_data["cached"] = True
-            return ScriptGenerationResult(**cached_data)
+            try:
+                cached_data = json.loads(cached)
+                latency_ms = (time.monotonic() - start) * 1000
+                cached_data["latency_ms"] = latency_ms
+                cached_data["cached"] = True
+                return ScriptGenerationResult(**cached_data)
+            except (json.JSONDecodeError, None:
+                logger.warning("Failed to deserialize cached result, treating as cache miss")
 
         query_embedding = await self._embedding.generate_embedding(query)
         kb_ids = None
@@ -139,18 +139,14 @@ class ScriptGenerationService:
         )
 
         if not chunks:
-            total_all = await self._count_total_chunks(org_id, kb_ids)
-            result = self._generate_no_knowledge_response(
-                query=query,
-                org_id=org_id,
-                total_chunks_scanned=total_all,
-                max_similarity=max((c["similarity"] for c in chunks))
-                if chunks
-                else 0.0,
+            total_all = total_scanned
+            event_type = (
+                "empty_knowledge_base" if total_all == 0 else "no_relevant_chunks"
             )
             latency_ms = (time.monotonic() - start) * 1000
+
             self._log_audit(
-                event_type="no_relevant_chunks",
+                event_type=event_type,
                 query=query,
                 org_id=org_id,
                 confidence=0.0,
@@ -160,66 +156,19 @@ class ScriptGenerationService:
                 latency_ms=latency_ms,
                 grounding_mode=grounding_mode,
             )
-            return result
 
-        system_prompt, user_message, was_truncated = self._build_grounded_prompt(
-            query, chunks, grounding_mode, system_prompt_template
-        )
-
-        if was_truncated:
-            logger.warning(
-                "Context truncated due to token budget",
-                extra={
-                    "original_chunks": len(chunks),
-                    "retained_chunks": len(
-                        [c for c in chunks if c.get("_included", False)]
-                    ),
-                },
+            return ScriptGenerationResult(
+                response=NO_KNOWLEDGE_FALLBACK,
+                grounding_confidence=0.0,
+                is_low_confidence=True,
+                source_chunks=[],
+                model=settings.AI_LLM_MODEL,
+                latency_ms=latency_ms,
+                grounding_mode=grounding_mode,
+                was_truncated=False,
+                cached=False,
+                cost_estimate=0.0,
             )
-
-        llm_response = await self._call_llm_with_retry(system_prompt, user_message)
-
-        grounding_result = GroundingService.compute_confidence(
-            chunks, llm_response, max_source_chunks, min_confidence
-        )
-
-        latency_ms = (time.monotonic() - start) * 1000
-        cost = self._estimate_cost(system_prompt, user_message, llm_response)
-
-        self._log_audit(
-            event_type="generation_completed",
-            query=query,
-            org_id=org_id,
-            confidence=grounding_result.score,
-            chunks=chunks,
-            latency_ms=latency_ms,
-            grounding_mode=grounding_mode,
-            was_truncated=was_truncated,
-            cost=cost,
-        )
-
-        result = ScriptGenerationResult(
-            response=llm_response,
-            grounding_confidence=grounding_result.score,
-            is_low_confidence=grounding_result.is_low_confidence,
-            source_chunks=[
-                {
-                    "chunk_id": c["chunk_id"],
-                    "knowledge_base_id": c["knowledge_base_id"],
-                    "similarity": c["similarity"],
-                }
-                for c in chunks
-            ],
-            model=settings.AI_LLM_MODEL,
-            latency_ms=latency_ms,
-            grounding_mode=grounding_mode,
-            was_truncated=was_truncated,
-            cached=False,
-            cost_estimate=cost,
-        )
-
-        await self._cache_result(query, org_id, agent_id, result)
-        return result
 
     async def _retrieve_context(
         self,
@@ -282,7 +231,9 @@ class ScriptGenerationService:
         system_prompt_template=None,
     ):
         base_system = system_prompt_template or DEFAULT_SYSTEM_PROMPT
-        grounding_instruction = GROUNDING_INSTRUCTIONS[grounding_mode]
+        grounding_instruction = GROUNDING_INSTRUCTIONS.get(
+            grounding_mode, GROUNDING_INSTRUCTIONS[settings.GROUNDING_DEFAULT_MODE]
+        )
         system_prompt = f"{base_system}\n\n{grounding_instruction}"
 
         sorted_chunks = sorted(chunks, key=lambda c: c["similarity"], reverse=True)
@@ -335,8 +286,6 @@ class ScriptGenerationService:
                             "attempt": attempt + 1,
                         },
                     )
-                    import asyncio
-
                     await asyncio.sleep(delay)
                 else:
                     logger.error(
@@ -352,16 +301,21 @@ class ScriptGenerationService:
         raise last_error or RuntimeError("LLM call failed with no error captured")
 
     def _generate_no_knowledge_response(
-        self, query, org_id, total_chunks_scanned, max_similarity
+        self,
+        query,
+        org_id,
+        total_chunks_scanned,
+        max_similarity,
+        grounding_mode,
     ):
         return ScriptGenerationResult(
             response=NO_KNOWLEDGE_FALLBACK,
             grounding_confidence=0.0,
             is_low_confidence=True,
             source_chunks=[],
-            model="none",
+            model=settings.AI_LLM_MODEL,
             latency_ms=0.0,
-            grounding_mode="none",
+            grounding_mode=grounding_mode,
             was_truncated=False,
             cached=False,
             cost_estimate=0.0,
