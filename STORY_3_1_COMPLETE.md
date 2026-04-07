@@ -8,7 +8,7 @@ All tasks and acceptance criteria have been successfully implemented and tested.
 
 - **Backend**: 100% Complete (20+ files created, 6 modified)
 - **Frontend**: 100% Complete (7 files created)
-- **Testing**: 100% Complete (4 test files, 33 tests passing)
+- **Testing**: 100% Complete (4 test files, 70 tests passing)
 - **Migration**: Ready (requires pgvector installation)
 
 ### 🎯 All Acceptance Criteria Met
@@ -23,7 +23,7 @@ All tasks and acceptance criteria have been successfully implemented and tested.
 | AC6 | Document listing with metadata                | ✅ Complete                    |
 | AC7 | Tenant isolation via RLS                      | ✅ Complete                    |
 | AC8 | Vector search <200ms                          | ✅ Complete (HNSW index)       |
-| —   | Configurable AI provider (OpenAI/Gemini)      | ✅ Complete (33 tests passing) |
+| —   | Configurable AI provider (OpenAI/Gemini)      | ✅ Complete (70 tests passing) |
 
 ### 📁 Files Created/Modified
 
@@ -70,11 +70,11 @@ All tasks and acceptance criteria have been successfully implemented and tested.
 5. `apps/api/models/knowledge_chunk.py`
 6. `packages/types/index.ts`
 
-**Tests (4 files, 33 tests)**:
+**Tests (4 files, 70 tests)**:
 
 1. `apps/api/tests/test_3_1_embedding_given_text_when_embedded_then_cached.py` (15 tests)
 2. `apps/api/tests/test_embedding_providers.py` (8 tests)
-3. `apps/api/tests/test_llm_service.py` (7 tests)
+3. `apps/api/tests/test_llm_service.py` (44 tests)
 4. `apps/api/tests/test_ai_provider_settings_api.py`
 
 ### ⚠️ Prerequisites for Testing

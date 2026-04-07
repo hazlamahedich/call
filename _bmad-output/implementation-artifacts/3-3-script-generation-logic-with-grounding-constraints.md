@@ -7,6 +7,7 @@ Last Updated: 2026-04-07
 **Adversarial Review:** 2026-04-06 — 32 findings addressed (see Appendix A)
 **Validation:** 2026-04-06 — 6 critical, 14 enhancement, 9 optimization findings applied (see Appendix B)
 **Code Review Fix Pass:** 2026-04-07 — 3 CRITICAL, 7 HIGH, 8 MEDIUM + deferred items (Redis wiring, cache invalidation, audit isolation) addressed (see Appendix C)
+**Test Expansion:** 2026-04-07 — `test_llm_service.py` expanded from 7 → 44 tests (providers, factory, service, ABC, integration)
 
 ---
 
@@ -22,15 +23,15 @@ Last Updated: 2026-04-07
 - Story 3.2 (Per-Tenant RAG Namespacing) MUST be complete — provides Namespace Guard, `verify_namespace_access()`, `RAG_SIMILARITY_THRESHOLD`, tenant-scoped search
 - Story 1.3 (PostgreSQL RLS) MUST be complete — provides `TenantModel`, `TenantService`, `set_tenant_context()`, RLS policies
 - Story 1.2 (Clerk Auth) MUST be complete — provides JWT validation, `org_id` extraction
-- LLM provider abstraction MUST be available — `services/llm/` with `LLMService`, `LLMProvider`, factory pattern (OpenAI + Gemini)
+- LLM provider abstraction MUST be available — `services/llm/` with `LLMService`, `LLMProvider`, factory pattern (OpenAI + Gemini). Tested via `tests/test_llm_service.py` (44 tests: provider unit tests, factory routing, service convenience methods, streaming, ABC enforcement, end-to-end integration)
 - Redis instance running (for response caching)
 
 **Existing Infrastructure to Reuse**:
 - `apps/api/services/knowledge_search.py` — **SHARED SERVICE** extracted from Story 3.1's `knowledge.py` search logic. Use `search_knowledge_chunks()` function directly. If this file doesn't exist yet, extract it from `apps/api/routers/knowledge.py` as the FIRST task (see Phase 0 below).
 - `apps/api/services/embedding/service.py` → `EmbeddingService` with provider abstraction — generates embeddings via OpenAI/Gemini
-- `apps/api/services/llm/service.py` → `LLMService` with `generate()` and `generate_stream()` — **use this for LLM calls, do NOT create a new LLM client**
-- `apps/api/services/llm/providers/factory.py` → `create_llm_provider(settings)` — creates the appropriate LLM provider
-- `apps/api/services/llm/providers/base.py` → `LLMProvider`, `LLMMessage`, `LLMResponse` — abstract base
+- `apps/api/services/llm/service.py` → `LLMService` with `generate()`, `generate_stream()`, `summarize()` — **use this for LLM calls, do NOT create a new LLM client** — tested with 44 tests in `tests/test_llm_service.py`
+- `apps/api/services/llm/providers/factory.py` → `create_llm_provider(settings)` — creates the appropriate LLM provider (OpenAI or Gemini based on `AI_PROVIDER`)
+- `apps/api/services/llm/providers/base.py` → `LLMProvider` ABC, `LLMMessage` dataclass, `LLMResponse` dataclass — abstract base with `complete()`, `stream()`, `model_name`
 - `apps/api/config/settings.py` → `AI_PROVIDER`, `AI_LLM_MODEL`, `AI_LLM_TEMPERATURE`, `AI_LLM_MAX_TOKENS`, `RAG_SIMILARITY_THRESHOLD` — all already configured
 - `apps/api/middleware/namespace_guard.py` → `verify_namespace_access()` — reuse for all new endpoints
 - `apps/api/dependencies/org_context.py` → `get_current_org_id` — reuse for org_id extraction
@@ -1019,9 +1020,11 @@ The LLM service supports `generate_stream()` but this story uses `generate()` on
 ### Technology Stack
 
 **LLM (Existing — DO NOT CHANGE)**:
-- `services/llm/service.py` — `LLMService` with `generate()` and `generate_stream()`
-- `services/llm/providers/base.py` — `LLMProvider` abstract base with `complete()` and `stream()`
-- `services/llm/providers/factory.py` — `create_llm_provider(settings)` creates OpenAI or Gemini provider
+- `services/llm/service.py` — `LLMService` with `generate()`, `generate_stream()`, `summarize()` (44 tests in `tests/test_llm_service.py`)
+- `services/llm/providers/base.py` — `LLMProvider` abstract base with `complete()` and `stream()`, `LLMMessage` dataclass, `LLMResponse` dataclass
+- `services/llm/providers/openai_provider.py` — `OpenAILLMProvider` wrapping `AsyncOpenAI` chat completions
+- `services/llm/providers/gemini_provider.py` — `GeminiLLMProvider` wrapping `google-genai` SDK with role mapping (`system`/`user` → `user`, `assistant` → `model`)
+- `services/llm/providers/factory.py` — `create_llm_provider(settings)` creates OpenAI or Gemini provider based on `AI_PROVIDER`
 - `config/settings.py` — `AI_PROVIDER`, `AI_LLM_MODEL`, `AI_LLM_TEMPERATURE`, `AI_LLM_MAX_TOKENS`
 
 **Embeddings (Existing — DO NOT CHANGE)**:
@@ -1443,6 +1446,7 @@ claude-sonnet-4-20250514 / Claude Sonnet 4 (via opencode CLI)
 10. **generate_response pipeline completed:** Original implementation was a stub (only cache hit + empty chunks). Full pipeline added: build prompt → call LLM → compute grounding → cache → audit → return
 11. **Settings validators added:** GROUNDING_MAX_SOURCE_CHUNKS >= 1, LLM_MAX_RETRIES >= 0, LLM_RETRY_BACKOFF_BASE > 0, SCRIPT_GENERATION_CACHE_TTL >= 1, model validator TOKEN_RESERVATION < AI_LLM_MAX_TOKENS
 12. **Key bug fixes:** syntax error `except (json.JSONDecodeError, None:` → `(json.JSONDecodeError, TypeError)`, invalidate_cache scan pattern fixed for agent_id=None, _estimate_cost double-charging of output tokens corrected, _log_audit f-string → lazy %s formatting, _build_grounded_prompt empty context fallback, ZeroDivision guard in grounding.py, _count_total_chunks try/except fallback for mock sessions, truncation warning log added
+13. **LLM provider test expansion:** `tests/test_llm_service.py` expanded from 7 → 44 tests covering OpenAI provider (complete, stream, kwargs, null content, no usage, message formatting), Gemini provider (complete, stream, map_messages, null text, no metadata), factory (OpenAI/Gemini routing, custom models), LLMService (generate, generate_stream, summarize, default/override params, extra kwargs), ABC enforcement (abstract instantiation, incomplete subclass, complete subclass), and end-to-end integration (factory→service wiring for both providers)
 
 ### File List
 
@@ -1455,6 +1459,7 @@ claude-sonnet-4-20250514 / Claude Sonnet 4 (via opencode CLI)
 - `apps/api/migrations/versions/p2q3r4s5t6u7_add_grounding_config_to_agents.py` — Alembic migration (Phase 2)
 - `apps/api/tests/test_3_3_script_generation_given_query_when_grounded_then_accurate.py` — 63 unit tests (all passing)
 - `apps/api/tests/test_3_3_integration_given_pipeline_when_wired_then_end_to_end.py` — 12 integration tests [3.3-INT-001] through [3.3-INT-005] (all passing)
+- `apps/api/tests/test_llm_service.py` — 44 LLM provider tests (expanded from 7): providers, factory, service, ABC enforcement, integration (all passing)
 
 #### Modified (existing files):
 - `apps/api/models/agent.py` — added grounding_config, system_prompt_template, config_version, knowledge_base_ids fields
@@ -1487,6 +1492,7 @@ claude-sonnet-4-20250514 / Claude Sonnet 4 (via opencode CLI)
 | 2026-04-07 | Added settings validators: GROUNDING_MAX_SOURCE_CHUNKS>=1, LLM_MAX_RETRIES>=0, LLM_RETRY_BACKOFF_BASE>0, SCRIPT_GENERATION_CACHE_TTL>=1, TOKEN_RESERVATION<AI_LLM_MAX_TOKENS | Dev Agent |
 | 2026-04-07 | Completed generate_response pipeline (was stub), fixed syntax error, invalidate_cache scan pattern, _estimate_cost double-charging, _log_audit lazy formatting, _build_grounded_prompt fallback, _count_total_chunks try/except, truncation warning log (f25d9ce) | Dev Agent |
 | 2026-04-07 | All 75 tests passing (46 unit + 12 integration + 17 existing), pushed to remote | Dev Agent |
+| 2026-04-07 | Expanded `test_llm_service.py` from 7 → 44 tests: OpenAI/Gemini provider complete+stream+edge cases, factory routing, LLMService generate/generate_stream/summarize, ABC enforcement, end-to-end factory→service integration (all 44 passing) | Dev Agent |
 
 ---
 
@@ -1549,6 +1555,6 @@ Adversarial code review of Story 3.3 implementation. 3 CRITICAL, 7 HIGH, 8 MEDIU
 
 ### Test Results
 
-- 75 tests passing (46 unit + 12 integration + 17 existing)
+- 75 story tests passing (46 unit + 12 integration + 17 existing) + 44 LLM provider tests
 - 0 failures, 31 warnings (all pre-existing: async mark on sync functions, SQLModel deprecation)
 - Runtime: ~16s

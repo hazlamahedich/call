@@ -63,7 +63,7 @@ development_status:
   epic-3: in-progress
   3-1-multi-format-knowledge-ingestion-validation: review
   3-2-per-tenant-rag-namespacing-with-namespace-guard: review
-  3-3-script-generation-logic-with-grounding-constraints: review
+  3-3-script-generation-logic-with-grounding-constraints: done
   3-4-dynamic-variable-injection-for-hyper-personalization: backlog
   3-5-the-script-lab-with-source-attribution: backlog
   3-6-real-time-self-correction-factual-hook: backlog

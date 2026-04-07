@@ -108,11 +108,11 @@ brew install pgvector
 
 ### 📋 Tests
 
-#### Tests Implemented (33 tests passing)
+#### Tests Implemented (70 tests passing)
 
 1. **`tests/test_3_1_embedding_given_text_when_embedded_then_cached.py`** — Updated to use provider abstraction (15 tests)
 2. **`tests/test_embedding_providers.py`** — OpenAI/Gemini provider unit tests (8 tests)
-3. **`tests/test_llm_service.py`** — LLM provider abstraction tests (7 tests)
+3. **`tests/test_llm_service.py`** — LLM providers, factory, service, ABC enforcement, and integration tests (44 tests)
 4. **`tests/test_ai_provider_settings_api.py`** — Settings API endpoint tests (MockEmbeddingProvider)
 
 ### 🎯 Next Steps
@@ -139,7 +139,7 @@ brew install pgvector
 | AC6 | Document listing with metadata                | ✅ Implemented              |
 | AC7 | Tenant isolation via RLS                      | ✅ Migration ready          |
 | AC8 | Vector search <200ms                          | ✅ Implemented (HNSW index) |
-| —   | Configurable AI provider (OpenAI/Gemini)      | ✅ 33 tests passing         |
+| —   | Configurable AI provider (OpenAI/Gemini)      | ✅ 70 tests passing         |
 
 ### 🔧 Configuration Required
 
