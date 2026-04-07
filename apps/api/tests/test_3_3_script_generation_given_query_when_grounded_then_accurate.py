@@ -107,7 +107,9 @@ def mock_embedding():
 @pytest.fixture
 def mock_session():
     session = AsyncMock()
-    session.execute = AsyncMock()
+    count_result = MagicMock()
+    count_result.scalar_one.return_value = 10
+    session.execute = AsyncMock(return_value=count_result)
     session.commit = AsyncMock()
     session.flush = AsyncMock()
     session.add = MagicMock()

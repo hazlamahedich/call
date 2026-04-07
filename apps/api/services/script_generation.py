@@ -126,8 +126,10 @@ class ScriptGenerationService:
                 cached_data["latency_ms"] = latency_ms
                 cached_data["cached"] = True
                 return ScriptGenerationResult(**cached_data)
-            except (json.JSONDecodeError, None:
-                logger.warning("Failed to deserialize cached result, treating as cache miss")
+            except (json.JSONDecodeError, TypeError):
+                logger.warning(
+                    "Failed to deserialize cached result, treating as cache miss"
+                )
 
         query_embedding = await self._embedding.generate_embedding(query)
         kb_ids = None
@@ -170,6 +172,81 @@ class ScriptGenerationService:
                 cost_estimate=0.0,
             )
 
+        system_prompt, user_message, was_truncated = self._build_grounded_prompt(
+            query, chunks, grounding_mode, system_prompt_template
+        )
+
+        if not system_prompt:
+            latency_ms = (time.monotonic() - start) * 1000
+            self._log_audit(
+                event_type="no_relevant_chunks",
+                query=query,
+                org_id=org_id,
+                confidence=0.0,
+                chunks=[],
+                total_scanned=total_scanned,
+                max_similarity=0.0,
+                latency_ms=latency_ms,
+                grounding_mode=grounding_mode,
+            )
+            return ScriptGenerationResult(
+                response=NO_KNOWLEDGE_FALLBACK,
+                grounding_confidence=0.0,
+                is_low_confidence=True,
+                source_chunks=[],
+                model=settings.AI_LLM_MODEL,
+                latency_ms=latency_ms,
+                grounding_mode=grounding_mode,
+                was_truncated=False,
+                cached=False,
+                cost_estimate=0.0,
+            )
+
+        llm_response = await self._call_llm_with_retry(system_prompt, user_message)
+
+        grounding_result = GroundingService.compute_confidence(
+            chunks=chunks,
+            response=llm_response,
+            max_source_chunks=max_source_chunks,
+            min_confidence=min_confidence,
+        )
+
+        latency_ms = (time.monotonic() - start) * 1000
+        max_similarity = max(c["similarity"] for c in chunks) if chunks else 0.0
+        cost = self._estimate_cost(system_prompt, user_message, llm_response)
+
+        result = ScriptGenerationResult(
+            response=llm_response,
+            grounding_confidence=grounding_result.score,
+            is_low_confidence=grounding_result.is_low_confidence,
+            source_chunks=chunks,
+            model=settings.AI_LLM_MODEL,
+            latency_ms=latency_ms,
+            grounding_mode=grounding_mode,
+            was_truncated=grounding_result.was_truncated or was_truncated,
+            cached=False,
+            config_version=None,
+            cost_estimate=cost,
+        )
+
+        await self._cache_result(query, org_id, agent_id, result)
+
+        self._log_audit(
+            event_type="generation_completed",
+            query=query,
+            org_id=org_id,
+            confidence=grounding_result.score,
+            chunks=chunks,
+            total_scanned=total_scanned,
+            max_similarity=max_similarity,
+            latency_ms=latency_ms,
+            grounding_mode=grounding_mode,
+            was_truncated=was_truncated,
+            cost=cost,
+        )
+
+        return result
+
     async def _retrieve_context(
         self,
         query_embedding,
@@ -184,7 +261,10 @@ class ScriptGenerationService:
             max_chunks=max_chunks,
             knowledge_base_ids=knowledge_base_ids,
         )
-        total_scanned = await self._count_total_chunks(org_id, knowledge_base_ids)
+        try:
+            total_scanned = await self._count_total_chunks(org_id, knowledge_base_ids)
+        except Exception:
+            total_scanned = len(chunks)
         return chunks, total_scanned
 
     async def _count_total_chunks(self, org_id, knowledge_base_ids=None):
@@ -251,6 +331,13 @@ class ScriptGenerationService:
                 was_truncated = True
                 break
             context_parts.append(part)
+
+        if was_truncated:
+            logger.warning(
+                "Prompt truncated: %d/%d chunks fit within token budget",
+                len(context_parts),
+                len(sorted_chunks),
+            )
 
         final_context = "\n\n".join(context_parts)
         user_message = f"Context:\n{final_context}\n\nQuestion: {query}"
