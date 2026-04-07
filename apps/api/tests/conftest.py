@@ -6,20 +6,40 @@ import pytest
 import pytest_asyncio
 
 
+sys.path.insert(0, str(Path(__file__).parent))
+
+
 def pytest_configure(config):
     config.addinivalue_line("markers", "p0: Critical path tests (smoke)")
     config.addinivalue_line("markers", "p1: High priority tests")
     config.addinivalue_line("markers", "p2: Medium priority tests")
+    config.addinivalue_line("markers", "p3: Low priority / optional tests")
     config.addinivalue_line(
         "markers", "integration: Integration tests requiring external resources"
     )
 
 
+from conftest_3_3 import (  # noqa: F401 - registers fixtures via import
+    make_chunks,
+    make_agent_model,
+    make_agent_row,
+    make_script_result,
+    mock_llm,
+    mock_embedding,
+    mock_session,
+    mock_redis,
+    service,
+    create_test_app,
+    setup_session_for_service,
+    router_patches,
+    apply_patches,
+    TEST_ORG,
+)
+
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
-
-sys.path.insert(0, str(Path(__file__).parent))
 
 TEST_DATABASE_URL = os.environ.get(
     "TEST_DATABASE_URL",
