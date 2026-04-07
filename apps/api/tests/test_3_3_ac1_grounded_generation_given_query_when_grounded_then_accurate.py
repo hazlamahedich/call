@@ -173,7 +173,12 @@ class TestAC2NoKnowledgePolicy:
         assert mock_logger.info.called
         call_args = mock_logger.info.call_args
         log_msg = call_args[0][0] if call_args[0] else ""
-        assert "no_relevant_chunks" in log_msg
+        log_extra = call_args.kwargs.get("extra", {}) or call_args[1].get("extra", {})
+        assert (
+            "no_relevant_chunks" in log_msg
+            or "no_relevant_chunks" in str(log_extra)
+            or call_args[0][1] == "no_relevant_chunks"
+        )
 
     async def test_3_3_010_given_empty_kb_when_generating_then_empty_kb_event(
         self, service, mock_session

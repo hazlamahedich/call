@@ -96,9 +96,9 @@ class ScriptGenerationResult:
 class ScriptGenerationService:
     def __init__(
         self,
-        llm_service: LLMService,
-        embedding_service,
-        session,
+        llm_service: LLMService | None = None,
+        embedding_service=None,
+        session=None,
         redis_client=None,
     ):
         self._llm = llm_service
@@ -172,11 +172,13 @@ class ScriptGenerationService:
                 cost_estimate=0.0,
             )
 
-        system_prompt, user_message, was_truncated = self._build_grounded_prompt(
-            query, chunks, grounding_mode, system_prompt_template
+        system_prompt, user_message, was_truncated, has_context = (
+            self._build_grounded_prompt(
+                query, chunks, grounding_mode, system_prompt_template
+            )
         )
 
-        if not system_prompt:
+        if not has_context and not was_truncated:
             latency_ms = (time.monotonic() - start) * 1000
             self._log_audit(
                 event_type="no_relevant_chunks",
@@ -341,7 +343,7 @@ class ScriptGenerationService:
 
         final_context = "\n\n".join(context_parts)
         user_message = f"Context:\n{final_context}\n\nQuestion: {query}"
-        return system_prompt, user_message, was_truncated
+        return system_prompt, user_message, was_truncated, bool(context_parts)
 
     @staticmethod
     def _estimate_token_count(text):
@@ -386,27 +388,6 @@ class ScriptGenerationService:
                         },
                     )
         raise last_error or RuntimeError("LLM call failed with no error captured")
-
-    def _generate_no_knowledge_response(
-        self,
-        query,
-        org_id,
-        total_chunks_scanned,
-        max_similarity,
-        grounding_mode,
-    ):
-        return ScriptGenerationResult(
-            response=NO_KNOWLEDGE_FALLBACK,
-            grounding_confidence=0.0,
-            is_low_confidence=True,
-            source_chunks=[],
-            model=settings.AI_LLM_MODEL,
-            latency_ms=0.0,
-            grounding_mode=grounding_mode,
-            was_truncated=False,
-            cached=False,
-            cost_estimate=0.0,
-        )
 
     async def _check_cache(self, query, org_id, agent_id=None):
         if not self._redis:
@@ -460,13 +441,13 @@ class ScriptGenerationService:
     def _estimate_cost(self, system_prompt, user_message, llm_response):
         if not settings.COST_TRACKING_ENABLED:
             return 0.0
-        total_chars = len(system_prompt) + len(user_message) + len(llm_response)
-        estimated_tokens = total_chars // 4
+        input_chars = len(system_prompt) + len(user_message)
+        input_tokens = input_chars // 4
+        output_tokens = len(llm_response) // 4
         cost_per_1k_input = 0.00001
         cost_per_1k_output = 0.00003
-        input_cost = estimated_tokens * cost_per_1k_input
-        output_tokens = len(llm_response) // 4
-        output_cost = output_tokens * cost_per_1k_output
+        input_cost = (input_tokens / 1000) * cost_per_1k_input
+        output_cost = (output_tokens / 1000) * cost_per_1k_output
         return round(input_cost + output_cost, 6)
 
     def _log_audit(
@@ -508,6 +489,7 @@ class ScriptGenerationService:
             ]
 
         logger.info(
-            f"Script generation {event_type}",
+            "Script generation %s",
+            event_type,
             extra=log_data,
         )

@@ -56,12 +56,15 @@ class TestINT001FullPipeline:
                 return_value="Our product supports advanced analytics."
             )
             stack.enter_context(
-                patch("routers.scripts.LLMService", return_value=mock_llm_svc)
+                patch(
+                    "routers.scripts._get_llm_service",
+                    return_value=mock_llm_svc,
+                )
             )
 
             stack.enter_context(
                 patch(
-                    "routers.scripts.GroundingService.compute_confidence",
+                    "services.grounding.GroundingService.compute_confidence",
                     return_value=GroundingResult(
                         score=0.82,
                         chunk_coverage=0.6,
@@ -314,12 +317,12 @@ class TestINT003LatencyMeasurement:
                 return_value="Analytics feature available."
             )
             stack.enter_context(
-                patch("routers.scripts.LLMService", return_value=mock_llm_svc)
+                patch("routers.scripts._get_llm_service", return_value=mock_llm_svc)
             )
 
             stack.enter_context(
                 patch(
-                    "routers.scripts.GroundingService.compute_confidence",
+                    "services.grounding.GroundingService.compute_confidence",
                     return_value=GroundingResult(
                         score=0.75,
                         chunk_coverage=0.4,
@@ -375,12 +378,12 @@ class TestINT004GroundingModes:
             mock_llm_svc = AsyncMock()
             mock_llm_svc.generate = AsyncMock(return_value=f"{mode.title()} response.")
             stack.enter_context(
-                patch("routers.scripts.LLMService", return_value=mock_llm_svc)
+                patch("routers.scripts._get_llm_service", return_value=mock_llm_svc)
             )
 
             stack.enter_context(
                 patch(
-                    "routers.scripts.GroundingService.compute_confidence",
+                    "services.grounding.GroundingService.compute_confidence",
                     return_value=GroundingResult(
                         score=0.8,
                         chunk_coverage=0.4,
@@ -483,7 +486,7 @@ class TestINT005Concurrency:
                 mock_llm_svc = AsyncMock()
                 mock_llm_svc.generate = AsyncMock(return_value=f"Response {i}")
                 stack.enter_context(
-                    patch("routers.scripts.LLMService", return_value=mock_llm_svc)
+                    patch("routers.scripts._get_llm_service", return_value=mock_llm_svc)
                 )
                 stack.enter_context(
                     patch(
@@ -538,11 +541,11 @@ class TestINT005Concurrency:
             mock_llm_svc = AsyncMock()
             mock_llm_svc.generate = AsyncMock(return_value="Creative response.")
             stack.enter_context(
-                patch("routers.scripts.LLMService", return_value=mock_llm_svc)
+                patch("routers.scripts._get_llm_service", return_value=mock_llm_svc)
             )
             stack.enter_context(
                 patch(
-                    "routers.scripts.GroundingService.compute_confidence",
+                    "services.grounding.GroundingService.compute_confidence",
                     return_value=GroundingResult(
                         score=0.7,
                         chunk_coverage=0.4,

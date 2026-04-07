@@ -4,10 +4,10 @@ Provides grounded response generation and agent-level grounding configuration.
 """
 
 import logging
-import time
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import text, select
+from redis.asyncio import Redis
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.session import get_session as get_db
@@ -23,13 +23,9 @@ from schemas.script_generation import (
 )
 from services.embedding import EmbeddingService, create_embedding_provider
 from services.grounding import GroundingService
-from services.knowledge_search import search_knowledge_chunks
 from services.llm.providers.factory import create_llm_provider
 from services.llm.service import LLMService
 from services.script_generation import (
-    NO_KNOWLEDGE_FALLBACK,
-    AgentNotFoundError,
-    AgentOwnershipError,
     ScriptGenerationService,
 )
 from config.settings import settings
@@ -38,7 +34,16 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Scripts"])
 
+_llm_service: LLMService | None = None
 _embedding_service: EmbeddingService | None = None
+
+
+def _get_llm_service() -> LLMService:
+    global _llm_service
+    if _llm_service is None:
+        provider = create_llm_provider(settings)
+        _llm_service = LLMService(provider)
+    return _llm_service
 
 
 def _get_embedding_service() -> EmbeddingService:
@@ -49,6 +54,11 @@ def _get_embedding_service() -> EmbeddingService:
     return _embedding_service
 
 
+async def _get_redis(request: Request) -> Redis | None:
+    redis = request.app.state.redis if hasattr(request.app.state, "redis") else None
+    return redis
+
+
 async def _set_rls_context(session: AsyncSession, org_id: str):
     await session.execute(
         text("SELECT set_config('app.current_org_id', :org_id, false)"),
@@ -57,14 +67,15 @@ async def _set_rls_context(session: AsyncSession, org_id: str):
 
 
 async def _load_and_validate_agent(
-    session: AsyncSession, agent_id: int, org_id: str
+    session: AsyncSession, agent_id: int, org_id: str, for_update: bool = False
 ) -> Agent:
-    agent = await session.execute(
-        select(Agent).where(
-            Agent.id == agent_id,
-            Agent.soft_delete == False,  # noqa: E712
-        )
+    query = select(Agent).where(
+        Agent.id == agent_id,
+        Agent.soft_delete == False,  # noqa: E712
     )
+    if for_update:
+        query = query.with_for_update()
+    agent = await session.execute(query)
     agent_obj = agent.scalar_one_or_none()
     if agent_obj is None:
         raise HTTPException(status_code=404, detail="Agent not found")
@@ -80,6 +91,12 @@ def _parse_grounding_config(agent: Agent) -> dict | None:
     if agent.grounding_config:
         return agent.grounding_config
     return None
+
+
+def _resolve_min_confidence(grounding_config: dict | None) -> float:
+    if grounding_config is not None and "minConfidence" in grounding_config:
+        return grounding_config["minConfidence"]
+    return settings.GROUNDING_MIN_CONFIDENCE
 
 
 @router.post("/generate", response_model=ScriptGenerateResponse)
@@ -100,30 +117,31 @@ async def generate_script_response(
         grounding_config = _parse_grounding_config(agent)
         config_version = agent.config_version
 
-    mode = (
-        request_body.override_grounding_mode
-        or (grounding_config and grounding_config.get("groundingMode"))
-        or settings.GROUNDING_DEFAULT_MODE
-    )
+    mode = request_body.override_grounding_mode
+    if mode is None and grounding_config:
+        mode = grounding_config.get("groundingMode")
+    mode = mode or settings.GROUNDING_DEFAULT_MODE
+
+    max_chunks = request_body.override_max_chunks
+    if max_chunks is None and grounding_config:
+        mc = grounding_config.get("maxSourceChunks")
+        if mc is not None:
+            max_chunks = int(mc)
     max_chunks = (
-        request_body.override_max_chunks
-        or (grounding_config and grounding_config.get("maxSourceChunks"))
-        or settings.GROUNDING_MAX_SOURCE_CHUNKS
+        max_chunks if max_chunks is not None else settings.GROUNDING_MAX_SOURCE_CHUNKS
     )
-    min_confidence = (
-        grounding_config and grounding_config.get("minConfidence")
-    ) or settings.GROUNDING_MIN_CONFIDENCE
+    min_confidence = _resolve_min_confidence(grounding_config)
     system_prompt_template = agent.system_prompt_template if agent else None
 
-    llm_provider = create_llm_provider(settings)
-    llm_service = LLMService(llm_provider)
+    llm_service = _get_llm_service()
     embedding_service = _get_embedding_service()
+    redis_client = await _get_redis(request)
 
     service = ScriptGenerationService(
         llm_service=llm_service,
         embedding_service=embedding_service,
         session=session,
-        redis_client=None,
+        redis_client=redis_client,
     )
 
     result = await service.generate_response(
@@ -169,7 +187,9 @@ async def configure_script(
     org_id = await verify_namespace_access(session=session, org_id=org_id)
     await _set_rls_context(session, org_id)
 
-    agent = await _load_and_validate_agent(session, request_body.agent_id, org_id)
+    agent = await _load_and_validate_agent(
+        session, request_body.agent_id, org_id, for_update=True
+    )
 
     if agent.config_version != request_body.expected_version:
         raise HTTPException(
@@ -191,6 +211,16 @@ async def configure_script(
     session.add(agent)
     await session.flush()
 
+    redis_client = await _get_redis(request)
+    if redis_client:
+        cache_service = ScriptGenerationService(
+            llm_service=None,
+            embedding_service=None,
+            session=None,
+            redis_client=redis_client,
+        )
+        await cache_service.invalidate_cache(org_id, request_body.agent_id)
+
     logger.info(
         "Grounding config updated for agent %d",
         request_body.agent_id,
@@ -201,6 +231,8 @@ async def configure_script(
             "grounding_mode": request_body.grounding_mode,
         },
     )
+
+    assert agent.id is not None
 
     return ScriptConfigResponse(
         agent_id=agent.id,
@@ -224,6 +256,7 @@ async def get_script_config(
 
     agent = await _load_and_validate_agent(session, agent_id, org_id)
 
+    assert agent.id is not None
     config = agent.grounding_config or {}
     return ScriptConfigResponse(
         agent_id=agent.id,

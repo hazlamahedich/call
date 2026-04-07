@@ -32,7 +32,7 @@ class TestAC9TokenBudget:
             patch.object(settings, "AI_LLM_MAX_TOKENS", 200),
             patch.object(settings, "TOKEN_RESERVATION", 50),
         ):
-            _, _, was_truncated = svc._build_grounded_prompt(
+            _, _, was_truncated, _ = svc._build_grounded_prompt(
                 "short query", chunks, "strict"
             )
 
@@ -46,7 +46,9 @@ class TestAC9TokenBudget:
             patch.object(settings, "AI_LLM_MAX_TOKENS", 10000),
             patch.object(settings, "TOKEN_RESERVATION", 500),
         ):
-            _, _, was_truncated = svc._build_grounded_prompt("query", chunks, "strict")
+            _, _, was_truncated, _ = svc._build_grounded_prompt(
+                "query", chunks, "strict"
+            )
 
         assert was_truncated is False
 
