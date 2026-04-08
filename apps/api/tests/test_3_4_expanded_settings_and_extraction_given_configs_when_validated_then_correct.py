@@ -1,0 +1,231 @@
+"""Story 3.4 Expanded: Settings Validation and Extraction Edge Cases.
+
+Tests settings validators, extract_variables edge cases, and
+_used_fallback accuracy.
+"""
+
+import pytest
+from pydantic import ValidationError
+
+from conftest_3_4 import make_lead_dict, make_lead_with_custom_fields, make_agent
+from services.variable_injection import (
+    VariableInjectionService,
+    VariableInfo,
+    classify_source,
+)
+
+
+class TestSettingsValidation:
+    def test_default_values(self):
+        from config.settings import settings
+
+        assert settings.VARIABLE_DEFAULT_FALLBACK == "Not Available"
+        assert settings.VARIABLE_INJECTION_ENABLED is True
+        assert settings.VARIABLE_RESOLUTION_TIMEOUT_MS == 100
+        assert settings.MAX_VARIABLE_VALUE_LENGTH == 500
+
+    def test_resolution_timeout_zero_rejected(self):
+        from config.settings import Settings
+
+        with pytest.raises(Exception):
+            Settings(VARIABLE_RESOLUTION_TIMEOUT_MS=0)
+
+    def test_resolution_timeout_negative_rejected(self):
+        from config.settings import Settings
+
+        with pytest.raises(Exception):
+            Settings(VARIABLE_RESOLUTION_TIMEOUT_MS=-1)
+
+    def test_resolution_timeout_valid_accepted(self):
+        from config.settings import Settings
+
+        s = Settings(VARIABLE_RESOLUTION_TIMEOUT_MS=50)
+        assert s.VARIABLE_RESOLUTION_TIMEOUT_MS == 50
+
+
+class TestClassifySource:
+    def test_lead_name_classified_as_lead(self):
+        assert classify_source("lead_name") == "lead"
+
+    def test_lead_email_classified_as_lead(self):
+        assert classify_source("lead_email") == "lead"
+
+    def test_current_date_classified_as_system(self):
+        assert classify_source("current_date") == "system"
+
+    def test_current_time_classified_as_system(self):
+        assert classify_source("current_time") == "system"
+
+    def test_agent_name_classified_as_system(self):
+        assert classify_source("agent_name") == "system"
+
+    def test_unknown_classified_as_custom(self):
+        assert classify_source("company_name") == "custom"
+
+    def test_case_insensitive_classification(self):
+        assert classify_source("LEAD_NAME") == "lead"
+        assert classify_source("CURRENT_DATE") == "system"
+
+
+class TestExtractVariablesEdgeCases:
+    def test_empty_fallback_not_matched(self):
+        service = VariableInjectionService(AsyncMock())
+        variables = service.extract_variables("Hello {{var:}}")
+        assert len(variables) == 0
+
+    def test_space_fallback_treated_as_none(self):
+        service = VariableInjectionService(AsyncMock())
+        variables = service.extract_variables("Hello {{var: }}")
+        assert len(variables) == 1
+        assert variables[0].fallback is None
+
+    def test_whitespace_fallback_treated_as_none(self):
+        service = VariableInjectionService(AsyncMock())
+        variables = service.extract_variables("Hello {{var:   }}")
+        assert len(variables) == 1
+        assert variables[0].fallback is None
+
+    def test_whitespace_in_braces_not_matched(self):
+        service = VariableInjectionService(AsyncMock())
+        variables = service.extract_variables("Hello {{ lead_name }}")
+        assert len(variables) == 0
+
+    def test_dollar_braces_not_matched(self):
+        service = VariableInjectionService(AsyncMock())
+        variables = service.extract_variables("Price: ${{price}}")
+        assert len(variables) == 0
+
+    def test_empty_braces_not_matched(self):
+        service = VariableInjectionService(AsyncMock())
+        variables = service.extract_variables("Hello {{}}")
+        assert len(variables) == 0
+
+    def test_raw_match_construction(self):
+        service = VariableInjectionService(AsyncMock())
+        variables = service.extract_variables("{{lead_name:there}}")
+        assert variables[0].raw_match == "{{lead_name:there}}"
+
+    def test_raw_match_without_fallback(self):
+        service = VariableInjectionService(AsyncMock())
+        variables = service.extract_variables("{{lead_name}}")
+        assert variables[0].raw_match == "{{lead_name}}"
+
+    def test_case_dedup_first_wins(self):
+        service = VariableInjectionService(AsyncMock())
+        variables = service.extract_variables("{{lead_name}} and {{LEAD_NAME}}")
+        assert len(variables) == 1
+        assert variables[0].name == "lead_name"
+
+    def test_multiple_variables_extracted(self):
+        service = VariableInjectionService(AsyncMock())
+        variables = service.extract_variables(
+            "{{lead_name}} {{company_name}} {{current_date}}"
+        )
+        assert len(variables) == 3
+
+    def test_variable_with_hyphen_not_matched(self):
+        service = VariableInjectionService(AsyncMock())
+        variables = service.extract_variables("{{company-name}}")
+        assert len(variables) == 0
+
+    def test_variable_starting_with_number_not_matched(self):
+        service = VariableInjectionService(AsyncMock())
+        variables = service.extract_variables("{{1var}}")
+        assert len(variables) == 0
+
+
+from unittest.mock import AsyncMock
+
+
+class TestUsedFallbackAccuracy:
+    def test_used_fallback_returns_true_for_unknown(self):
+        service = VariableInjectionService(AsyncMock())
+        var = VariableInfo(
+            name="totally_unknown",
+            fallback=None,
+            source_type="custom",
+            raw_match="{{totally_unknown}}",
+        )
+        assert service._used_fallback(var, {}, None, None) is True
+
+    def test_used_fallback_returns_false_for_resolved_lead_field(self):
+        service = VariableInjectionService(AsyncMock())
+        var = VariableInfo(
+            name="lead_name",
+            fallback=None,
+            source_type="lead",
+            raw_match="{{lead_name}}",
+        )
+        lead = make_lead_dict(name="Alice")
+        assert service._used_fallback(var, lead, None, None) is False
+
+    def test_used_fallback_returns_false_for_system_callable(self):
+        service = VariableInjectionService(AsyncMock())
+        var = VariableInfo(
+            name="current_date",
+            fallback=None,
+            source_type="system",
+            raw_match="{{current_date}}",
+        )
+        assert service._used_fallback(var, {}, None, None) is False
+
+    def test_used_fallback_returns_false_for_agent_with_name(self):
+        service = VariableInjectionService(AsyncMock())
+        var = VariableInfo(
+            name="agent_name",
+            fallback=None,
+            source_type="system",
+            raw_match="{{agent_name}}",
+        )
+        agent = make_agent(name="Bot")
+        assert service._used_fallback(var, {}, agent, None) is False
+
+    def test_used_fallback_returns_true_for_agent_without_name(self):
+        service = VariableInjectionService(AsyncMock())
+        var = VariableInfo(
+            name="agent_name",
+            fallback=None,
+            source_type="system",
+            raw_match="{{agent_name}}",
+        )
+        agent = make_agent(name="")
+        assert service._used_fallback(var, {}, agent, None) is True
+
+    def test_used_fallback_returns_false_for_inline_fallback(self):
+        service = VariableInjectionService(AsyncMock())
+        var = VariableInfo(
+            name="unknown",
+            fallback="default_val",
+            source_type="custom",
+            raw_match="{{unknown:default_val}}",
+        )
+        assert service._used_fallback(var, {}, None, None) is False
+
+    def test_used_fallback_returns_false_for_custom_fallbacks_dict(self):
+        service = VariableInjectionService(AsyncMock())
+        var = VariableInfo(
+            name="region", fallback=None, source_type="custom", raw_match="{{region}}"
+        )
+        assert service._used_fallback(var, {}, None, {"region": "East"}) is False
+
+    def test_used_fallback_returns_false_for_custom_field(self):
+        service = VariableInjectionService(AsyncMock())
+        var = VariableInfo(
+            name="company_name",
+            fallback=None,
+            source_type="custom",
+            raw_match="{{company_name}}",
+        )
+        lead = make_lead_dict(custom_fields={"company_name": "Acme"})
+        assert service._used_fallback(var, lead, None, None) is False
+
+    def test_used_fallback_returns_true_for_null_custom_field(self):
+        service = VariableInjectionService(AsyncMock())
+        var = VariableInfo(
+            name="company_name",
+            fallback=None,
+            source_type="custom",
+            raw_match="{{company_name}}",
+        )
+        lead = make_lead_dict(custom_fields={"company_name": None})
+        assert service._used_fallback(var, lead, None, None) is True
