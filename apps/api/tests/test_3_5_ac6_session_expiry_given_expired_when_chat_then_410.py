@@ -14,40 +14,14 @@ from fastapi import HTTPException
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from conftest_3_5 import *
+from conftest_3_5 import (
+    TEST_ORG,
+    mock_session,
+    lab_service,
+    make_active_row,
+    make_expired_row,
+)
 from services.script_lab import ScriptLabService
-
-
-def _make_expired_row(**overrides):
-    defaults = {
-        "id": 1,
-        "org_id": TEST_ORG,
-        "agent_id": 1,
-        "script_id": 1,
-        "lead_id": None,
-        "scenario_overlay": None,
-        "expires_at": datetime.now(timezone.utc) - timedelta(minutes=5),
-        "status": "active",
-        "turn_count": 0,
-    }
-    defaults.update(overrides)
-    return tuple(defaults.values())
-
-
-def _make_active_row(**overrides):
-    defaults = {
-        "id": 1,
-        "org_id": TEST_ORG,
-        "agent_id": 1,
-        "script_id": 1,
-        "lead_id": None,
-        "scenario_overlay": None,
-        "expires_at": datetime.now(timezone.utc) + timedelta(hours=1),
-        "status": "active",
-        "turn_count": 0,
-    }
-    defaults.update(overrides)
-    return tuple(defaults.values())
 
 
 @pytest.mark.asyncio
@@ -56,8 +30,7 @@ class TestAC6SessionExpiry:
     async def test_3_5_021_given_session_past_ttl_when_sending_chat_then_raises_410(
         self, mock_session, lab_service
     ):
-        # [3.5-UNIT-021]
-        expired_row = _make_expired_row()
+        expired_row = make_expired_row()
         mock_result = MagicMock()
         mock_result.fetchone.return_value = expired_row
         mock_session.execute = AsyncMock(return_value=mock_result)
@@ -72,8 +45,7 @@ class TestAC6SessionExpiry:
     async def test_3_5_022_given_session_about_to_expire_when_ttl_checked_then_410(
         self, mock_session, lab_service
     ):
-        # [3.5-UNIT-022]
-        barely_expired = _make_expired_row(
+        barely_expired = make_expired_row(
             expires_at=datetime.now(timezone.utc) - timedelta(seconds=1)
         )
         mock_result = MagicMock()
@@ -90,8 +62,7 @@ class TestAC6SessionExpiry:
     async def test_3_5_022b_given_session_at_max_turns_when_sending_chat_then_422(
         self, mock_session, lab_service
     ):
-        # [3.5-UNIT-022b]
-        max_turns_row = _make_active_row(turn_count=50)
+        max_turns_row = make_active_row(turn_count=50)
         mock_result = MagicMock()
         mock_result.fetchone.return_value = max_turns_row
         mock_session.execute = AsyncMock(return_value=mock_result)
@@ -115,7 +86,6 @@ class TestAC6SessionExpiry:
     async def test_3_5_023_given_background_cleanup_when_sessions_expire_then_status_set(
         self, mock_session, lab_service
     ):
-        # [3.5-UNIT-023]
         mock_result = MagicMock()
         mock_result.rowcount = 3
         mock_session.execute = AsyncMock(return_value=mock_result)
@@ -130,7 +100,6 @@ class TestAC6SessionExpiry:
     async def test_3_5_023b_given_no_expired_sessions_when_cleanup_then_zero_returned(
         self, mock_session, lab_service
     ):
-        # [3.5-UNIT-023b]
         mock_result = MagicMock()
         mock_result.rowcount = 0
         mock_session.execute = AsyncMock(return_value=mock_result)
@@ -144,8 +113,7 @@ class TestAC6SessionExpiry:
     async def test_3_5_021b_given_session_already_expired_status_when_chat_then_410(
         self, mock_session, lab_service
     ):
-        # [3.5-UNIT-021b]
-        expired_status_row = _make_active_row(status="expired")
+        expired_status_row = make_active_row(status="expired")
         mock_result = MagicMock()
         mock_result.fetchone.return_value = expired_status_row
         mock_session.execute = AsyncMock(return_value=mock_result)

@@ -760,6 +760,15 @@ glm-5.1
   - `test_3_5_ac5_source_retrieval_given_turns_when_fetched_then_entries.py` — 7 tests: turns with entries, 404/403, sequential turns, no assistant turns, orphan turn, null confidence default
   - `test_3_5_ac7_delete_session_given_session_when_deleted_then_soft_delete.py` — 4 tests: successful soft delete, 404/403, session + turns both soft-deleted
   - `test_3_5_helpers_and_edge_cases_given_input_when_processed_then_correct.py` — 13 tests: `_ensure_dict` (5 variants), `_ensure_list` (5 variants), null expires_at → 500, naive datetime tz handling, create_session with lead_id
+- Test quality review (2026-04-08): Score 88/100 (A - Good). 8 findings identified, all addressed:
+  - P1: Extracted shared mock setup into `chat_pipeline_patches` async context manager in conftest_3_5.py — reduced AC2 from 475 to ~290 lines
+  - P1: Fixed test 059 — now actually simulates assistant turn persist failure (flush raises on call #2 inside try/except, call #3 unprotected flush succeeds)
+  - P1: Rewrote AC8 boundary tests (027b–027e) to exercise `send_chat_message` pipeline via `chat_pipeline_patches` instead of testing Python's `<` operator
+  - P2: Replaced all wildcard imports (`from conftest_3_5 import *`) with explicit named imports in all 11 test files
+  - P2: Extracted mock setup boilerplate into `chat_pipeline_patches` context manager + `mock_gen_result`/`mock_gen_service` helpers in conftest
+  - P3: Removed all inline test ID markers (e.g., `# [3.5-UNIT-001]`) — redundant with function names
+  - P3: Consolidated duplicate `_make_active_row`, `_make_expired_row`, `_make_overlay_row` helpers into conftest_3_5.py
+  - Note: `sys.path.insert` fix cancelled — no `pyproject.toml` exists in the project
 - Code review (3-layer: Blind Hunter + Edge Case Hunter + Acceptance Auditor) completed 2026-04-08 — 18 findings fixed:
   - Fixed dual `turn_count` UPDATE race condition — both increments now use atomic `turn_count + 1` instead of overwriting with fixed value
   - Added `_ensure_dict()` / `_ensure_list()` JSONB deserialization guards for raw SQL query results
@@ -804,6 +813,7 @@ glm-5.1
 - `apps/api/tests/test_3_5_ac5_source_retrieval_given_turns_when_fetched_then_entries.py`
 - `apps/api/tests/test_3_5_ac7_delete_session_given_session_when_deleted_then_soft_delete.py`
 - `apps/api/tests/test_3_5_helpers_and_edge_cases_given_input_when_processed_then_correct.py`
+- `apps/api/tests/test-review-story-3.5.md`
 
 **Modified Files:**
 - `apps/api/models/__init__.py`

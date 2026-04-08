@@ -1,4 +1,5 @@
 import sys
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -30,8 +31,7 @@ def make_lab_session(**kwargs):
         "soft_delete": False,
     }
     defaults.update(kwargs)
-    session = ScriptLabSession.model_validate(defaults)
-    return session
+    return ScriptLabSession.model_validate(defaults)
 
 
 def make_lab_turn(**kwargs):
@@ -48,8 +48,7 @@ def make_lab_turn(**kwargs):
         "soft_delete": False,
     }
     defaults.update(kwargs)
-    turn = ScriptLabTurn.model_validate(defaults)
-    return turn
+    return ScriptLabTurn.model_validate(defaults)
 
 
 def make_source_attribution(**kwargs):
@@ -78,6 +77,88 @@ def make_raw_chunk(**kwargs):
     }
     defaults.update(kwargs)
     return defaults
+
+
+def make_active_row(**overrides):
+    defaults = {
+        "id": 1,
+        "org_id": TEST_ORG,
+        "agent_id": 1,
+        "script_id": 10,
+        "lead_id": None,
+        "scenario_overlay": None,
+        "expires_at": datetime.now(timezone.utc) + timedelta(hours=1),
+        "status": "active",
+        "turn_count": 0,
+    }
+    defaults.update(overrides)
+    return tuple(defaults.values())
+
+
+def make_expired_row(**overrides):
+    defaults = {
+        "id": 1,
+        "org_id": TEST_ORG,
+        "agent_id": 1,
+        "script_id": 1,
+        "lead_id": None,
+        "scenario_overlay": None,
+        "expires_at": datetime.now(timezone.utc) - timedelta(minutes=5),
+        "status": "active",
+        "turn_count": 0,
+    }
+    defaults.update(overrides)
+    return tuple(defaults.values())
+
+
+def make_overlay_row(**overrides):
+    defaults = {
+        "id": 1,
+        "org_id": TEST_ORG,
+        "agent_id": 1,
+        "script_id": 1,
+        "lead_id": None,
+        "status": "active",
+        "expires_at": datetime.now(timezone.utc) + timedelta(hours=1),
+        "scenario_overlay": None,
+    }
+    defaults.update(overrides)
+    return tuple(defaults.values())
+
+
+def mock_gen_result(response="AI response", confidence=0.85, chunks=None):
+    gen_result = MagicMock()
+    gen_result.response = response
+    gen_result.grounding_confidence = confidence
+    gen_result.source_chunks = chunks or [make_raw_chunk()]
+    return gen_result
+
+
+def mock_gen_service(gen_result):
+    svc = AsyncMock()
+    svc.generate_response.return_value = gen_result
+    return svc
+
+
+@asynccontextmanager
+async def chat_pipeline_patches(
+    gen_result, *, variable_injection=False, max_turns=50, script_content="Script"
+):
+    with (
+        patch("services.script_lab.set_rls_context", new_callable=AsyncMock),
+        patch("services.script_lab.settings") as mock_settings,
+        patch(
+            "services.script_lab.load_script_for_context", new_callable=AsyncMock
+        ) as mock_load_script,
+        patch("services.script_generation.ScriptGenerationService") as mock_gen_cls,
+    ):
+        mock_settings.SCRIPT_LAB_MAX_TURNS = max_turns
+        mock_settings.VARIABLE_INJECTION_ENABLED = variable_injection
+        mock_script = MagicMock()
+        mock_script.content = script_content
+        mock_load_script.return_value = mock_script
+        mock_gen_cls.return_value = mock_gen_service(gen_result)
+        yield {"gen_cls": mock_gen_cls, "settings": mock_settings}
 
 
 @pytest.fixture

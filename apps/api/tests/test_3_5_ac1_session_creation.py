@@ -12,7 +12,14 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from conftest_3_5 import *
+from conftest_3_5 import (
+    TEST_ORG,
+    mock_session,
+    lab_service,
+    make_raw_chunk,
+    chat_pipeline_patches,
+    mock_gen_result,
+)
 from services.script_lab import ScriptLabService
 from schemas.script_lab import CreateLabSessionRequest
 
@@ -23,7 +30,6 @@ class TestAC1SessionCreation:
     async def test_3_5_001_given_agent_and_script_when_creating_session_then_session_id_returned(
         self, mock_session, lab_service
     ):
-        # [3.5-UNIT-001]
         with (
             patch("services.script_lab.load_agent_for_context", new_callable=AsyncMock),
             patch(
@@ -51,14 +57,13 @@ class TestAC1SessionCreation:
     async def test_3_5_002_given_new_session_when_inspecting_then_org_id_matches_caller(
         self, mock_session, lab_service
     ):
-        # [3.5-UNIT-002]
         captured_org = None
 
         with (
             patch("services.script_lab.load_agent_for_context", new_callable=AsyncMock),
             patch(
                 "services.script_lab.load_script_for_context", new_callable=AsyncMock
-            ) as mock_script,
+            ),
         ):
 
             def capture_add(instance):
@@ -81,7 +86,6 @@ class TestAC1SessionCreation:
     async def test_3_5_003_given_new_session_when_inspecting_then_expires_at_about_one_hour(
         self, mock_session, lab_service
     ):
-        # [3.5-UNIT-003]
         captured_expires_at = None
 
         with (
@@ -102,7 +106,7 @@ class TestAC1SessionCreation:
             before = datetime.now(timezone.utc)
             with patch("services.script_lab.settings") as mock_settings:
                 mock_settings.SCRIPT_LAB_SESSION_TTL_SECONDS = 3600
-                result = await lab_service.create_session(
+                await lab_service.create_session(
                     org_id=TEST_ORG, agent_id=1, script_id=2
                 )
             after = datetime.now(timezone.utc)
@@ -115,7 +119,6 @@ class TestAC1SessionCreation:
     async def test_3_5_004_given_creation_without_required_fields_when_validated_then_rejected(
         self,
     ):
-        # [3.5-UNIT-004]
         import pydantic
 
         with pytest.raises(pydantic.ValidationError):

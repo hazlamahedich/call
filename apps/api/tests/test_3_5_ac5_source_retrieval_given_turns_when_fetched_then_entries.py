@@ -13,7 +13,12 @@ from fastapi import HTTPException
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from conftest_3_5 import *
+from conftest_3_5 import (
+    TEST_ORG,
+    TEST_ORG_B,
+    mock_session,
+    lab_service,
+)
 from services.script_lab import ScriptLabService
 
 

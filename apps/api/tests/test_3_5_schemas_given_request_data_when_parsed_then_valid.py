@@ -12,7 +12,10 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from conftest_3_5 import *
+from conftest_3_5 import (
+    mock_session,
+    lab_service,
+)
 from schemas.script_lab import (
     CreateLabSessionRequest,
     LabChatRequest,

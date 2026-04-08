@@ -12,9 +12,12 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from conftest_3_5 import *
+from conftest_3_5 import (
+    lab_service,
+    sample_raw_chunks,
+    make_raw_chunk,
+)
 from services.script_lab import ScriptLabService
-from unittest.mock import AsyncMock
 
 
 @pytest.mark.asyncio
@@ -23,7 +26,6 @@ class TestAC3SourceAttribution:
     async def test_3_5_011_given_source_attribution_when_inspecting_then_document_name_present(
         self, lab_service, sample_raw_chunks
     ):
-        # [3.5-UNIT-011]
         attributions = lab_service._format_source_attribution(sample_raw_chunks)
         assert len(attributions) == 3
 
@@ -35,7 +37,6 @@ class TestAC3SourceAttribution:
     async def test_3_5_012_given_source_attribution_with_page_number_when_inspecting_then_page_number_present(
         self, lab_service, sample_raw_chunks
     ):
-        # [3.5-UNIT-012]
         attributions = lab_service._format_source_attribution(sample_raw_chunks)
 
         assert attributions[0].page_number == 3
@@ -46,7 +47,6 @@ class TestAC3SourceAttribution:
     async def test_3_5_013_given_source_attribution_when_inspecting_then_excerpt_is_first_200_chars(
         self, lab_service, sample_raw_chunks
     ):
-        # [3.5-UNIT-013]
         long_content = "A" * 350
         long_chunk = make_raw_chunk(
             chunk_id=99,
@@ -67,7 +67,6 @@ class TestAC3SourceAttribution:
     async def test_3_5_014_given_source_attribution_when_inspecting_then_similarity_score_between_0_and_1(
         self, lab_service, sample_raw_chunks
     ):
-        # [3.5-UNIT-014]
         attributions = lab_service._format_source_attribution(sample_raw_chunks)
 
         for attr in attributions:

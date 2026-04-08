@@ -14,23 +14,14 @@ from fastapi import HTTPException
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from conftest_3_5 import *
+from conftest_3_5 import (
+    TEST_ORG,
+    TEST_ORG_B,
+    mock_session,
+    lab_service,
+    make_overlay_row,
+)
 from services.script_lab import ScriptLabService
-
-
-def _make_overlay_row(**overrides):
-    defaults = {
-        "id": 1,
-        "org_id": TEST_ORG,
-        "agent_id": 1,
-        "script_id": 1,
-        "lead_id": None,
-        "status": "active",
-        "expires_at": datetime.now(timezone.utc) + timedelta(hours=1),
-        "scenario_overlay": None,
-    }
-    defaults.update(overrides)
-    return tuple(defaults.values())
 
 
 @pytest.mark.asyncio
@@ -39,8 +30,8 @@ class TestAC4ScenarioOverlay:
     async def test_3_5_070_given_active_session_when_overlay_set_then_response_returned(
         self, mock_session, lab_service
     ):
-        active_row = _make_overlay_row()
-        updated_row = _make_overlay_row(scenario_overlay={"name": "Acme"})
+        active_row = make_overlay_row()
+        updated_row = make_overlay_row(scenario_overlay={"name": "Acme"})
 
         call_count = 0
 
@@ -92,9 +83,8 @@ class TestAC4ScenarioOverlay:
     async def test_3_5_072_given_cross_tenant_session_when_overlay_then_403(
         self, mock_session, lab_service
     ):
-        cross_tenant_row = _make_overlay_row(org_id=TEST_ORG_B)
         mock_result = MagicMock()
-        mock_result.fetchone.return_value = cross_tenant_row
+        mock_result.fetchone.return_value = make_overlay_row(org_id=TEST_ORG_B)
         mock_session.execute = AsyncMock(return_value=mock_result)
 
         with pytest.raises(HTTPException) as exc_info:
@@ -109,9 +99,8 @@ class TestAC4ScenarioOverlay:
     async def test_3_5_073_given_expired_session_when_overlay_then_410(
         self, mock_session, lab_service
     ):
-        expired_status_row = _make_overlay_row(status="expired")
         mock_result = MagicMock()
-        mock_result.fetchone.return_value = expired_status_row
+        mock_result.fetchone.return_value = make_overlay_row(status="expired")
         mock_session.execute = AsyncMock(return_value=mock_result)
 
         with pytest.raises(HTTPException) as exc_info:
@@ -126,11 +115,10 @@ class TestAC4ScenarioOverlay:
     async def test_3_5_074_given_session_past_ttl_but_active_status_when_overlay_then_410(
         self, mock_session, lab_service
     ):
-        past_ttl_row = _make_overlay_row(
+        mock_result = MagicMock()
+        mock_result.fetchone.return_value = make_overlay_row(
             expires_at=datetime.now(timezone.utc) - timedelta(minutes=5)
         )
-        mock_result = MagicMock()
-        mock_result.fetchone.return_value = past_ttl_row
         mock_session.execute = AsyncMock(return_value=mock_result)
 
         with pytest.raises(HTTPException) as exc_info:
@@ -144,8 +132,8 @@ class TestAC4ScenarioOverlay:
     async def test_3_5_075_given_overlay_values_when_sanitized_then_each_value_processed(
         self, mock_session, lab_service
     ):
-        active_row = _make_overlay_row()
-        updated_row = _make_overlay_row(scenario_overlay={"a": "safe_a", "b": "safe_b"})
+        active_row = make_overlay_row()
+        updated_row = make_overlay_row(scenario_overlay={"a": "safe_a", "b": "safe_b"})
 
         call_count = 0
 
@@ -187,9 +175,8 @@ class TestAC4ScenarioOverlay:
         naive_past = datetime.now(timezone.utc) - timedelta(minutes=5)
         naive_past = naive_past.replace(tzinfo=None)
 
-        active_row = _make_overlay_row(expires_at=naive_past)
         mock_result = MagicMock()
-        mock_result.fetchone.return_value = active_row
+        mock_result.fetchone.return_value = make_overlay_row(expires_at=naive_past)
         mock_session.execute = AsyncMock(return_value=mock_result)
 
         with pytest.raises(HTTPException) as exc_info:
@@ -203,7 +190,7 @@ class TestAC4ScenarioOverlay:
     async def test_3_5_077_given_session_vanished_after_update_when_overlay_then_404(
         self, mock_session, lab_service
     ):
-        active_row = _make_overlay_row()
+        active_row = make_overlay_row()
 
         call_count = 0
 

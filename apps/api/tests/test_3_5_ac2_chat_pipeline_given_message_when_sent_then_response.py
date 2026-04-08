@@ -15,40 +15,29 @@ from fastapi import HTTPException
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from conftest_3_5 import *
+from conftest_3_5 import (
+    TEST_ORG,
+    TEST_ORG_B,
+    mock_session,
+    lab_service,
+    make_active_row,
+    make_raw_chunk,
+    mock_gen_result,
+    mock_gen_service,
+    chat_pipeline_patches,
+)
 from services.script_lab import ScriptLabService
 
 
-def _make_active_row(**overrides):
-    defaults = {
-        "id": 1,
-        "org_id": TEST_ORG,
-        "agent_id": 1,
-        "script_id": 10,
-        "lead_id": None,
-        "scenario_overlay": None,
-        "expires_at": datetime.now(timezone.utc) + timedelta(hours=1),
-        "status": "active",
-        "turn_count": 0,
-    }
-    defaults.update(overrides)
-    return tuple(defaults.values())
-
-
-def _mock_gen_result(response="AI response", confidence=0.85, chunks=None):
-    gen_result = MagicMock()
-    gen_result.response = response
-    gen_result.grounding_confidence = confidence
-    gen_result.source_chunks = chunks or [
-        make_raw_chunk(),
-    ]
-    return gen_result
-
-
-def _make_mock_gen_service(gen_result):
-    mock_gen = AsyncMock()
-    mock_gen.generate_response.return_value = gen_result
-    return mock_gen
+def _setup_session(mock_session, row, added_instances=None):
+    mock_result = MagicMock()
+    mock_result.fetchone.return_value = row
+    mock_session.execute = AsyncMock(return_value=mock_result)
+    if added_instances is not None:
+        mock_session.add = MagicMock(side_effect=lambda i: added_instances.append(i))
+    else:
+        mock_session.add = MagicMock()
+    mock_session.flush = AsyncMock()
 
 
 @pytest.mark.asyncio
@@ -57,32 +46,9 @@ class TestAC2ChatPipeline:
     async def test_3_5_050_given_active_session_when_chat_sent_then_response_returned(
         self, mock_session, lab_service
     ):
-        active_row = _make_active_row(turn_count=0)
-        mock_result = MagicMock()
-        mock_result.fetchone.return_value = active_row
-        mock_session.execute = AsyncMock(return_value=mock_result)
-        mock_session.add = MagicMock()
-        mock_session.flush = AsyncMock()
+        _setup_session(mock_session, make_active_row(turn_count=0))
 
-        gen_result = _mock_gen_result()
-
-        with (
-            patch("services.script_lab.set_rls_context", new_callable=AsyncMock),
-            patch("services.script_lab.settings") as mock_settings,
-            patch(
-                "services.script_lab.load_script_for_context", new_callable=AsyncMock
-            ) as mock_load_script,
-            patch("services.script_generation.ScriptGenerationService") as mock_gen_cls,
-        ):
-            mock_settings.SCRIPT_LAB_MAX_TURNS = 50
-            mock_settings.VARIABLE_INJECTION_ENABLED = False
-
-            mock_script = MagicMock()
-            mock_script.content = "Hello {{name}}"
-            mock_load_script.return_value = mock_script
-
-            mock_gen_cls.return_value = _make_mock_gen_service(gen_result)
-
+        async with chat_pipeline_patches(mock_gen_result()):
             result = await lab_service.send_chat_message(
                 org_id=TEST_ORG, session_id=1, message="Hi there"
             )
@@ -96,38 +62,10 @@ class TestAC2ChatPipeline:
     async def test_3_5_051_given_chat_when_inspecting_turns_then_user_and_assistant_persisted(
         self, mock_session, lab_service
     ):
-        active_row = _make_active_row(turn_count=2)
-        mock_result = MagicMock()
-        mock_result.fetchone.return_value = active_row
-        mock_session.execute = AsyncMock(return_value=mock_result)
-
         added_instances = []
+        _setup_session(mock_session, make_active_row(turn_count=2), added_instances)
 
-        def capture_add(instance):
-            added_instances.append(instance)
-
-        mock_session.add = MagicMock(side_effect=capture_add)
-        mock_session.flush = AsyncMock()
-
-        gen_result = _mock_gen_result()
-
-        with (
-            patch("services.script_lab.set_rls_context", new_callable=AsyncMock),
-            patch("services.script_lab.settings") as mock_settings,
-            patch(
-                "services.script_lab.load_script_for_context", new_callable=AsyncMock
-            ) as mock_load_script,
-            patch("services.script_generation.ScriptGenerationService") as mock_gen_cls,
-        ):
-            mock_settings.SCRIPT_LAB_MAX_TURNS = 50
-            mock_settings.VARIABLE_INJECTION_ENABLED = False
-
-            mock_script = MagicMock()
-            mock_script.content = "Script"
-            mock_load_script.return_value = mock_script
-
-            mock_gen_cls.return_value = _make_mock_gen_service(gen_result)
-
+        async with chat_pipeline_patches(mock_gen_result()):
             await lab_service.send_chat_message(
                 org_id=TEST_ORG, session_id=1, message="Test message"
             )
@@ -161,9 +99,8 @@ class TestAC2ChatPipeline:
     async def test_3_5_053_given_cross_tenant_session_when_chat_then_403(
         self, mock_session, lab_service
     ):
-        cross_tenant_row = _make_active_row(org_id=TEST_ORG_B)
         mock_result = MagicMock()
-        mock_result.fetchone.return_value = cross_tenant_row
+        mock_result.fetchone.return_value = make_active_row(org_id=TEST_ORG_B)
         mock_session.execute = AsyncMock(return_value=mock_result)
 
         with (
@@ -181,32 +118,9 @@ class TestAC2ChatPipeline:
     async def test_3_5_054_given_low_confidence_response_when_chat_then_warning_true(
         self, mock_session, lab_service
     ):
-        active_row = _make_active_row(turn_count=0)
-        mock_result = MagicMock()
-        mock_result.fetchone.return_value = active_row
-        mock_session.execute = AsyncMock(return_value=mock_result)
-        mock_session.add = MagicMock()
-        mock_session.flush = AsyncMock()
+        _setup_session(mock_session, make_active_row(turn_count=0))
 
-        gen_result = _mock_gen_result(confidence=0.3)
-
-        with (
-            patch("services.script_lab.set_rls_context", new_callable=AsyncMock),
-            patch("services.script_lab.settings") as mock_settings,
-            patch(
-                "services.script_lab.load_script_for_context", new_callable=AsyncMock
-            ) as mock_load_script,
-            patch("services.script_generation.ScriptGenerationService") as mock_gen_cls,
-        ):
-            mock_settings.SCRIPT_LAB_MAX_TURNS = 50
-            mock_settings.VARIABLE_INJECTION_ENABLED = False
-
-            mock_script = MagicMock()
-            mock_script.content = "Script"
-            mock_load_script.return_value = mock_script
-
-            mock_gen_cls.return_value = _make_mock_gen_service(gen_result)
-
+        async with chat_pipeline_patches(mock_gen_result(confidence=0.3)):
             result = await lab_service.send_chat_message(
                 org_id=TEST_ORG, session_id=1, message="Low confidence test"
             )
@@ -218,12 +132,9 @@ class TestAC2ChatPipeline:
     async def test_3_5_055_given_pipeline_failure_when_chat_then_500(
         self, mock_session, lab_service
     ):
-        active_row = _make_active_row(turn_count=0)
-        mock_result = MagicMock()
-        mock_result.fetchone.return_value = active_row
-        mock_session.execute = AsyncMock(return_value=mock_result)
-        mock_session.add = MagicMock()
-        mock_session.flush = AsyncMock()
+        _setup_session(mock_session, make_active_row(turn_count=0))
+        failing_gen = AsyncMock()
+        failing_gen.generate_response.side_effect = RuntimeError("LLM down")
 
         with (
             patch("services.script_lab.set_rls_context", new_callable=AsyncMock),
@@ -235,14 +146,10 @@ class TestAC2ChatPipeline:
         ):
             mock_settings.SCRIPT_LAB_MAX_TURNS = 50
             mock_settings.VARIABLE_INJECTION_ENABLED = False
-
             mock_script = MagicMock()
             mock_script.content = "Script"
             mock_load_script.return_value = mock_script
-
-            mock_gen_instance = AsyncMock()
-            mock_gen_instance.generate_response.side_effect = RuntimeError("LLM down")
-            mock_gen_cls.return_value = mock_gen_instance
+            mock_gen_cls.return_value = failing_gen
 
             with pytest.raises(HTTPException) as exc_info:
                 await lab_service.send_chat_message(
@@ -256,12 +163,11 @@ class TestAC2ChatPipeline:
     async def test_3_5_056_given_http_exception_in_pipeline_when_chat_then_propagated(
         self, mock_session, lab_service
     ):
-        active_row = _make_active_row(turn_count=0)
-        mock_result = MagicMock()
-        mock_result.fetchone.return_value = active_row
-        mock_session.execute = AsyncMock(return_value=mock_result)
-        mock_session.add = MagicMock()
-        mock_session.flush = AsyncMock()
+        _setup_session(mock_session, make_active_row(turn_count=0))
+        failing_gen = AsyncMock()
+        failing_gen.generate_response.side_effect = HTTPException(
+            status_code=422, detail={"error": {"code": "test_error"}}
+        )
 
         with (
             patch("services.script_lab.set_rls_context", new_callable=AsyncMock),
@@ -273,16 +179,10 @@ class TestAC2ChatPipeline:
         ):
             mock_settings.SCRIPT_LAB_MAX_TURNS = 50
             mock_settings.VARIABLE_INJECTION_ENABLED = False
-
             mock_script = MagicMock()
             mock_script.content = "Script"
             mock_load_script.return_value = mock_script
-
-            mock_gen_instance = AsyncMock()
-            mock_gen_instance.generate_response.side_effect = HTTPException(
-                status_code=422, detail={"error": {"code": "test_error"}}
-            )
-            mock_gen_cls.return_value = mock_gen_instance
+            mock_gen_cls.return_value = failing_gen
 
             with pytest.raises(HTTPException) as exc_info:
                 await lab_service.send_chat_message(
@@ -295,14 +195,7 @@ class TestAC2ChatPipeline:
     async def test_3_5_057_given_variable_injection_enabled_when_chat_then_template_rendered(
         self, mock_session, lab_service
     ):
-        active_row = _make_active_row(turn_count=0, lead_id=5)
-        mock_result = MagicMock()
-        mock_result.fetchone.return_value = active_row
-        mock_session.execute = AsyncMock(return_value=mock_result)
-        mock_session.add = MagicMock()
-        mock_session.flush = AsyncMock()
-
-        gen_result = _mock_gen_result()
+        _setup_session(mock_session, make_active_row(turn_count=0, lead_id=5))
 
         mock_render_result = MagicMock()
         mock_render_result.rendered_text = "Hello John Doe, welcome!"
@@ -323,19 +216,15 @@ class TestAC2ChatPipeline:
         ):
             mock_settings.SCRIPT_LAB_MAX_TURNS = 50
             mock_settings.VARIABLE_INJECTION_ENABLED = True
-
             mock_script = MagicMock()
             mock_script.content = "Hello {{name}}"
             mock_load_script.return_value = mock_script
-
             mock_lead = MagicMock()
             mock_load_lead.return_value = mock_lead
-
             mock_vi_instance = AsyncMock()
             mock_vi_instance.render_template.return_value = mock_render_result
             mock_vi_cls.return_value = mock_vi_instance
-
-            mock_gen_cls.return_value = _make_mock_gen_service(gen_result)
+            mock_gen_cls.return_value = mock_gen_service(mock_gen_result())
 
             result = await lab_service.send_chat_message(
                 org_id=TEST_ORG, session_id=1, message="Hi"
@@ -348,18 +237,15 @@ class TestAC2ChatPipeline:
     async def test_3_5_058_given_scenario_overlay_without_lead_when_chat_then_overlay_used_as_lead(
         self, mock_session, lab_service
     ):
-        active_row = _make_active_row(
-            turn_count=0,
-            lead_id=None,
-            scenario_overlay={"company": "Acme Corp"},
+        _setup_session(
+            mock_session,
+            make_active_row(
+                turn_count=0,
+                lead_id=None,
+                scenario_overlay={"company": "Acme Corp"},
+            ),
         )
-        mock_result = MagicMock()
-        mock_result.fetchone.return_value = active_row
-        mock_session.execute = AsyncMock(return_value=mock_result)
-        mock_session.add = MagicMock()
-        mock_session.flush = AsyncMock()
 
-        gen_result = _mock_gen_result()
         mock_render_result = MagicMock()
         mock_render_result.rendered_text = "Rendered"
 
@@ -376,16 +262,13 @@ class TestAC2ChatPipeline:
         ):
             mock_settings.SCRIPT_LAB_MAX_TURNS = 50
             mock_settings.VARIABLE_INJECTION_ENABLED = True
-
             mock_script = MagicMock()
             mock_script.content = "Template"
             mock_load_script.return_value = mock_script
-
             mock_vi_instance = AsyncMock()
             mock_vi_instance.render_template.return_value = mock_render_result
             mock_vi_cls.return_value = mock_vi_instance
-
-            mock_gen_cls.return_value = _make_mock_gen_service(gen_result)
+            mock_gen_cls.return_value = mock_gen_service(mock_gen_result())
 
             await lab_service.send_chat_message(
                 org_id=TEST_ORG, session_id=1, message="Overlay test"
@@ -399,73 +282,42 @@ class TestAC2ChatPipeline:
     async def test_3_5_059_given_assistant_turn_persist_failure_when_chat_then_response_still_returned(
         self, mock_session, lab_service
     ):
-        active_row = _make_active_row(turn_count=0)
+        active_row = make_active_row(turn_count=0)
         mock_result = MagicMock()
         mock_result.fetchone.return_value = active_row
-
         mock_session.execute = AsyncMock(return_value=mock_result)
         mock_session.add = MagicMock()
-        mock_session.flush = AsyncMock()
 
-        gen_result = _mock_gen_result()
+        flush_call_count = 0
 
-        with (
-            patch("services.script_lab.set_rls_context", new_callable=AsyncMock),
-            patch("services.script_lab.settings") as mock_settings,
-            patch(
-                "services.script_lab.load_script_for_context", new_callable=AsyncMock
-            ) as mock_load_script,
-            patch("services.script_generation.ScriptGenerationService") as mock_gen_cls,
-        ):
-            mock_settings.SCRIPT_LAB_MAX_TURNS = 50
-            mock_settings.VARIABLE_INJECTION_ENABLED = False
+        async def mock_flush():
+            nonlocal flush_call_count
+            flush_call_count += 1
+            if flush_call_count == 2:
+                raise RuntimeError("DB connection lost")
 
-            mock_script = MagicMock()
-            mock_script.content = "Script"
-            mock_load_script.return_value = mock_script
+        mock_session.flush = AsyncMock(side_effect=mock_flush)
 
-            mock_gen_cls.return_value = _make_mock_gen_service(gen_result)
-
+        async with chat_pipeline_patches(mock_gen_result()):
             result = await lab_service.send_chat_message(
                 org_id=TEST_ORG, session_id=1, message="Test"
             )
 
         assert result.response_text == "AI response"
+        assert flush_call_count >= 2
 
     @pytest.mark.p2
     async def test_3_5_060_given_source_attributions_in_chat_when_inspecting_then_chunk_id_present(
         self, mock_session, lab_service
     ):
-        active_row = _make_active_row(turn_count=0)
-        mock_result = MagicMock()
-        mock_result.fetchone.return_value = active_row
-        mock_session.execute = AsyncMock(return_value=mock_result)
-        mock_session.add = MagicMock()
-        mock_session.flush = AsyncMock()
+        _setup_session(mock_session, make_active_row(turn_count=0))
 
         chunks = [
             make_raw_chunk(chunk_id=100, similarity=0.9),
             make_raw_chunk(chunk_id=101, similarity=0.7),
         ]
-        gen_result = _mock_gen_result(chunks=chunks)
 
-        with (
-            patch("services.script_lab.set_rls_context", new_callable=AsyncMock),
-            patch("services.script_lab.settings") as mock_settings,
-            patch(
-                "services.script_lab.load_script_for_context", new_callable=AsyncMock
-            ) as mock_load_script,
-            patch("services.script_generation.ScriptGenerationService") as mock_gen_cls,
-        ):
-            mock_settings.SCRIPT_LAB_MAX_TURNS = 50
-            mock_settings.VARIABLE_INJECTION_ENABLED = False
-
-            mock_script = MagicMock()
-            mock_script.content = "Script"
-            mock_load_script.return_value = mock_script
-
-            mock_gen_cls.return_value = _make_mock_gen_service(gen_result)
-
+        async with chat_pipeline_patches(mock_gen_result(chunks=chunks)):
             result = await lab_service.send_chat_message(
                 org_id=TEST_ORG, session_id=1, message="Attribution test"
             )
