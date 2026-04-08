@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -20,6 +21,7 @@ from routers import (
     ai_settings,
     scripts,
     leads,
+    script_lab,
 )
 from routers.ws_transcript import router as ws_transcript_router
 from middleware.auth import AuthMiddleware
@@ -31,7 +33,6 @@ from services.cache_strategy import CacheStrategy, create_cache_strategy
 from services.preset_samples import PresetSampleService
 from database.session import AsyncSessionLocal
 
-# Cache strategy for preset sample caching (Story 2.6)
 _cache_strategy: CacheStrategy | None = None
 
 
@@ -88,7 +89,24 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"Warning: knowledge base recovery failed: {e}")
 
+    # Script Lab background cleanup (Story 3.5)
+    async def _lab_cleanup_loop():
+        while True:
+            try:
+                async with AsyncSessionLocal() as db:
+                    from services.script_lab import ScriptLabService
+
+                    svc = ScriptLabService(db)
+                    await svc.cleanup_expired_sessions()
+            except Exception as e:
+                print(f"Warning: lab cleanup failed: {e}")
+            await asyncio.sleep(settings.SCRIPT_LAB_CLEANUP_INTERVAL_SECONDS)
+
+    lab_cleanup_task = asyncio.create_task(_lab_cleanup_loop())
+
     yield
+
+    lab_cleanup_task.cancel()
 
     # Shutdown
     from routers.knowledge import get_ingestion_service
@@ -144,3 +162,4 @@ app.include_router(knowledge.router, prefix="/api/v1", tags=["Knowledge Base"])
 app.include_router(ai_settings.router, prefix="/api/v1", tags=["AI Provider Settings"])
 app.include_router(scripts.router, prefix="/api/v1/scripts", tags=["Scripts"])
 app.include_router(leads.router, prefix="/api/v1/leads", tags=["Leads"])
+app.include_router(script_lab.router, prefix="/api/v1/script-lab", tags=["Script Lab"])

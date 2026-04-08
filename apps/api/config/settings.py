@@ -96,6 +96,11 @@ class Settings(BaseSettings):
     VARIABLE_RESOLUTION_TIMEOUT_MS: int = 100
     MAX_VARIABLE_VALUE_LENGTH: int = 500
 
+    SCRIPT_LAB_MAX_TURNS: int = 50
+    SCRIPT_LAB_SESSION_TTL_SECONDS: int = 3600
+    SCRIPT_LAB_SOURCE_MIN_SIMILARITY: float = 0.3
+    SCRIPT_LAB_CLEANUP_INTERVAL_SECONDS: int = 300
+
     @field_validator("VARIABLE_RESOLUTION_TIMEOUT_MS")
     @classmethod
     def validate_resolution_timeout(cls, v: int) -> int:

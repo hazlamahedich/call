@@ -16,3 +16,5 @@ from models.call_performance import CallPerformance
 from models.knowledge_base import KnowledgeBase
 from models.knowledge_chunk import KnowledgeChunk
 from models.ai_provider_settings import AIProviderSettings
+from models.script_lab_session import ScriptLabSession
+from models.script_lab_turn import ScriptLabTurn
