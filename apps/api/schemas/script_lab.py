@@ -3,6 +3,8 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
+from schemas.factual_hook import ClaimVerificationResponse
+
 
 class CreateLabSessionRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True, alias_generator=to_camel)
@@ -48,6 +50,10 @@ class LabChatResponse(BaseModel):
     grounding_confidence: float
     turn_number: int
     low_confidence_warning: bool
+    was_corrected: bool = False
+    correction_count: int = 0
+    verification_timed_out: bool = False
+    verified_claims: list[ClaimVerificationResponse] = []
 
 
 class ScenarioOverlayRequest(BaseModel):

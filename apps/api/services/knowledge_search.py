@@ -8,6 +8,19 @@ from config.settings import settings
 logger = logging.getLogger(__name__)
 
 
+async def _invalidate_script_gen_cache(org_id: str):
+    try:
+        import redis.asyncio as aioredis
+
+        redis = aioredis.from_url(settings.REDIS_URL)
+        keys = [k async for k in redis.scan_iter(match=f"script_gen:{org_id}:*")]
+        if keys:
+            await redis.delete(*keys)
+        await redis.close()
+    except Exception as e:
+        logger.warning("Script gen cache invalidation failed for org %s: %s", org_id, e)
+
+
 async def search_knowledge_chunks(
     session: AsyncSession,
     query_embedding: list[float],

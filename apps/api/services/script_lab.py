@@ -16,6 +16,7 @@ from schemas.script_lab import (
     LabSessionResponse,
     SourceAttribution,
 )
+from schemas.factual_hook import ClaimVerificationResponse
 from services.shared_queries import (
     set_rls_context,
     load_agent_for_context,
@@ -262,6 +263,12 @@ class ScriptLabService:
             grounding_confidence = gen_result.grounding_confidence
             low_confidence_warning = grounding_confidence < 0.5
             response_text = gen_result.response
+            was_corrected = getattr(gen_result, "was_corrected", False)
+            correction_count = getattr(gen_result, "correction_count", 0)
+            verification_timed_out = getattr(
+                gen_result, "verification_timed_out", False
+            )
+            verified_claims_raw = getattr(gen_result, "verified_claims", [])
 
         except HTTPException:
             raise
@@ -306,6 +313,8 @@ class ScriptLabService:
                     "sourceAttributions": attribution_data,
                     "groundingConfidence": grounding_confidence,
                     "lowConfidenceWarning": low_confidence_warning,
+                    "correctionCount": correction_count,
+                    "wasCorrected": was_corrected,
                     "orgId": org_id,
                 }
             )
@@ -330,12 +339,26 @@ class ScriptLabService:
         )
         await self._session.flush()
 
+        verified_claim_responses = [
+            ClaimVerificationResponse(
+                claim_text=vc.claim_text,
+                is_supported=vc.is_supported,
+                max_similarity=vc.max_similarity,
+                verification_error=vc.verification_error,
+            )
+            for vc in verified_claims_raw
+        ]
+
         return LabChatResponse(
             response_text=response_text,
             source_attributions=source_attributions,
             grounding_confidence=grounding_confidence,
             turn_number=new_turn_number,
             low_confidence_warning=low_confidence_warning,
+            was_corrected=was_corrected,
+            correction_count=correction_count,
+            verification_timed_out=verification_timed_out,
+            verified_claims=verified_claim_responses,
         )
 
     async def set_scenario_overlay(

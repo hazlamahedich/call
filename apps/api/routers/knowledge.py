@@ -40,7 +40,10 @@ from services.embedding import (
     create_embedding_provider,
 )
 from services.knowledge_base_service import KnowledgeBaseService
-from services.knowledge_search import search_knowledge_chunks
+from services.knowledge_search import (
+    search_knowledge_chunks,
+    _invalidate_script_gen_cache,
+)
 from services.namespace_audit import NamespaceAuditService, AuditReport
 from services.tenant_helpers import require_tenant_resource
 
@@ -190,6 +193,7 @@ async def _process_ingestion(
             {"kb_id": kb_id, "chunk_count": len(all_embeddings), "org_id": org_id},
         )
         await session.commit()
+        await _invalidate_script_gen_cache(org_id)
 
         logger.info(
             "Knowledge base %d processed for org %s: %d chunks, processing->ready",
@@ -684,6 +688,8 @@ async def delete_document(
     if not deleted:
         raise HTTPException(status_code=404, detail="Document not found")
 
+    await _invalidate_script_gen_cache(org_id)
+
     logger.info(
         "Deleted knowledge base %d for org %s",
         document_id,
@@ -817,6 +823,7 @@ async def retry_document(
         {"doc_id": document_id, "org_id": org_id},
     )
     await session.commit()
+    await _invalidate_script_gen_cache(org_id)
 
     task = asyncio.create_task(
         _process_ingestion(

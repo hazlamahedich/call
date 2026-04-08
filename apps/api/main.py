@@ -22,6 +22,7 @@ from routers import (
     scripts,
     leads,
     script_lab,
+    factual_hook,
 )
 from routers.ws_transcript import router as ws_transcript_router
 from middleware.auth import AuthMiddleware
@@ -163,3 +164,6 @@ app.include_router(ai_settings.router, prefix="/api/v1", tags=["AI Provider Sett
 app.include_router(scripts.router, prefix="/api/v1/scripts", tags=["Scripts"])
 app.include_router(leads.router, prefix="/api/v1/leads", tags=["Leads"])
 app.include_router(script_lab.router, prefix="/api/v1/script-lab", tags=["Script Lab"])
+app.include_router(
+    factual_hook.router, prefix="/api/v1/factual-hook", tags=["Factual Hook"]
+)

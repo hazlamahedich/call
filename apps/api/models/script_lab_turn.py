@@ -15,3 +15,5 @@ class ScriptLabTurn(TenantModel, table=True):
     source_attributions: Optional[list] = Field(default=None)
     grounding_confidence: Optional[float] = Field(default=None)
     low_confidence_warning: bool = Field(default=False)
+    correction_count: int = Field(default=0)
+    was_corrected: bool = Field(default=False)

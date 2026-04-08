@@ -55,6 +55,20 @@ from conftest_3_4 import (  # noqa: F401 - registers fixtures via import
 )
 
 
+from conftest_3_6 import (  # noqa: F401 - registers fixtures via import
+    make_claim_verification,
+    make_factual_hook_result,
+    mock_llm,
+    mock_embedding,
+    mock_session,
+    factual_hook_service,
+    sample_claims,
+    sample_knowledge_chunks,
+    flaky_embedding_service,
+    degraded_embedding_service,
+)
+
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool

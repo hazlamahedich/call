@@ -91,6 +91,9 @@ class ScriptGenerationResult:
     cached: bool
     config_version: Optional[int] = None
     cost_estimate: float = 0.0
+    was_corrected: bool = False
+    correction_count: int = 0
+    verification_timed_out: bool = False
 
 
 class ScriptGenerationService:
@@ -117,6 +120,7 @@ class ScriptGenerationService:
         min_confidence: float = 0.5,
         lead_id: int | None = None,
         script_id: int | None = None,
+        factual_hook_enabled: bool = True,
     ) -> ScriptGenerationResult:
         if (lead_id is None) != (script_id is None):
             from fastapi import HTTPException
@@ -160,6 +164,9 @@ class ScriptGenerationService:
         if cached:
             try:
                 cached_data = json.loads(cached)
+                cached_data.setdefault("was_corrected", False)
+                cached_data.setdefault("correction_count", 0)
+                cached_data.setdefault("verification_timed_out", False)
                 latency_ms = (time.monotonic() - start) * 1000
                 cached_data["latency_ms"] = latency_ms
                 cached_data["cached"] = True
@@ -260,6 +267,77 @@ class ScriptGenerationService:
             min_confidence=min_confidence,
         )
 
+        hook_was_corrected = False
+        hook_correction_count = 0
+        hook_verification_timed_out = False
+
+        if (
+            settings.FACTUAL_HOOK_ENABLED
+            and factual_hook_enabled
+            and not cached
+            and grounding_result.score > 0
+        ):
+            from services.factual_hook import FactualHookService
+
+            hook = FactualHookService(self._session, self._llm, self._embedding)
+            try:
+                hook_result = await asyncio.wait_for(
+                    hook.verify_and_correct(
+                        response=llm_response,
+                        source_chunks=chunks,
+                        query=query,
+                        org_id=org_id,
+                        knowledge_base_ids=kb_ids,
+                    ),
+                    timeout=settings.FACTUAL_HOOK_VERIFICATION_TIMEOUT_MS / 1000,
+                )
+                if hook_result.was_corrected:
+                    llm_response = hook_result.final_response
+                    grounding_result = GroundingService.compute_confidence(
+                        chunks=chunks,
+                        response=llm_response,
+                        max_source_chunks=max_source_chunks,
+                        min_confidence=min_confidence,
+                    )
+                hook_was_corrected = hook_result.was_corrected
+                hook_correction_count = hook_result.correction_count
+                hook_verification_timed_out = hook_result.verification_timed_out
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "Factual hook timed out after %dms",
+                    settings.FACTUAL_HOOK_VERIFICATION_TIMEOUT_MS,
+                    extra={
+                        "org_id": org_id,
+                        "query_hash": hashlib.sha256(query.encode()).hexdigest()[:8],
+                    },
+                )
+                result = ScriptGenerationResult(
+                    response=llm_response,
+                    grounding_confidence=grounding_result.score,
+                    is_low_confidence=grounding_result.is_low_confidence,
+                    source_chunks=chunks,
+                    model=settings.AI_LLM_MODEL,
+                    latency_ms=(time.monotonic() - start) * 1000,
+                    grounding_mode=grounding_mode,
+                    was_truncated=grounding_result.was_truncated or was_truncated,
+                    cached=False,
+                    cost_estimate=self._estimate_cost(
+                        system_prompt, user_message, llm_response
+                    ),
+                    was_corrected=False,
+                    correction_count=0,
+                    verification_timed_out=True,
+                )
+                await self._cache_result(
+                    query,
+                    org_id,
+                    agent_id,
+                    result,
+                    lead_id=lead_id,
+                    script_id=script_id,
+                )
+                return result
+
         latency_ms = (time.monotonic() - start) * 1000
         max_similarity = max(c["similarity"] for c in chunks) if chunks else 0.0
         cost = self._estimate_cost(system_prompt, user_message, llm_response)
@@ -276,6 +354,9 @@ class ScriptGenerationService:
             cached=False,
             config_version=None,
             cost_estimate=cost,
+            was_corrected=hook_was_corrected,
+            correction_count=hook_correction_count,
+            verification_timed_out=hook_verification_timed_out,
         )
 
         await self._cache_result(
@@ -481,6 +562,9 @@ class ScriptGenerationService:
                     "grounding_mode": result.grounding_mode,
                     "was_truncated": result.was_truncated,
                     "cost_estimate": result.cost_estimate,
+                    "was_corrected": result.was_corrected,
+                    "correction_count": result.correction_count,
+                    "verification_timed_out": result.verification_timed_out,
                 }
             )
             await self._redis.setex(
