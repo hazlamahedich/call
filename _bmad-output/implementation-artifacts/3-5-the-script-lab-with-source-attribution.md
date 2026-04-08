@@ -753,7 +753,13 @@ glm-5.1
 - Background cleanup task registered in FastAPI lifespan with proper shutdown cancellation (E-002)
 - Turn limit enforcement with SELECT FOR UPDATE for concurrency safety (E-003/E-005)
 - Frontend uses `(dashboard)` route group pattern (C-002), canonical server action auth pattern, click-triggered source tooltips (S-001)
-- 44 unit tests passing across 6 test files covering ACs 1, 3, 6, 8, security, and schema validation
+- 87 unit tests passing across 11 test files covering all ACs (1–8), security, schema validation, helpers, and edge cases (expanded from initial 44 tests in 6 files)
+- Test automation expansion (2026-04-08): Added 5 new test files with 43 new tests covering AC2 (chat pipeline), AC4 (scenario overlay), AC5 (source retrieval), AC7 (delete session), and helpers/edge cases
+  - `test_3_5_ac2_chat_pipeline_given_message_when_sent_then_response.py` — 11 tests: active session response, turn persistence, 404/403, low confidence, pipeline failure, HTTPException propagation, variable injection wiring, overlay as lead substitute, assistant turn failure resilience, source attribution in chat
+  - `test_3_5_ac4_scenario_overlay_given_overlay_when_set_then_response.py` — 8 tests: successful overlay, 404/403/410, sanitization wiring, naive datetime, session vanished after update
+  - `test_3_5_ac5_source_retrieval_given_turns_when_fetched_then_entries.py` — 7 tests: turns with entries, 404/403, sequential turns, no assistant turns, orphan turn, null confidence default
+  - `test_3_5_ac7_delete_session_given_session_when_deleted_then_soft_delete.py` — 4 tests: successful soft delete, 404/403, session + turns both soft-deleted
+  - `test_3_5_helpers_and_edge_cases_given_input_when_processed_then_correct.py` — 13 tests: `_ensure_dict` (5 variants), `_ensure_list` (5 variants), null expires_at → 500, naive datetime tz handling, create_session with lead_id
 - Code review (3-layer: Blind Hunter + Edge Case Hunter + Acceptance Auditor) completed 2026-04-08 — 18 findings fixed:
   - Fixed dual `turn_count` UPDATE race condition — both increments now use atomic `turn_count + 1` instead of overwriting with fixed value
   - Added `_ensure_dict()` / `_ensure_list()` JSONB deserialization guards for raw SQL query results
@@ -793,6 +799,11 @@ glm-5.1
 - `apps/api/tests/test_3_5_ac8_low_confidence_given_weak_grounding_when_shown_then_warning.py`
 - `apps/api/tests/test_3_5_security_overlay_injection_given_malicious_overlay_when_processed_then_sanitized.py`
 - `apps/api/tests/test_3_5_schemas_given_request_data_when_parsed_then_valid.py`
+- `apps/api/tests/test_3_5_ac2_chat_pipeline_given_message_when_sent_then_response.py`
+- `apps/api/tests/test_3_5_ac4_scenario_overlay_given_overlay_when_set_then_response.py`
+- `apps/api/tests/test_3_5_ac5_source_retrieval_given_turns_when_fetched_then_entries.py`
+- `apps/api/tests/test_3_5_ac7_delete_session_given_session_when_deleted_then_soft_delete.py`
+- `apps/api/tests/test_3_5_helpers_and_edge_cases_given_input_when_processed_then_correct.py`
 
 **Modified Files:**
 - `apps/api/models/__init__.py`
