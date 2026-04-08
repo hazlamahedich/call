@@ -4,15 +4,11 @@ Tests for _ensure_dict, _ensure_list, null expiry in _check_session_expiry,
 and session creation with lead_id.
 """
 
-import sys
 from datetime import datetime, timezone, timedelta
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from conftest_3_5 import (
     TEST_ORG,

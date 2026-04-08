@@ -1,13 +1,9 @@
-import sys
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import pytest_asyncio
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from models.script_lab_session import ScriptLabSession
 from models.script_lab_turn import ScriptLabTurn
@@ -142,7 +138,12 @@ def mock_gen_service(gen_result):
 
 @asynccontextmanager
 async def chat_pipeline_patches(
-    gen_result, *, variable_injection=False, max_turns=50, script_content="Script"
+    gen_result=None,
+    *,
+    gen_service_override=None,
+    variable_injection=False,
+    max_turns=50,
+    script_content="Script",
 ):
     with (
         patch("services.script_lab.set_rls_context", new_callable=AsyncMock),
@@ -157,7 +158,11 @@ async def chat_pipeline_patches(
         mock_script = MagicMock()
         mock_script.content = script_content
         mock_load_script.return_value = mock_script
-        mock_gen_cls.return_value = mock_gen_service(gen_result)
+        mock_gen_cls.return_value = (
+            gen_service_override
+            if gen_service_override
+            else mock_gen_service(gen_result)
+        )
         yield {"gen_cls": mock_gen_cls, "settings": mock_settings}
 
 

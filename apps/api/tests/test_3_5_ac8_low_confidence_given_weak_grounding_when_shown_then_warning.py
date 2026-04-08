@@ -6,13 +6,9 @@ Tests exercise the actual service pipeline via _format_source_attribution
 and send_chat_message, not just Python comparison operators.
 """
 
-import sys
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from conftest_3_5 import (
     TEST_ORG,

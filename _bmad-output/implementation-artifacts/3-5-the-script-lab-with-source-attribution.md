@@ -1,10 +1,12 @@
 # Story 3.5: The "Script Lab" with Source Attribution
 
-Status: review
+Status: done
 
 **Adversarial Review:** 2026-04-08 — 16 findings addressed (3 CRITICAL, 6 HIGH, 6 MEDIUM, 1 LOW). See Appendix A.
 
 **Code Review (3-Layer):** 2026-04-08 — 18 patch findings addressed (2 CRITICAL, 8 HIGH, 6 MEDIUM, 1 LOW) + 2 deferred. See Appendix D.
+
+**Implementation Review:** 2026-04-08 — All 8 ACs verified (backend + frontend). 87 tests passing (~97/100 quality). TEA review P1 findings resolved (test 059, AC8 boundary, AC2 length). sys.path.insert centralized. chat_pipeline_patches refactored with gen_service_override.
 
 ---
 

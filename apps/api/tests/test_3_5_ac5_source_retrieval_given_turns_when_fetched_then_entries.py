@@ -4,14 +4,10 @@ Tests for session ownership verification, turn pairing, source formatting,
 display turn number calculation, and empty sessions.
 """
 
-import sys
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import HTTPException
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from conftest_3_5 import (
     TEST_ORG,

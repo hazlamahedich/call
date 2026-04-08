@@ -5,15 +5,10 @@ expiry enforcement, turn persistence, variable injection, RAG generation,
 source attribution, and response assembly.
 """
 
-import sys
-from datetime import datetime, timezone, timedelta
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from conftest_3_5 import (
     TEST_ORG,
@@ -136,21 +131,7 @@ class TestAC2ChatPipeline:
         failing_gen = AsyncMock()
         failing_gen.generate_response.side_effect = RuntimeError("LLM down")
 
-        with (
-            patch("services.script_lab.set_rls_context", new_callable=AsyncMock),
-            patch("services.script_lab.settings") as mock_settings,
-            patch(
-                "services.script_lab.load_script_for_context", new_callable=AsyncMock
-            ) as mock_load_script,
-            patch("services.script_generation.ScriptGenerationService") as mock_gen_cls,
-        ):
-            mock_settings.SCRIPT_LAB_MAX_TURNS = 50
-            mock_settings.VARIABLE_INJECTION_ENABLED = False
-            mock_script = MagicMock()
-            mock_script.content = "Script"
-            mock_load_script.return_value = mock_script
-            mock_gen_cls.return_value = failing_gen
-
+        async with chat_pipeline_patches(gen_service_override=failing_gen):
             with pytest.raises(HTTPException) as exc_info:
                 await lab_service.send_chat_message(
                     org_id=TEST_ORG, session_id=1, message="Trigger error"
@@ -169,21 +150,7 @@ class TestAC2ChatPipeline:
             status_code=422, detail={"error": {"code": "test_error"}}
         )
 
-        with (
-            patch("services.script_lab.set_rls_context", new_callable=AsyncMock),
-            patch("services.script_lab.settings") as mock_settings,
-            patch(
-                "services.script_lab.load_script_for_context", new_callable=AsyncMock
-            ) as mock_load_script,
-            patch("services.script_generation.ScriptGenerationService") as mock_gen_cls,
-        ):
-            mock_settings.SCRIPT_LAB_MAX_TURNS = 50
-            mock_settings.VARIABLE_INJECTION_ENABLED = False
-            mock_script = MagicMock()
-            mock_script.content = "Script"
-            mock_load_script.return_value = mock_script
-            mock_gen_cls.return_value = failing_gen
-
+        async with chat_pipeline_patches(gen_service_override=failing_gen):
             with pytest.raises(HTTPException) as exc_info:
                 await lab_service.send_chat_message(
                     org_id=TEST_ORG, session_id=1, message="Propagate HTTP"

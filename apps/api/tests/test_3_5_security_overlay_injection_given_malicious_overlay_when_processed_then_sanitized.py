@@ -4,13 +4,9 @@ Tests that scenario overlay values are sanitized for prompt injection,
 truncated for length, and keys with template syntax are rejected.
 """
 
-import sys
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from conftest_3_5 import (
     mock_session,
