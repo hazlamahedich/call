@@ -5,7 +5,7 @@ Uses AliasGenerator(to_camel) exclusively for camelCase JSON mapping.
 
 from typing import List, Literal, Optional
 
-from pydantic import AliasGenerator, BaseModel, ConfigDict, Field
+from pydantic import AliasGenerator, BaseModel, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
 
 
@@ -19,6 +19,16 @@ class ScriptGenerateRequest(BaseModel):
     agent_id: Optional[int] = None
     override_grounding_mode: Optional[Literal["strict", "balanced", "creative"]] = None
     override_max_chunks: Optional[int] = Field(None, ge=1, le=20)
+    lead_id: Optional[int] = None
+    script_id: Optional[int] = None
+
+    @model_validator(mode="after")
+    def validate_variable_injection_params(self):
+        if (self.lead_id is None) != (self.script_id is None):
+            raise ValueError(
+                "Both lead_id and script_id must be provided together, or neither."
+            )
+        return self
 
 
 class SourceChunkInfo(BaseModel):

@@ -21,6 +21,12 @@ from schemas.script_generation import (
     ScriptGenerateResponse,
     SourceChunkInfo,
 )
+from schemas.variable_injection import (
+    ScriptRenderRequest,
+    ScriptRenderResponse,
+    VariablePreviewRequest,
+    VariablePreviewResponse,
+)
 from services.embedding import EmbeddingService, create_embedding_provider
 from services.grounding import GroundingService
 from services.llm.providers.factory import create_llm_provider
@@ -28,6 +34,13 @@ from services.llm.service import LLMService
 from services.script_generation import (
     ScriptGenerationService,
 )
+from services.shared_queries import (
+    set_rls_context,
+    load_agent_for_context,
+    load_lead_for_context,
+    load_script_for_context,
+)
+from services.variable_injection import VariableInjectionService, classify_source
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -59,34 +72,6 @@ async def _get_redis(request: Request) -> Redis | None:
     return redis
 
 
-async def _set_rls_context(session: AsyncSession, org_id: str):
-    await session.execute(
-        text("SELECT set_config('app.current_org_id', :org_id, false)"),
-        {"org_id": org_id},
-    )
-
-
-async def _load_and_validate_agent(
-    session: AsyncSession, agent_id: int, org_id: str, for_update: bool = False
-) -> Agent:
-    query = select(Agent).where(
-        Agent.id == agent_id,
-        Agent.soft_delete == False,  # noqa: E712
-    )
-    if for_update:
-        query = query.with_for_update()
-    agent = await session.execute(query)
-    agent_obj = agent.scalar_one_or_none()
-    if agent_obj is None:
-        raise HTTPException(status_code=404, detail="Agent not found")
-    if agent_obj.org_id != org_id:
-        raise HTTPException(
-            status_code=403,
-            detail="Agent belongs to different organization",
-        )
-    return agent_obj
-
-
 def _parse_grounding_config(agent: Agent) -> dict | None:
     if agent.grounding_config:
         return agent.grounding_config
@@ -107,13 +92,13 @@ async def generate_script_response(
     org_id: str = Depends(get_current_org_id),
 ):
     org_id = await verify_namespace_access(session=session, org_id=org_id)
-    await _set_rls_context(session, org_id)
+    await set_rls_context(session, org_id)
 
     agent = None
     grounding_config = None
     config_version = None
     if request_body.agent_id is not None:
-        agent = await _load_and_validate_agent(session, request_body.agent_id, org_id)
+        agent = await load_agent_for_context(session, request_body.agent_id, org_id)
         grounding_config = _parse_grounding_config(agent)
         config_version = agent.config_version
 
@@ -152,6 +137,8 @@ async def generate_script_response(
         max_source_chunks=max_chunks,
         system_prompt_template=system_prompt_template,
         min_confidence=min_confidence,
+        lead_id=request_body.lead_id,
+        script_id=request_body.script_id,
     )
 
     source_chunk_infos = [
@@ -177,6 +164,68 @@ async def generate_script_response(
     )
 
 
+@router.post("/render", response_model=ScriptRenderResponse)
+async def render_script(
+    request_body: ScriptRenderRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+    org_id: str = Depends(get_current_org_id),
+):
+    org_id = await verify_namespace_access(session=session, org_id=org_id)
+    await set_rls_context(session, org_id)
+
+    script = await load_script_for_context(session, request_body.script_id, org_id)
+    lead = await load_lead_for_context(session, request_body.lead_id, org_id)
+
+    agent = None
+    if request_body.agent_id is not None:
+        agent = await load_agent_for_context(session, request_body.agent_id, org_id)
+
+    injection_service = VariableInjectionService(session)
+    result = await injection_service.render_template(
+        template=script.content,
+        lead=lead,
+        agent=agent,
+        custom_fallbacks=request_body.custom_fallbacks,
+    )
+
+    return ScriptRenderResponse(
+        rendered_text=result.rendered_text,
+        resolved_variables=result.resolved_variables,
+        unresolved_variables=result.unresolved_variables,
+        was_rendered=result.was_rendered,
+    )
+
+
+@router.post("/preview-variables", response_model=VariablePreviewResponse)
+async def preview_variables(
+    request_body: VariablePreviewRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+    org_id: str = Depends(get_current_org_id),
+):
+    org_id = await verify_namespace_access(session=session, org_id=org_id)
+    await set_rls_context(session, org_id)
+
+    injection_service = VariableInjectionService(session)
+    variables = injection_service.extract_variables(request_body.template)
+
+    var_names = [v.name for v in variables]
+    var_sources = {v.name: v.source_type for v in variables}
+
+    sample_lead = request_body.sample_data or {}
+    render_result = await injection_service.render_template(
+        template=request_body.template,
+        lead=sample_lead,
+    )
+
+    return VariablePreviewResponse(
+        variables=var_names,
+        variable_sources=var_sources,
+        preview=render_result.rendered_text,
+    )
+
+
 @router.post("/config", response_model=ScriptConfigResponse)
 async def configure_script(
     request_body: ScriptConfigRequest,
@@ -185,9 +234,9 @@ async def configure_script(
     org_id: str = Depends(get_current_org_id),
 ):
     org_id = await verify_namespace_access(session=session, org_id=org_id)
-    await _set_rls_context(session, org_id)
+    await set_rls_context(session, org_id)
 
-    agent = await _load_and_validate_agent(
+    agent = await load_agent_for_context(
         session, request_body.agent_id, org_id, for_update=True
     )
 
@@ -252,9 +301,9 @@ async def get_script_config(
     org_id: str = Depends(get_current_org_id),
 ):
     org_id = await verify_namespace_access(session=session, org_id=org_id)
-    await _set_rls_context(session, org_id)
+    await set_rls_context(session, org_id)
 
-    agent = await _load_and_validate_agent(session, agent_id, org_id)
+    agent = await load_agent_for_context(session, agent_id, org_id)
 
     assert agent.id is not None
     config = agent.grounding_config or {}

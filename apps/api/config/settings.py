@@ -91,6 +91,18 @@ class Settings(BaseSettings):
             )
         return v
 
+    VARIABLE_DEFAULT_FALLBACK: str = "Not Available"
+    VARIABLE_INJECTION_ENABLED: bool = True
+    VARIABLE_RESOLUTION_TIMEOUT_MS: int = 100
+    MAX_VARIABLE_VALUE_LENGTH: int = 500
+
+    @field_validator("VARIABLE_RESOLUTION_TIMEOUT_MS")
+    @classmethod
+    def validate_resolution_timeout(cls, v: int) -> int:
+        if v < 1:
+            raise ValueError("VARIABLE_RESOLUTION_TIMEOUT_MS must be >= 1")
+        return v
+
     RAG_SIMILARITY_THRESHOLD: float = 0.7
     NAMESPACE_GUARD_ENABLED: bool = True
     NAMESPACE_AUDIT_MAX_PAIRS: int = 100

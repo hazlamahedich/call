@@ -199,9 +199,9 @@ def router_patches(mock_agent):
             "routers.scripts.verify_namespace_access",
             {"new_callable": AsyncMock, "return_value": TEST_ORG},
         ),
-        ("routers.scripts._set_rls_context", {"new_callable": AsyncMock}),
+        ("routers.scripts.set_rls_context", {"new_callable": AsyncMock}),
         (
-            "routers.scripts._load_and_validate_agent",
+            "routers.scripts.load_agent_for_context",
             {"new_callable": AsyncMock, "return_value": mock_agent},
         ),
         ("routers.scripts.create_llm_provider", {"return_value": MagicMock()}),

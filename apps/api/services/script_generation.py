@@ -115,10 +115,48 @@ class ScriptGenerationService:
         max_source_chunks: int = 5,
         system_prompt_template: str | None = None,
         min_confidence: float = 0.5,
+        lead_id: int | None = None,
+        script_id: int | None = None,
     ) -> ScriptGenerationResult:
+        if (lead_id is None) != (script_id is None):
+            from fastapi import HTTPException
+
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "invalid_params",
+                    "message": "Both lead_id and script_id must be provided together, or neither.",
+                },
+            )
+
         start = time.monotonic()
 
-        cached = await self._check_cache(query, org_id, agent_id)
+        render_result = None
+        if (
+            lead_id is not None
+            and script_id is not None
+            and settings.VARIABLE_INJECTION_ENABLED
+        ):
+            from services.variable_injection import VariableInjectionService
+            from services.shared_queries import (
+                load_script_for_context,
+                load_lead_for_context,
+            )
+
+            injection_svc = VariableInjectionService(self._session)
+            script = await load_script_for_context(self._session, script_id, org_id)
+            lead = await load_lead_for_context(self._session, lead_id, org_id)
+            render_result = await asyncio.wait_for(
+                injection_svc.render_template(script.content, lead),
+                timeout=settings.VARIABLE_RESOLUTION_TIMEOUT_MS / 1000,
+            )
+            query = render_result.rendered_text
+
+        cache_key = f"script_gen:{org_id}:{agent_id or 'default'}:{hashlib.sha256(query.encode()).hexdigest()[:16]}"
+        if lead_id is not None and script_id is not None:
+            cache_key += f":l{lead_id}:s{script_id}"
+
+        cached = await self._check_cache_by_key(cache_key)
         if cached:
             try:
                 cached_data = json.loads(cached)
@@ -135,6 +173,15 @@ class ScriptGenerationService:
         kb_ids = None
         if agent_id is not None:
             kb_ids = await self._get_agent_knowledge_base_ids(agent_id, org_id)
+
+        if render_result and render_result.was_rendered:
+            budget = settings.AI_LLM_MAX_TOKENS - settings.TOKEN_RESERVATION
+            query_tokens = self._estimate_token_count(query)
+            if query_tokens > (budget * 0.5):
+                logger.warning(
+                    "Rendered template consumes >50%% of context budget",
+                    extra={"query_tokens": query_tokens, "budget": budget},
+                )
 
         chunks, total_scanned = await self._retrieve_context(
             query_embedding, org_id, kb_ids, max_source_chunks
@@ -231,7 +278,9 @@ class ScriptGenerationService:
             cost_estimate=cost,
         )
 
-        await self._cache_result(query, org_id, agent_id, result)
+        await self._cache_result(
+            query, org_id, agent_id, result, lead_id=lead_id, script_id=script_id
+        )
 
         self._log_audit(
             event_type="generation_completed",
@@ -245,6 +294,16 @@ class ScriptGenerationService:
             grounding_mode=grounding_mode,
             was_truncated=was_truncated,
             cost=cost,
+            extra_fields={
+                "script_id": script_id,
+                "lead_id": lead_id,
+                "variable_count": len(render_result.resolved_variables)
+                if render_result
+                else 0,
+                "unresolved_variables": render_result.unresolved_variables
+                if render_result
+                else [],
+            },
         )
 
         return result
@@ -390,9 +449,12 @@ class ScriptGenerationService:
         raise last_error or RuntimeError("LLM call failed with no error captured")
 
     async def _check_cache(self, query, org_id, agent_id=None):
+        cache_key = f"script_gen:{org_id}:{agent_id or 'default'}:{hashlib.sha256(query.encode()).hexdigest()[:16]}"
+        return await self._check_cache_by_key(cache_key)
+
+    async def _check_cache_by_key(self, cache_key):
         if not self._redis:
             return None
-        cache_key = f"script_gen:{org_id}:{agent_id or 'default'}:{hashlib.sha256(query.encode()).hexdigest()[:16]}"
         try:
             cached = await self._redis.get(cache_key)
             return cached
@@ -400,10 +462,14 @@ class ScriptGenerationService:
             logger.warning("Redis cache lookup failed: %s", e)
             return None
 
-    async def _cache_result(self, query, org_id, agent_id, result):
+    async def _cache_result(
+        self, query, org_id, agent_id, result, lead_id=None, script_id=None
+    ):
         if not self._redis:
             return
         cache_key = f"script_gen:{org_id}:{agent_id or 'default'}:{hashlib.sha256(query.encode()).hexdigest()[:16]}"
+        if lead_id is not None and script_id is not None:
+            cache_key += f":l{lead_id}:s{script_id}"
         try:
             data = json.dumps(
                 {
@@ -463,10 +529,13 @@ class ScriptGenerationService:
         grounding_mode="strict",
         was_truncated=False,
         cost=0.0,
+        extra_fields: dict | None = None,
     ):
         log_data = {
             "org_id": org_id,
-            "query": query[:200],
+            "query": query[:200]
+            if not extra_fields
+            else "[variable-injected query redacted for PII]",
             "grounding_confidence": round(confidence, 4),
             "model": settings.AI_LLM_MODEL,
             "latency_ms": round(latency_ms, 2),
@@ -487,6 +556,9 @@ class ScriptGenerationService:
                 {"chunk_id": c["chunk_id"], "similarity": round(c["similarity"], 3)}
                 for c in chunks
             ]
+
+        if extra_fields:
+            log_data.update(extra_fields)
 
         logger.info(
             "Script generation %s",

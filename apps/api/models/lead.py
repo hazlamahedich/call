@@ -12,3 +12,6 @@ class Lead(TenantModel, table=True):
     email: str = Field(description="Lead email")
     phone: Optional[str] = Field(default=None, description="Lead phone")
     status: str = Field(default="new", description="Lead status")
+    custom_fields: Optional[dict] = Field(
+        default=None, description="Lead custom attributes (JSONB)"
+    )

@@ -37,6 +37,22 @@ from conftest_3_3 import (  # noqa: F401 - registers fixtures via import
 )
 
 
+from conftest_3_4 import (  # noqa: F401 - registers fixtures via import
+    injection_service,
+    sample_lead,
+    sample_lead_with_custom,
+    sample_agent,
+    sample_template,
+    make_lead,
+    make_lead_with_custom_fields,
+    make_lead_dict,
+    make_script_with_variables,
+    make_agent,
+    create_render_result,
+    assert_variable_resolved,
+)
+
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool

@@ -140,11 +140,11 @@ class TestINT001FullPipeline:
                 )
             )
             stack.enter_context(
-                patch("routers.scripts._set_rls_context", new_callable=AsyncMock)
+                patch("routers.scripts.set_rls_context", new_callable=AsyncMock)
             )
             stack.enter_context(
                 patch(
-                    "routers.scripts._load_and_validate_agent",
+                    "routers.scripts.load_agent_for_context",
                     new_callable=AsyncMock,
                     side_effect=HTTPException(
                         status_code=404, detail="Agent not found"
@@ -182,11 +182,11 @@ class TestINT002ConfigPersistence:
                 )
             )
             stack.enter_context(
-                patch("routers.scripts._set_rls_context", new_callable=AsyncMock)
+                patch("routers.scripts.set_rls_context", new_callable=AsyncMock)
             )
             stack.enter_context(
                 patch(
-                    "routers.scripts._load_and_validate_agent",
+                    "routers.scripts.load_agent_for_context",
                     new_callable=AsyncMock,
                     return_value=mock_agent,
                 )
@@ -228,11 +228,11 @@ class TestINT002ConfigPersistence:
                 )
             )
             stack.enter_context(
-                patch("routers.scripts._set_rls_context", new_callable=AsyncMock)
+                patch("routers.scripts.set_rls_context", new_callable=AsyncMock)
             )
             stack.enter_context(
                 patch(
-                    "routers.scripts._load_and_validate_agent",
+                    "routers.scripts.load_agent_for_context",
                     new_callable=AsyncMock,
                     return_value=mock_agent,
                 )
@@ -269,11 +269,11 @@ class TestINT002ConfigPersistence:
                 )
             )
             stack.enter_context(
-                patch("routers.scripts._set_rls_context", new_callable=AsyncMock)
+                patch("routers.scripts.set_rls_context", new_callable=AsyncMock)
             )
             stack.enter_context(
                 patch(
-                    "routers.scripts._load_and_validate_agent",
+                    "routers.scripts.load_agent_for_context",
                     new_callable=AsyncMock,
                     return_value=mock_agent,
                 )

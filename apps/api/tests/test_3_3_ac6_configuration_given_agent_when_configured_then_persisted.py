@@ -26,9 +26,9 @@ class TestAC6Configuration:
                 new_callable=AsyncMock,
                 return_value=TEST_ORG,
             ),
-            patch("routers.scripts._set_rls_context", new_callable=AsyncMock),
+            patch("routers.scripts.set_rls_context", new_callable=AsyncMock),
             patch(
-                "routers.scripts._load_and_validate_agent",
+                "routers.scripts.load_agent_for_context",
                 new_callable=AsyncMock,
                 return_value=agent,
             ),
@@ -103,9 +103,9 @@ class TestAC6Configuration:
                 new_callable=AsyncMock,
                 return_value=TEST_ORG,
             ),
-            patch("routers.scripts._set_rls_context", new_callable=AsyncMock),
+            patch("routers.scripts.set_rls_context", new_callable=AsyncMock),
             patch(
-                "routers.scripts._load_and_validate_agent",
+                "routers.scripts.load_agent_for_context",
                 new_callable=AsyncMock,
                 return_value=agent,
             ),
@@ -129,9 +129,9 @@ class TestAC6Configuration:
                 new_callable=AsyncMock,
                 return_value=TEST_ORG,
             ),
-            patch("routers.scripts._set_rls_context", new_callable=AsyncMock),
+            patch("routers.scripts.set_rls_context", new_callable=AsyncMock),
             patch(
-                "routers.scripts._load_and_validate_agent",
+                "routers.scripts.load_agent_for_context",
                 new_callable=AsyncMock,
                 return_value=agent,
             ),
@@ -153,9 +153,9 @@ class TestAC6Configuration:
                 new_callable=AsyncMock,
                 return_value=TEST_ORG,
             ),
-            patch("routers.scripts._set_rls_context", new_callable=AsyncMock),
+            patch("routers.scripts.set_rls_context", new_callable=AsyncMock),
             patch(
-                "routers.scripts._load_and_validate_agent",
+                "routers.scripts.load_agent_for_context",
                 new_callable=AsyncMock,
                 return_value=agent,
             ),
@@ -185,9 +185,9 @@ class TestAC6Configuration:
                 new_callable=AsyncMock,
                 return_value=TEST_ORG,
             ),
-            patch("routers.scripts._set_rls_context", new_callable=AsyncMock),
+            patch("routers.scripts.set_rls_context", new_callable=AsyncMock),
             patch(
-                "routers.scripts._load_and_validate_agent",
+                "routers.scripts.load_agent_for_context",
                 new_callable=AsyncMock,
                 return_value=agent,
             ),
@@ -217,9 +217,9 @@ class TestAC6Configuration:
                 new_callable=AsyncMock,
                 return_value=TEST_ORG,
             ),
-            patch("routers.scripts._set_rls_context", new_callable=AsyncMock),
+            patch("routers.scripts.set_rls_context", new_callable=AsyncMock),
             patch(
-                "routers.scripts._load_and_validate_agent",
+                "routers.scripts.load_agent_for_context",
                 new_callable=AsyncMock,
                 side_effect=__import__("fastapi").HTTPException(
                     status_code=404, detail="Agent not found"
@@ -250,9 +250,9 @@ class TestAC6Configuration:
                 new_callable=AsyncMock,
                 return_value=TEST_ORG,
             ),
-            patch("routers.scripts._set_rls_context", new_callable=AsyncMock),
+            patch("routers.scripts.set_rls_context", new_callable=AsyncMock),
             patch(
-                "routers.scripts._load_and_validate_agent",
+                "routers.scripts.load_agent_for_context",
                 new_callable=AsyncMock,
                 side_effect=__import__("fastapi").HTTPException(
                     status_code=403, detail="Agent belongs to different organization"
