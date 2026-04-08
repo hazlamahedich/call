@@ -2,6 +2,10 @@
 
 Tests that cache keys include lead/script context and do not leak
 data between different leads.
+
+NOTE: _build_cache_key mirrors the inline key format in
+services/script_generation.py:155. If the service key format changes,
+these tests must be updated to match.
 """
 
 import hashlib
@@ -18,7 +22,8 @@ from unittest.mock import AsyncMock
 
 
 class TestCacheKeyCorrectness:
-    def test_3_4_cache001_given_different_leads_when_cached_then_keys_differ(self):
+    @pytest.mark.p2
+    def test_3_4_035_given_different_leads_when_cached_then_keys_differ(self):
         query = "Tell me about products"
         org_id = TEST_ORG
         agent_id = 1
@@ -28,7 +33,8 @@ class TestCacheKeyCorrectness:
 
         assert key_a != key_b
 
-    def test_3_4_cache002_given_cached_lead_a_when_generating_lead_b_then_no_leak(self):
+    @pytest.mark.p2
+    def test_3_4_036_given_cached_lead_a_when_generating_lead_b_then_no_leak(self):
         query = "What solutions?"
         org_id = TEST_ORG
 
@@ -39,7 +45,8 @@ class TestCacheKeyCorrectness:
         assert "l100" in key_a
         assert "l200" in key_b
 
-    def test_3_4_cache003_given_no_lead_id_when_cached_then_backward_compatible_key(
+    @pytest.mark.p2
+    def test_3_4_037_given_no_lead_id_when_cached_then_backward_compatible_key(
         self,
     ):
         query = "Standard query"

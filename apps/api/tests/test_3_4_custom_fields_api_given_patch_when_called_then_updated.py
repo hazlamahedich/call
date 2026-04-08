@@ -15,19 +15,19 @@ from conftest_3_4 import (
     TEST_ORG,
 )
 from schemas.variable_injection import CustomFieldsUpdateRequest
-from services.variable_injection import VariableInjectionService
-from unittest.mock import AsyncMock
 
 
 @pytest.mark.asyncio
 class TestCustomFieldsAPI:
-    def test_3_4_api001_given_valid_patch_when_called_then_fields_merged(self):
+    @pytest.mark.p1
+    def test_3_4_038_given_valid_patch_when_called_then_fields_merged(self):
         existing = {"company_name": "Acme"}
         patch_data = {"industry": "SaaS"}
         merged = {**existing, **patch_data}
         assert merged == {"company_name": "Acme", "industry": "SaaS"}
 
-    def test_3_4_api002_given_existing_fields_when_patched_then_merged_not_replaced(
+    @pytest.mark.p1
+    def test_3_4_039_given_existing_fields_when_patched_then_merged_not_replaced(
         self,
     ):
         existing = {"company_name": "Acme", "industry": "Tech", "tier": "gold"}
@@ -37,14 +37,16 @@ class TestCustomFieldsAPI:
         assert merged["industry"] == "SaaS"
         assert merged["tier"] == "gold"
 
-    def test_3_4_api003_given_schema_validation_when_called_then_validates(self):
+    @pytest.mark.p1
+    def test_3_4_040_given_schema_validation_when_called_then_validates(self):
         req = CustomFieldsUpdateRequest(custom_fields={"key": "value"})
         assert req.custom_fields == {"key": "value"}
 
         with pytest.raises(Exception):
             CustomFieldsUpdateRequest(custom_fields={})
 
-    async def test_3_4_api004_given_cross_org_lead_when_patched_then_403(self):
+    @pytest.mark.p1
+    async def test_3_4_041_given_cross_org_lead_when_patched_then_403(self):
         with patch(
             "services.shared_queries.load_lead_for_context",
             new_callable=AsyncMock,

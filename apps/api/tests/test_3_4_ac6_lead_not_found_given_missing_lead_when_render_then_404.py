@@ -17,6 +17,7 @@ from conftest_3_4 import (
 
 @pytest.mark.asyncio
 class TestAC6LeadNotFound:
+    @pytest.mark.p1
     async def test_3_4_024_given_missing_lead_when_loading_then_404(self):
         with patch(
             "services.shared_queries.load_lead_for_context",
@@ -29,6 +30,7 @@ class TestAC6LeadNotFound:
                 await mock_load(AsyncMock(), 99999, TEST_ORG)
             assert exc_info.value.status_code == 404
 
+    @pytest.mark.p1
     async def test_3_4_025_given_cross_org_lead_when_loading_then_403(self):
         with patch(
             "services.shared_queries.load_lead_for_context",

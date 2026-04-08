@@ -20,6 +20,7 @@ from unittest.mock import AsyncMock
 
 @pytest.mark.asyncio
 class TestAC8Performance:
+    @pytest.mark.p1
     async def test_3_4_030_given_10_variables_when_rendered_then_under_10ms(
         self, injection_service
     ):
@@ -50,6 +51,7 @@ class TestAC8Performance:
         assert result.was_rendered is True
         assert elapsed_ms < 10, f"Rendering took {elapsed_ms:.2f}ms, expected < 10ms"
 
+    @pytest.mark.p1
     async def test_3_4_031_given_render_service_when_called_then_fast(
         self, injection_service
     ):

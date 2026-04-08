@@ -19,6 +19,7 @@ from unittest.mock import AsyncMock
 
 @pytest.mark.asyncio
 class TestAC7FallbackConfig:
+    @pytest.mark.p1
     async def test_3_4_026_given_name_type_when_missing_then_there(
         self, injection_service
     ):
@@ -26,6 +27,7 @@ class TestAC7FallbackConfig:
         result = await injection_service.render_template("{{lead_name}}", lead)
         assert result.rendered_text == "there"
 
+    @pytest.mark.p1
     async def test_3_4_027_given_company_type_when_missing_then_your_company(
         self, injection_service
     ):
@@ -33,6 +35,7 @@ class TestAC7FallbackConfig:
         result = await injection_service.render_template("{{employer}}", lead)
         assert result.rendered_text == "your company"
 
+    @pytest.mark.p1
     async def test_3_4_028_given_inline_fallback_when_missing_then_overrides_type(
         self, injection_service
     ):
@@ -42,6 +45,7 @@ class TestAC7FallbackConfig:
         )
         assert result.rendered_text == "Acme Inc"
 
+    @pytest.mark.p1
     async def test_3_4_029_given_custom_fallbacks_dict_when_resolved_then_dict_value(
         self, injection_service
     ):

@@ -14,6 +14,7 @@ from conftest_3_4 import TEST_ORG, make_lead, make_agent, make_script_with_varia
 
 class TestSharedQueriesErrorPaths:
     @pytest.mark.asyncio
+    @pytest.mark.p2
     async def test_load_agent_404_detail(self):
         from services.shared_queries import load_agent_for_context
 
@@ -29,6 +30,7 @@ class TestSharedQueriesErrorPaths:
             assert exc_info.value.status_code == 404
 
     @pytest.mark.asyncio
+    @pytest.mark.p2
     async def test_load_agent_403_detail(self):
         with patch(
             "services.shared_queries.load_agent_for_context", new_callable=AsyncMock
@@ -45,6 +47,7 @@ class TestSharedQueriesErrorPaths:
             assert exc_info.value.status_code == 403
 
     @pytest.mark.asyncio
+    @pytest.mark.p2
     async def test_load_lead_404_detail(self):
         with patch(
             "services.shared_queries.load_lead_for_context", new_callable=AsyncMock
@@ -58,6 +61,7 @@ class TestSharedQueriesErrorPaths:
             assert exc_info.value.status_code == 404
 
     @pytest.mark.asyncio
+    @pytest.mark.p2
     async def test_load_lead_403_detail(self):
         with patch(
             "services.shared_queries.load_lead_for_context", new_callable=AsyncMock
@@ -74,6 +78,7 @@ class TestSharedQueriesErrorPaths:
             assert exc_info.value.status_code == 403
 
     @pytest.mark.asyncio
+    @pytest.mark.p2
     async def test_load_script_404_detail(self):
         with patch(
             "services.shared_queries.load_script_for_context", new_callable=AsyncMock
@@ -87,6 +92,7 @@ class TestSharedQueriesErrorPaths:
             assert exc_info.value.status_code == 404
 
     @pytest.mark.asyncio
+    @pytest.mark.p2
     async def test_load_script_403_detail(self):
         with patch(
             "services.shared_queries.load_script_for_context", new_callable=AsyncMock
@@ -103,6 +109,7 @@ class TestSharedQueriesErrorPaths:
             assert exc_info.value.status_code == 403
 
     @pytest.mark.asyncio
+    @pytest.mark.p2
     async def test_set_rls_context_calls_set_config(self):
         mock_session = AsyncMock()
         from services.shared_queries import set_rls_context
@@ -117,6 +124,7 @@ class TestSharedQueriesErrorPaths:
         }
 
     @pytest.mark.asyncio
+    @pytest.mark.p2
     async def test_load_agent_success(self):
         agent = make_agent(org_id=TEST_ORG)
         with patch(
@@ -129,6 +137,7 @@ class TestSharedQueriesErrorPaths:
             mock_fn.assert_called_once()
 
     @pytest.mark.asyncio
+    @pytest.mark.p2
     async def test_load_agent_for_update_flag(self):
         agent = make_agent(org_id=TEST_ORG)
         with patch(
@@ -142,6 +151,7 @@ class TestSharedQueriesErrorPaths:
 
 class TestRenderEndpointLogic:
     @pytest.mark.asyncio
+    @pytest.mark.p2
     async def test_render_with_custom_fallbacks(self):
         from services.variable_injection import VariableInjectionService
 
@@ -157,6 +167,7 @@ class TestRenderEndpointLogic:
         assert "John Doe" in result.rendered_text
 
     @pytest.mark.asyncio
+    @pytest.mark.p2
     async def test_render_with_agent_name(self):
         from services.variable_injection import VariableInjectionService
 
@@ -173,6 +184,7 @@ class TestRenderEndpointLogic:
         assert "John Doe" in result.rendered_text
 
     @pytest.mark.asyncio
+    @pytest.mark.p2
     async def test_render_without_agent_id_skips_agent_load(self):
         from services.variable_injection import VariableInjectionService
 
@@ -190,6 +202,7 @@ class TestRenderEndpointLogic:
 
 class TestPreviewVariablesLogic:
     @pytest.mark.asyncio
+    @pytest.mark.p2
     async def test_preview_extracts_variables_and_sources(self):
         from services.variable_injection import VariableInjectionService
 
@@ -209,6 +222,7 @@ class TestPreviewVariablesLogic:
         assert var_sources["company_name"] == "custom"
 
     @pytest.mark.asyncio
+    @pytest.mark.p2
     async def test_preview_with_sample_data(self):
         from services.variable_injection import VariableInjectionService
 
@@ -220,6 +234,7 @@ class TestPreviewVariablesLogic:
         assert "Preview User" in result.rendered_text
 
     @pytest.mark.asyncio
+    @pytest.mark.p2
     async def test_preview_without_sample_data(self):
         from services.variable_injection import VariableInjectionService
 

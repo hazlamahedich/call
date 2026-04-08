@@ -28,6 +28,7 @@ def _make_service():
 
 @pytest.mark.asyncio
 class TestPipelinePartialParams:
+    @pytest.mark.p1
     async def test_lead_id_without_script_id_raises_422(self):
         service = _make_service()
         with pytest.raises(HTTPException) as exc_info:
@@ -43,6 +44,7 @@ class TestPipelinePartialParams:
             or "together" in str(exc_info.value.detail).lower()
         )
 
+    @pytest.mark.p1
     async def test_script_id_without_lead_id_raises_422(self):
         service = _make_service()
         with pytest.raises(HTTPException) as exc_info:
@@ -54,6 +56,7 @@ class TestPipelinePartialParams:
             )
         assert exc_info.value.status_code == 422
 
+    @pytest.mark.p1
     async def test_both_none_does_not_raise_422(self):
         service = _make_service()
         with patch(
@@ -78,6 +81,7 @@ class TestPipelinePartialParams:
 
 @pytest.mark.asyncio
 class TestPipelineFeatureToggle:
+    @pytest.mark.p1
     async def test_variable_injection_disabled_skips_injection(self):
         service = _make_service()
         with patch("services.script_generation.settings") as mock_settings:
@@ -107,6 +111,7 @@ class TestPipelineFeatureToggle:
 
 @pytest.mark.asyncio
 class TestCacheKeyWithVariableFingerprint:
+    @pytest.mark.p1
     async def test_cache_key_includes_lead_and_script_id(self):
         service = _make_service()
         from conftest_3_4 import make_lead, make_script_with_variables

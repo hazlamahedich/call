@@ -18,23 +18,28 @@ from schemas.variable_injection import (
 
 
 class TestScriptRenderRequest:
+    @pytest.mark.p2
     def test_camel_case_aliases(self):
         req = ScriptRenderRequest(**{"scriptId": 1, "leadId": 2})
         assert req.script_id == 1
         assert req.lead_id == 2
 
+    @pytest.mark.p2
     def test_snake_case_also_works(self):
         req = ScriptRenderRequest(script_id=1, lead_id=2)
         assert req.script_id == 1
 
+    @pytest.mark.p2
     def test_optional_agent_id(self):
         req = ScriptRenderRequest(script_id=1, lead_id=2)
         assert req.agent_id is None
 
+    @pytest.mark.p2
     def test_optional_custom_fallbacks(self):
         req = ScriptRenderRequest(script_id=1, lead_id=2)
         assert req.custom_fallbacks is None
 
+    @pytest.mark.p2
     def test_with_all_fields(self):
         req = ScriptRenderRequest(
             script_id=1,
@@ -45,12 +50,14 @@ class TestScriptRenderRequest:
         assert req.agent_id == 3
         assert req.custom_fallbacks == {"key": "value"}
 
+    @pytest.mark.p2
     def test_missing_required_field_raises(self):
         with pytest.raises(ValidationError):
             ScriptRenderRequest(script_id=1)
 
 
 class TestScriptRenderResponse:
+    @pytest.mark.p2
     def test_camel_case_serialization(self):
         resp = ScriptRenderResponse(
             rendered_text="Hello John",
@@ -66,10 +73,12 @@ class TestScriptRenderResponse:
 
 
 class TestVariablePreviewRequest:
+    @pytest.mark.p2
     def test_valid_template(self):
         req = VariablePreviewRequest(template="Hello {{name}}")
         assert req.template == "Hello {{name}}"
 
+    @pytest.mark.p2
     def test_empty_template_rejected(self):
         with pytest.raises(ValidationError) as exc_info:
             VariablePreviewRequest(template="")
@@ -78,18 +87,22 @@ class TestVariablePreviewRequest:
             or "min_length" in str(exc_info.value).lower()
         )
 
+    @pytest.mark.p2
     def test_too_long_template_rejected(self):
         with pytest.raises(ValidationError):
             VariablePreviewRequest(template="A" * 50001)
 
+    @pytest.mark.p2
     def test_max_length_template_accepted(self):
         req = VariablePreviewRequest(template="A" * 50000)
         assert len(req.template) == 50000
 
+    @pytest.mark.p2
     def test_sample_data_optional(self):
         req = VariablePreviewRequest(template="Hi {{name}}")
         assert req.sample_data is None
 
+    @pytest.mark.p2
     def test_sample_data_provided(self):
         req = VariablePreviewRequest(
             template="Hi {{name}}", sample_data={"name": "Test"}
@@ -98,43 +111,52 @@ class TestVariablePreviewRequest:
 
 
 class TestCustomFieldsUpdateRequest:
+    @pytest.mark.p2
     def test_valid_fields(self):
         req = CustomFieldsUpdateRequest(custom_fields={"company": "Acme"})
         assert req.custom_fields == {"company": "Acme"}
 
+    @pytest.mark.p2
     def test_empty_dict_rejected(self):
         with pytest.raises(ValidationError):
             CustomFieldsUpdateRequest(custom_fields={})
 
+    @pytest.mark.p2
     def test_value_exceeding_500_chars_rejected(self):
         with pytest.raises(ValidationError) as exc_info:
             CustomFieldsUpdateRequest(custom_fields={"key": "A" * 501})
         assert "500" in str(exc_info.value)
 
+    @pytest.mark.p2
     def test_value_at_500_chars_accepted(self):
         req = CustomFieldsUpdateRequest(custom_fields={"key": "A" * 500})
         assert len(req.custom_fields["key"]) == 500
 
+    @pytest.mark.p2
     def test_max_50_keys(self):
         fields = {f"key_{i}": f"val_{i}" for i in range(50)}
         req = CustomFieldsUpdateRequest(custom_fields=fields)
         assert len(req.custom_fields) == 50
 
+    @pytest.mark.p2
     def test_over_50_keys_rejected(self):
         fields = {f"key_{i}": f"val_{i}" for i in range(51)}
         with pytest.raises(ValidationError):
             CustomFieldsUpdateRequest(custom_fields=fields)
 
+    @pytest.mark.p2
     def test_empty_string_value_accepted(self):
         req = CustomFieldsUpdateRequest(custom_fields={"key": ""})
         assert req.custom_fields["key"] == ""
 
+    @pytest.mark.p2
     def test_camel_case_alias(self):
         req = CustomFieldsUpdateRequest(**{"customFields": {"k": "v"}})
         assert req.custom_fields == {"k": "v"}
 
 
 class TestResolvedVariable:
+    @pytest.mark.p2
     def test_camel_case_serialization(self):
         var = ResolvedVariable(
             name="lead_name", value="John", source="lead", used_fallback=False

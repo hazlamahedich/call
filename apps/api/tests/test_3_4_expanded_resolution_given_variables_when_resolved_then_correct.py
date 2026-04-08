@@ -20,21 +20,25 @@ from services.variable_injection import VariableInjectionService
 
 @pytest.mark.asyncio
 class TestResolutionWithORMObject:
+    @pytest.mark.p1
     async def test_resolve_lead_name_from_orm_object(self, injection_service):
         lead = make_lead(name="Sarah Connor")
         result = await injection_service.render_template("Hello {{lead_name}}", lead)
         assert "Sarah Connor" in result.rendered_text
 
+    @pytest.mark.p1
     async def test_resolve_lead_email_from_orm_object(self, injection_service):
         lead = make_lead(email="sarah@skynet.com")
         result = await injection_service.render_template("Email: {{lead_email}}", lead)
         assert "sarah@skynet.com" in result.rendered_text
 
+    @pytest.mark.p1
     async def test_resolve_lead_phone_from_orm_object(self, injection_service):
         lead = make_lead(phone="555-0199")
         result = await injection_service.render_template("Call {{lead_phone}}", lead)
         assert "555-0199" in result.rendered_text
 
+    @pytest.mark.p1
     async def test_resolve_lead_status_from_orm_object(self, injection_service):
         lead = make_lead(status="contacted")
         result = await injection_service.render_template(
@@ -42,6 +46,7 @@ class TestResolutionWithORMObject:
         )
         assert "contacted" in result.rendered_text
 
+    @pytest.mark.p1
     async def test_resolve_custom_field_from_orm_object(self, injection_service):
         lead = make_lead_with_custom_fields({"company_name": "Cyberdyne"})
         lead.custom_fields = {"company_name": "Cyberdyne"}
@@ -51,6 +56,7 @@ class TestResolutionWithORMObject:
 
 @pytest.mark.asyncio
 class TestLeadFieldEdgeCases:
+    @pytest.mark.p1
     async def test_lead_name_is_none_uses_fallback(self, injection_service):
         lead = make_lead_dict(name=None, phone=None)
         result = await injection_service.render_template("Hi {{lead_name}}", lead)
@@ -59,16 +65,19 @@ class TestLeadFieldEdgeCases:
             or "Not Available" in result.rendered_text
         )
 
+    @pytest.mark.p1
     async def test_lead_name_is_empty_uses_fallback(self, injection_service):
         lead = make_lead_dict(name="")
         result = await injection_service.render_template("Hi {{lead_name}}", lead)
         assert "{{lead_name}}" not in result.rendered_text
 
+    @pytest.mark.p1
     async def test_phone_none_uses_fallback(self, injection_service):
         lead = make_lead_dict(phone=None)
         result = await injection_service.render_template("Call {{lead_phone}}", lead)
         assert "{{lead_phone}}" not in result.rendered_text
 
+    @pytest.mark.p1
     async def test_custom_fields_null_resolves_to_fallback(self, injection_service):
         lead = make_lead_dict(custom_fields=None)
         result = await injection_service.render_template(
@@ -79,6 +88,7 @@ class TestLeadFieldEdgeCases:
 
 @pytest.mark.asyncio
 class TestCustomFieldComplexValues:
+    @pytest.mark.p1
     async def test_dict_value_converted_to_string(self, injection_service):
         lead = make_lead_dict(
             custom_fields={"company": {"name": "Acme", "location": "NYC"}}
@@ -87,11 +97,13 @@ class TestCustomFieldComplexValues:
         assert "{{company}}" not in result.rendered_text
         assert "Acme" in result.rendered_text
 
+    @pytest.mark.p1
     async def test_list_value_converted_to_string(self, injection_service):
         lead = make_lead_dict(custom_fields={"tags": ["enterprise", "vip"]})
         result = await injection_service.render_template("Tags: {{tags}}", lead)
         assert "enterprise" in result.rendered_text
 
+    @pytest.mark.p1
     async def test_custom_field_case_insensitive_key(self, injection_service):
         lead = make_lead_dict(custom_fields={"Company_Name": "Acme Corp"})
         result = await injection_service.render_template(
@@ -102,18 +114,21 @@ class TestCustomFieldComplexValues:
 
 @pytest.mark.asyncio
 class TestSystemVariables:
+    @pytest.mark.p1
     async def test_current_date_returns_today(self, injection_service):
         lead = make_lead_dict()
         result = await injection_service.render_template("Date: {{current_date}}", lead)
         expected = date.today().isoformat()
         assert expected in result.rendered_text
 
+    @pytest.mark.p1
     async def test_current_time_returns_formatted(self, injection_service):
         lead = make_lead_dict()
         result = await injection_service.render_template("Time: {{current_time}}", lead)
         assert "{{current_time}}" not in result.rendered_text
         assert len(result.rendered_text) > 6
 
+    @pytest.mark.p1
     async def test_current_datetime_returns_iso(self, injection_service):
         lead = make_lead_dict()
         result = await injection_service.render_template(
@@ -121,6 +136,7 @@ class TestSystemVariables:
         )
         assert "{{current_datetime}}" not in result.rendered_text
 
+    @pytest.mark.p1
     async def test_agent_name_without_agent_uses_fallback(self, injection_service):
         lead = make_lead_dict()
         result = await injection_service.render_template(
@@ -131,16 +147,19 @@ class TestSystemVariables:
 
 @pytest.mark.asyncio
 class TestTypeBasedFallbacks:
+    @pytest.mark.p1
     async def test_name_type_fallback_is_there(self, injection_service):
         lead = make_lead_dict(custom_fields={})
         result = await injection_service.render_template("Hi {{first_name}}", lead)
         assert result.resolved_variables.get("first_name") == "there"
 
+    @pytest.mark.p1
     async def test_company_type_fallback_is_your_company(self, injection_service):
         lead = make_lead_dict(custom_fields={})
         result = await injection_service.render_template("About {{company_size}}", lead)
         assert result.resolved_variables.get("company_size") == "your company"
 
+    @pytest.mark.p1
     async def test_date_type_fallback_is_recently(self, injection_service):
         lead = make_lead_dict(custom_fields={})
         result = await injection_service.render_template(
@@ -148,6 +167,7 @@ class TestTypeBasedFallbacks:
         )
         assert result.resolved_variables.get("interaction_date") == "recently"
 
+    @pytest.mark.p1
     async def test_email_type_fallback(self, injection_service):
         lead = make_lead_dict(custom_fields={})
         result = await injection_service.render_template(
@@ -155,11 +175,13 @@ class TestTypeBasedFallbacks:
         )
         assert result.resolved_variables.get("contact_email") == "Not Available"
 
+    @pytest.mark.p1
     async def test_phone_type_fallback(self, injection_service):
         lead = make_lead_dict(custom_fields={})
         result = await injection_service.render_template("Call {{mobile_number}}", lead)
         assert result.resolved_variables.get("mobile_number") == "Not Available"
 
+    @pytest.mark.p1
     async def test_generic_fallback_is_not_available(self, injection_service):
         lead = make_lead_dict(custom_fields={})
         result = await injection_service.render_template(
@@ -170,6 +192,7 @@ class TestTypeBasedFallbacks:
 
 @pytest.mark.asyncio
 class TestCustomFallbacksDict:
+    @pytest.mark.p1
     async def test_custom_fallbacks_override_type_default(self, injection_service):
         lead = make_lead_dict(custom_fields={})
         result = await injection_service.render_template(
@@ -179,6 +202,7 @@ class TestCustomFallbacksDict:
         )
         assert result.resolved_variables.get("region") == "the East Coast"
 
+    @pytest.mark.p1
     async def test_custom_fallbacks_used_when_no_data(self, injection_service):
         lead = make_lead_dict(custom_fields={})
         result = await injection_service.render_template(
@@ -188,6 +212,7 @@ class TestCustomFallbacksDict:
         )
         assert result.resolved_variables.get("source_channel") == "organic"
 
+    @pytest.mark.p1
     async def test_lead_data_takes_priority_over_custom_fallbacks(
         self, injection_service
     ):
@@ -203,6 +228,7 @@ class TestCustomFallbacksDict:
 
 @pytest.mark.asyncio
 class TestRenderTemplateEdgeCases:
+    @pytest.mark.p1
     async def test_no_variables_returns_was_rendered_false(self, injection_service):
         lead = make_lead_dict()
         result = await injection_service.render_template(
@@ -212,6 +238,7 @@ class TestRenderTemplateEdgeCases:
         assert result.rendered_text == "Hello world, no variables here."
         assert result.resolved_variables == {}
 
+    @pytest.mark.p1
     async def test_duplicate_variables_different_case_deduplicated(
         self, injection_service
     ):
@@ -222,6 +249,7 @@ class TestRenderTemplateEdgeCases:
         assert result.rendered_text == "Bob and Bob"
         assert "lead_name" in result.resolved_variables
 
+    @pytest.mark.p1
     async def test_custom_fallbacks_passed_through(self, injection_service):
         lead = make_lead_dict(custom_fields={})
         result = await injection_service.render_template(

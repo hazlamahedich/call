@@ -16,6 +16,7 @@ from services.variable_injection import (
 
 
 class TestSettingsValidation:
+    @pytest.mark.p2
     def test_default_values(self):
         from config.settings import settings
 
@@ -24,18 +25,21 @@ class TestSettingsValidation:
         assert settings.VARIABLE_RESOLUTION_TIMEOUT_MS == 100
         assert settings.MAX_VARIABLE_VALUE_LENGTH == 500
 
+    @pytest.mark.p2
     def test_resolution_timeout_zero_rejected(self):
         from config.settings import Settings
 
         with pytest.raises(Exception):
             Settings(VARIABLE_RESOLUTION_TIMEOUT_MS=0)
 
+    @pytest.mark.p2
     def test_resolution_timeout_negative_rejected(self):
         from config.settings import Settings
 
         with pytest.raises(Exception):
             Settings(VARIABLE_RESOLUTION_TIMEOUT_MS=-1)
 
+    @pytest.mark.p2
     def test_resolution_timeout_valid_accepted(self):
         from config.settings import Settings
 
@@ -44,78 +48,95 @@ class TestSettingsValidation:
 
 
 class TestClassifySource:
+    @pytest.mark.p2
     def test_lead_name_classified_as_lead(self):
         assert classify_source("lead_name") == "lead"
 
+    @pytest.mark.p2
     def test_lead_email_classified_as_lead(self):
         assert classify_source("lead_email") == "lead"
 
+    @pytest.mark.p2
     def test_current_date_classified_as_system(self):
         assert classify_source("current_date") == "system"
 
+    @pytest.mark.p2
     def test_current_time_classified_as_system(self):
         assert classify_source("current_time") == "system"
 
+    @pytest.mark.p2
     def test_agent_name_classified_as_system(self):
         assert classify_source("agent_name") == "system"
 
+    @pytest.mark.p2
     def test_unknown_classified_as_custom(self):
         assert classify_source("company_name") == "custom"
 
+    @pytest.mark.p2
     def test_case_insensitive_classification(self):
         assert classify_source("LEAD_NAME") == "lead"
         assert classify_source("CURRENT_DATE") == "system"
 
 
 class TestExtractVariablesEdgeCases:
+    @pytest.mark.p2
     def test_empty_fallback_not_matched(self):
         service = VariableInjectionService(AsyncMock())
         variables = service.extract_variables("Hello {{var:}}")
         assert len(variables) == 0
 
+    @pytest.mark.p2
     def test_space_fallback_treated_as_none(self):
         service = VariableInjectionService(AsyncMock())
         variables = service.extract_variables("Hello {{var: }}")
         assert len(variables) == 1
         assert variables[0].fallback is None
 
+    @pytest.mark.p2
     def test_whitespace_fallback_treated_as_none(self):
         service = VariableInjectionService(AsyncMock())
         variables = service.extract_variables("Hello {{var:   }}")
         assert len(variables) == 1
         assert variables[0].fallback is None
 
+    @pytest.mark.p2
     def test_whitespace_in_braces_not_matched(self):
         service = VariableInjectionService(AsyncMock())
         variables = service.extract_variables("Hello {{ lead_name }}")
         assert len(variables) == 0
 
+    @pytest.mark.p2
     def test_dollar_braces_not_matched(self):
         service = VariableInjectionService(AsyncMock())
         variables = service.extract_variables("Price: ${{price}}")
         assert len(variables) == 0
 
+    @pytest.mark.p2
     def test_empty_braces_not_matched(self):
         service = VariableInjectionService(AsyncMock())
         variables = service.extract_variables("Hello {{}}")
         assert len(variables) == 0
 
+    @pytest.mark.p2
     def test_raw_match_construction(self):
         service = VariableInjectionService(AsyncMock())
         variables = service.extract_variables("{{lead_name:there}}")
         assert variables[0].raw_match == "{{lead_name:there}}"
 
+    @pytest.mark.p2
     def test_raw_match_without_fallback(self):
         service = VariableInjectionService(AsyncMock())
         variables = service.extract_variables("{{lead_name}}")
         assert variables[0].raw_match == "{{lead_name}}"
 
+    @pytest.mark.p2
     def test_case_dedup_first_wins(self):
         service = VariableInjectionService(AsyncMock())
         variables = service.extract_variables("{{lead_name}} and {{LEAD_NAME}}")
         assert len(variables) == 1
         assert variables[0].name == "lead_name"
 
+    @pytest.mark.p2
     def test_multiple_variables_extracted(self):
         service = VariableInjectionService(AsyncMock())
         variables = service.extract_variables(
@@ -123,11 +144,13 @@ class TestExtractVariablesEdgeCases:
         )
         assert len(variables) == 3
 
+    @pytest.mark.p2
     def test_variable_with_hyphen_not_matched(self):
         service = VariableInjectionService(AsyncMock())
         variables = service.extract_variables("{{company-name}}")
         assert len(variables) == 0
 
+    @pytest.mark.p2
     def test_variable_starting_with_number_not_matched(self):
         service = VariableInjectionService(AsyncMock())
         variables = service.extract_variables("{{1var}}")
@@ -138,6 +161,7 @@ from unittest.mock import AsyncMock
 
 
 class TestUsedFallbackAccuracy:
+    @pytest.mark.p2
     def test_used_fallback_returns_true_for_unknown(self):
         service = VariableInjectionService(AsyncMock())
         var = VariableInfo(
@@ -148,6 +172,7 @@ class TestUsedFallbackAccuracy:
         )
         assert service._used_fallback(var, {}, None, None) is True
 
+    @pytest.mark.p2
     def test_used_fallback_returns_false_for_resolved_lead_field(self):
         service = VariableInjectionService(AsyncMock())
         var = VariableInfo(
@@ -159,6 +184,7 @@ class TestUsedFallbackAccuracy:
         lead = make_lead_dict(name="Alice")
         assert service._used_fallback(var, lead, None, None) is False
 
+    @pytest.mark.p2
     def test_used_fallback_returns_false_for_system_callable(self):
         service = VariableInjectionService(AsyncMock())
         var = VariableInfo(
@@ -169,6 +195,7 @@ class TestUsedFallbackAccuracy:
         )
         assert service._used_fallback(var, {}, None, None) is False
 
+    @pytest.mark.p2
     def test_used_fallback_returns_false_for_agent_with_name(self):
         service = VariableInjectionService(AsyncMock())
         var = VariableInfo(
@@ -180,6 +207,7 @@ class TestUsedFallbackAccuracy:
         agent = make_agent(name="Bot")
         assert service._used_fallback(var, {}, agent, None) is False
 
+    @pytest.mark.p2
     def test_used_fallback_returns_true_for_agent_without_name(self):
         service = VariableInjectionService(AsyncMock())
         var = VariableInfo(
@@ -191,6 +219,7 @@ class TestUsedFallbackAccuracy:
         agent = make_agent(name="")
         assert service._used_fallback(var, {}, agent, None) is True
 
+    @pytest.mark.p2
     def test_used_fallback_returns_false_for_inline_fallback(self):
         service = VariableInjectionService(AsyncMock())
         var = VariableInfo(
@@ -201,6 +230,7 @@ class TestUsedFallbackAccuracy:
         )
         assert service._used_fallback(var, {}, None, None) is False
 
+    @pytest.mark.p2
     def test_used_fallback_returns_false_for_custom_fallbacks_dict(self):
         service = VariableInjectionService(AsyncMock())
         var = VariableInfo(
@@ -208,6 +238,7 @@ class TestUsedFallbackAccuracy:
         )
         assert service._used_fallback(var, {}, None, {"region": "East"}) is False
 
+    @pytest.mark.p2
     def test_used_fallback_returns_false_for_custom_field(self):
         service = VariableInjectionService(AsyncMock())
         var = VariableInfo(
@@ -219,6 +250,7 @@ class TestUsedFallbackAccuracy:
         lead = make_lead_dict(custom_fields={"company_name": "Acme"})
         assert service._used_fallback(var, lead, None, None) is False
 
+    @pytest.mark.p2
     def test_used_fallback_returns_true_for_null_custom_field(self):
         service = VariableInjectionService(AsyncMock())
         var = VariableInfo(

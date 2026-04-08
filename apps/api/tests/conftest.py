@@ -39,6 +39,7 @@ from conftest_3_3 import (  # noqa: F401 - registers fixtures via import
 
 from conftest_3_4 import (  # noqa: F401 - registers fixtures via import
     injection_service,
+    mock_session,
     sample_lead,
     sample_lead_with_custom,
     sample_agent,
@@ -50,6 +51,7 @@ from conftest_3_4 import (  # noqa: F401 - registers fixtures via import
     make_agent,
     create_render_result,
     assert_variable_resolved,
+    TEST_ORG,
 )
 
 

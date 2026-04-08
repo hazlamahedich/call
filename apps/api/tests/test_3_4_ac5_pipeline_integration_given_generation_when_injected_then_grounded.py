@@ -18,11 +18,11 @@ from conftest_3_4 import (
 )
 from services.variable_injection import VariableInjectionService, RenderResult
 from services.script_generation import ScriptGenerationService
-from unittest.mock import AsyncMock
 
 
 @pytest.mark.asyncio
 class TestAC5PipelineIntegration:
+    @pytest.mark.p1
     async def test_3_4_021_given_lead_and_script_ids_when_generated_then_injection_runs(
         self, injection_service
     ):
@@ -33,6 +33,7 @@ class TestAC5PipelineIntegration:
         assert "{{lead_name}}" not in result.rendered_text
         assert result.was_rendered is True
 
+    @pytest.mark.p1
     async def test_3_4_022_given_rendered_query_when_rag_retrieves_then_uses_rendered_text(
         self, injection_service
     ):
@@ -43,6 +44,7 @@ class TestAC5PipelineIntegration:
         assert rendered == "What solutions for Marcus?"
         assert "lead_name" in result.resolved_variables
 
+    @pytest.mark.p1
     async def test_3_4_023_given_no_lead_id_when_generated_then_backward_compatible(
         self,
     ):

@@ -17,12 +17,12 @@ from conftest_3_4 import (
     TEST_ORG,
 )
 from services.variable_injection import VariableInjectionService, RenderResult
-from unittest.mock import AsyncMock
 
 
 @pytest.mark.asyncio
 class TestAuditTrail:
-    async def test_3_4_audit001_given_generation_with_vars_when_completed_then_variable_count_logged(
+    @pytest.mark.p2
+    async def test_3_4_032_given_generation_with_vars_when_completed_then_variable_count_logged(
         self, injection_service
     ):
         lead = make_lead_dict(name="Alice")
@@ -32,7 +32,8 @@ class TestAuditTrail:
             result = await injection_service.render_template(template, lead)
             assert len(result.resolved_variables) >= 1
 
-    async def test_3_4_audit002_given_unresolved_vars_when_completed_then_names_logged(
+    @pytest.mark.p2
+    async def test_3_4_033_given_unresolved_vars_when_completed_then_names_logged(
         self, injection_service
     ):
         lead = make_lead_dict()
@@ -42,7 +43,8 @@ class TestAuditTrail:
         assert "unknown_var_x" in result.unresolved_variables
         assert "another_unknown_y" in result.unresolved_variables
 
-    async def test_3_4_audit003_given_audit_entry_when_inspected_then_no_values_logged(
+    @pytest.mark.p2
+    async def test_3_4_034_given_audit_entry_when_inspected_then_no_values_logged(
         self, injection_service
     ):
         lead = make_lead_dict(name="Sensitive Name", email="secret@email.com")

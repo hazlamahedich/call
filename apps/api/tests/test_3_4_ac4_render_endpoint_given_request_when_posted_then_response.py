@@ -20,6 +20,7 @@ from unittest.mock import AsyncMock
 
 @pytest.mark.asyncio
 class TestAC4RenderEndpoint:
+    @pytest.mark.p1
     async def test_3_4_017_given_render_request_when_called_then_returns_response(
         self, injection_service
     ):
@@ -33,6 +34,7 @@ class TestAC4RenderEndpoint:
         assert "Alice" in result.rendered_text
         assert "SalesBot" in result.rendered_text
 
+    @pytest.mark.p1
     async def test_3_4_018_given_render_response_when_inspected_then_resolved_map_present(
         self, injection_service
     ):
@@ -45,6 +47,7 @@ class TestAC4RenderEndpoint:
         assert result.resolved_variables["lead_name"] == "Bob"
         assert result.resolved_variables["lead_email"] == "bob@test.com"
 
+    @pytest.mark.p1
     async def test_3_4_019_given_unresolved_vars_when_inspected_then_list_present(
         self, injection_service
     ):
@@ -55,6 +58,7 @@ class TestAC4RenderEndpoint:
         assert "unknown_var" in result.unresolved_variables
         assert "lead_name" not in result.unresolved_variables
 
+    @pytest.mark.p1
     async def test_3_4_020_given_no_auth_when_called_then_401(self):
         mock_session = AsyncMock()
         service = VariableInjectionService(mock_session)
