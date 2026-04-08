@@ -18,8 +18,7 @@ from schemas.script_generation import ScriptGenerateRequest
 from unittest.mock import AsyncMock
 
 
-@pytest.mark.asyncio
-class TestEdgeCases:
+class TestEdgeCasesSync:
     @pytest.mark.p2
     def test_3_4_047_given_empty_braces_when_parsed_then_no_vars(
         self, injection_service
@@ -35,19 +34,27 @@ class TestEdgeCases:
         assert len(variables) == 0
 
     @pytest.mark.p2
+    def test_3_4_050_given_dollar_syntax_when_parsed_then_not_extracted(
+        self, injection_service
+    ):
+        variables = injection_service.extract_variables("Hello $name and ${company}")
+        assert len(variables) == 0
+
+    @pytest.mark.p2
+    def test_3_4_053_given_partial_params_when_validated_then_422(self):
+        with pytest.raises(ValueError):
+            ScriptGenerateRequest(query="test", lead_id=1)
+
+
+@pytest.mark.asyncio
+class TestEdgeCasesAsync:
+    @pytest.mark.p2
     async def test_3_4_049_given_empty_fallback_when_resolved_then_type_default(
         self, injection_service
     ):
         lead = make_lead_dict()
         result = await injection_service.render_template("{{employer}}", lead)
         assert result.rendered_text == "your company"
-
-    @pytest.mark.p2
-    def test_3_4_050_given_dollar_syntax_when_parsed_then_not_extracted(
-        self, injection_service
-    ):
-        variables = injection_service.extract_variables("Hello $name and ${company}")
-        assert len(variables) == 0
 
     @pytest.mark.p2
     async def test_3_4_051_given_null_custom_fields_when_resolved_then_fallback(
@@ -70,11 +77,6 @@ class TestEdgeCases:
             or "'value'" in result.rendered_text
             or "key" in result.rendered_text
         )
-
-    @pytest.mark.p2
-    def test_3_4_053_given_partial_params_when_validated_then_422(self):
-        with pytest.raises(ValueError):
-            ScriptGenerateRequest(query="test", lead_id=1)
 
     @pytest.mark.p2
     async def test_3_4_054_given_50_variables_when_rendered_then_all_resolved(

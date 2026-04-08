@@ -52,6 +52,9 @@ class TestAC5PipelineIntegration:
         mock_embedding = AsyncMock()
         mock_embedding.generate_embedding = AsyncMock(return_value=[0.1] * 1536)
         mock_session = AsyncMock()
+        mock_result = AsyncMock()
+        mock_result.scalar_one.return_value = 0
+        mock_session.execute = AsyncMock(return_value=mock_result)
 
         service = ScriptGenerationService(
             llm_service=mock_llm,

@@ -24,13 +24,14 @@ inputDocuments:
   - "apps/api/tests/test_3_4_expanded_schema_validation_given_schemas_when_validated_then_correct.py"
   - "apps/api/tests/test_3_4_expanded_settings_and_extraction_given_configs_when_validated_then_correct.py"
   - "apps/api/tests/test_3_4_expanded_shared_queries_and_routers_given_request_when_processed_then_correct.py"
+  - "apps/api/tests/test_3_4_sanitization_integration_given_pipeline_when_rendered_then_sanitized.py"
 ---
 
 # Test Quality Review: Story 3.4 — Dynamic Variable Injection for Hyper-Personalization
 
 **Quality Score**: 95/100 (A+ - Excellent)
-**Review Date**: 2026-04-08 (updated post-fix)
-**Review Scope**: suite (20 test files + 1 conftest)
+**Review Date**: 2026-04-08 (updated post-implementation-review)
+**Review Scope**: suite (21 test files + 1 conftest)
 **Reviewer**: TEA Agent
 
 ---
@@ -51,7 +52,7 @@ Coverage mapping and coverage gates are out of scope here. Use `trace` for cover
 ✅ Strong test coverage of security/sanitization with 23 dedicated tests covering injection patterns, length truncation, and false-positive prevention
 ✅ All 20 test files are well under the 300-line threshold (max 232 lines, avg 95 lines)
 ✅ Zero hard waits (`time.sleep`, `waitForTimeout`) detected across all files
-✅ Priority markers (`@pytest.mark.p0/p1/p2/p3`) applied to all 186 tests for CI triage
+✅ Priority markers (`@pytest.mark.p0/p1/p2/p3`) applied to all 194 tests for CI triage
 ✅ No duplicate imports — all redundant `AsyncMock` imports cleaned up
 
 ### Key Weaknesses
@@ -60,7 +61,7 @@ None remaining — all pre-fix concerns resolved.
 
 ### Summary
 
-Story 3.4 tests demonstrate excellent testing discipline with strong BDD naming, factory fixtures, and thorough edge-case coverage. All 186 tests across 20 files use unified `test_3_4_NNN` IDs, carry priority markers for CI triage, and have no duplicate imports. The expanded custom fields router tests now exercise ORM model attribute assignment on real `Lead` objects instead of raw dict operations. The cache key test helper includes a reference comment documenting alignment with `script_generation.py:155`. The conftest.py already re-exports all fixtures from `conftest_3_4.py`, including `mock_session` and `TEST_ORG`.
+Story 3.4 tests demonstrate excellent testing discipline with strong BDD naming, factory fixtures, and thorough edge-case coverage. All 194 tests across 21 files use unified `test_3_4_NNN` IDs, carry priority markers for CI triage, and have no duplicate imports. The expanded custom fields router tests now exercise ORM model attribute assignment on real `Lead` objects instead of raw dict operations. The cache key test helper includes a reference comment documenting alignment with `script_generation.py:155`. The conftest.py already re-exports all fixtures from `conftest_3_4.py`, including `mock_session` and `TEST_ORG`.
 
 ---
 
@@ -70,7 +71,7 @@ Story 3.4 tests demonstrate excellent testing discipline with strong BDD naming,
 | ------------------------------------ | ------- | ---------- | ------------------------------------------------------------------------- |
 | BDD Format (Given-When-Then)         | ✅ PASS | 0          | All test names follow `given_X_when_Y_then_Z` pattern                     |
 | Test IDs                             | ✅ PASS | 0          | All tests use unified `test_3_4_NNN` scheme                               |
-| Priority Markers (P0/P1/P2/P3)       | ✅ PASS | 0          | All 186 tests carry `@pytest.mark.p0/p1/p2/p3`                            |
+| Priority Markers (P0/P1/P2/P3)       | ✅ PASS | 0          | All 194 tests carry `@pytest.mark.p0/p1/p2/p3`                            |
 | Hard Waits (sleep, waitForTimeout)   | ✅ PASS | 0          | Zero hard waits detected                                                  |
 | Determinism (no conditionals)        | ✅ PASS | 0          | Only test-logic conditionals present (acceptable)                         |
 | Isolation (cleanup, no shared state) | ✅ PASS | 0          | Fixtures create fresh instances per test; no shared mutable state         |
@@ -164,6 +165,40 @@ Replaced tests that asserted on raw dict merge operations with tests that exerci
 **File**: `test_3_4_cache_key_correctness_*.py`
 
 Added module-level docstring noting that `_build_cache_key` mirrors `services/script_generation.py:155` and must be updated if the service format changes.
+
+---
+
+## Implementation Review Fixes (Party Mode — 2026-04-08)
+
+Multi-agent review (Winston/Architect, Murat/Test Architect, Amelia/Developer, John/PM) identified 6 test-related concerns. All resolved.
+
+### 7. ✅ TestUsedFallbackAccuracy Rewritten for `_resolve()`
+
+**Severity was**: P1 (High)
+**Files affected**: `test_3_4_expanded_settings_and_extraction_*.py`
+
+Rewrote all 9 tests in `TestUsedFallbackAccuracy` to call `service._resolve()` instead of removed `service._used_fallback()`. Tests now assert on the `(value, used_fallback)` tuple returned by `_resolve()`.
+
+### 8. ✅ Sync/Async Test Class Split
+
+**Severity was**: P2 (Medium)
+**Files affected**: `test_3_4_custom_fields_api_*.py`, `test_3_4_edge_cases_*.py`
+
+Split `TestCustomFieldsAPI` into `TestCustomFieldsAPISync` (3 sync) + `TestCustomFieldsAPIAsync` (1 async). Split `TestEdgeCases` into `TestEdgeCasesSync` (4 sync) + `TestEdgeCasesAsync` (4 async). Eliminated 16 `PytestWarning` about async marks on sync methods.
+
+### 9. ✅ RuntimeWarning Fix in Pipeline Tests
+
+**Severity was**: P2 (Medium)
+**Files affected**: `test_3_4_expanded_pipeline_*.py`, `test_3_4_ac5_pipeline_*.py`
+
+Updated `_make_service()` to properly mock `mock_session.execute` with `AsyncMock(return_value=mock_result)` where `mock_result.scalar_one.return_value = 0`. Fixed `RuntimeWarning: coroutine never awaited` in pipeline integration tests.
+
+### 10. ✅ Sanitization Integration Tests Created
+
+**Severity was**: P1 (High)
+**File**: `test_3_4_sanitization_integration_given_pipeline_when_rendered_then_sanitized.py`
+
+Added 8 integration tests (test_3_4_200 through test_3_4_207) proving `_sanitize_value()` is wired into the render pipeline end-to-end — not just tested in isolation. Covers: lead names, custom fields, agent names, inline fallbacks, custom_fallbacks dict, HTML tags, long values, and normal names (no false positives).
 
 ---
 
@@ -264,13 +299,14 @@ Uses `time.monotonic()` (not `time.time()`) for wall-clock measurement and asser
 | expanded_schema_validation          | 144       | 22      | 24      |
 | expanded_settings_and_extraction    | 231       | 32      | 37      |
 | expanded_shared_queries_and_routers | 230       | 15      | 22      |
-| **TOTAL**                           | **2,152** | **186** | **248** |
+| sanitization_integration            | ~80       | 8       | 8       |
+| **TOTAL**                           | **2,232** | **194** | **256** |
 
 ### Suite Metrics
 
-- **Total Test Files**: 20 (+ 1 conftest)
-- **Total Test Cases**: 186
-- **Total Assertions**: 248
+- **Total Test Files**: 21 (+ 1 conftest)
+- **Total Test Cases**: 194
+- **Total Assertions**: 256
 - **Average Assertions/Test**: 1.33
 - **Average Lines/File**: 95 (excl. conftest)
 - **Max Lines/File**: 232 (expanded_resolution)
@@ -328,4 +364,4 @@ None — test quality is production-ready.
 **Workflow**: testarch-test-review v5.0
 **Review ID**: test-review-story-3.4-20260408
 **Timestamp**: 2026-04-08
-**Version**: 2.0 (post-fix update)
+**Version**: 3.0 (post-implementation-review update)

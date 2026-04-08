@@ -17,8 +17,7 @@ from conftest_3_4 import (
 from schemas.variable_injection import CustomFieldsUpdateRequest
 
 
-@pytest.mark.asyncio
-class TestCustomFieldsAPI:
+class TestCustomFieldsAPISync:
     @pytest.mark.p1
     def test_3_4_038_given_valid_patch_when_called_then_fields_merged(self):
         existing = {"company_name": "Acme"}
@@ -45,6 +44,9 @@ class TestCustomFieldsAPI:
         with pytest.raises(Exception):
             CustomFieldsUpdateRequest(custom_fields={})
 
+
+@pytest.mark.asyncio
+class TestCustomFieldsAPIAsync:
     @pytest.mark.p1
     async def test_3_4_041_given_cross_org_lead_when_patched_then_403(self):
         with patch(

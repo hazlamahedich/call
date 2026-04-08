@@ -18,6 +18,9 @@ def _make_service():
     mock_embedding = AsyncMock()
     mock_embedding.generate_embedding = AsyncMock(return_value=[0.1] * 1536)
     mock_session = AsyncMock()
+    mock_result = AsyncMock()
+    mock_result.scalar_one.return_value = 0
+    mock_session.execute = AsyncMock(return_value=mock_result)
     return ScriptGenerationService(
         llm_service=mock_llm,
         embedding_service=mock_embedding,

@@ -162,102 +162,69 @@ from unittest.mock import AsyncMock
 
 class TestUsedFallbackAccuracy:
     @pytest.mark.p2
-    def test_used_fallback_returns_true_for_unknown(self):
+    def test_resolve_returns_used_fallback_true_for_unknown(self):
         service = VariableInjectionService(AsyncMock())
-        var = VariableInfo(
-            name="totally_unknown",
-            fallback=None,
-            source_type="custom",
-            raw_match="{{totally_unknown}}",
-        )
-        assert service._used_fallback(var, {}, None, None) is True
+        value, used_fallback = service._resolve("totally_unknown", None, {}, None, None)
+        assert used_fallback is True
 
     @pytest.mark.p2
-    def test_used_fallback_returns_false_for_resolved_lead_field(self):
+    def test_resolve_returns_used_fallback_false_for_resolved_lead_field(self):
         service = VariableInjectionService(AsyncMock())
-        var = VariableInfo(
-            name="lead_name",
-            fallback=None,
-            source_type="lead",
-            raw_match="{{lead_name}}",
-        )
         lead = make_lead_dict(name="Alice")
-        assert service._used_fallback(var, lead, None, None) is False
+        value, used_fallback = service._resolve("lead_name", None, lead, None, None)
+        assert used_fallback is False
+        assert "Alice" in value
 
     @pytest.mark.p2
-    def test_used_fallback_returns_false_for_system_callable(self):
+    def test_resolve_returns_used_fallback_false_for_system_callable(self):
         service = VariableInjectionService(AsyncMock())
-        var = VariableInfo(
-            name="current_date",
-            fallback=None,
-            source_type="system",
-            raw_match="{{current_date}}",
-        )
-        assert service._used_fallback(var, {}, None, None) is False
+        value, used_fallback = service._resolve("current_date", None, {}, None, None)
+        assert used_fallback is False
 
     @pytest.mark.p2
-    def test_used_fallback_returns_false_for_agent_with_name(self):
+    def test_resolve_returns_used_fallback_false_for_agent_with_name(self):
         service = VariableInjectionService(AsyncMock())
-        var = VariableInfo(
-            name="agent_name",
-            fallback=None,
-            source_type="system",
-            raw_match="{{agent_name}}",
-        )
         agent = make_agent(name="Bot")
-        assert service._used_fallback(var, {}, agent, None) is False
+        value, used_fallback = service._resolve("agent_name", None, {}, agent, None)
+        assert used_fallback is False
+        assert "Bot" in value
 
     @pytest.mark.p2
-    def test_used_fallback_returns_true_for_agent_without_name(self):
+    def test_resolve_returns_used_fallback_true_for_agent_without_name(self):
         service = VariableInjectionService(AsyncMock())
-        var = VariableInfo(
-            name="agent_name",
-            fallback=None,
-            source_type="system",
-            raw_match="{{agent_name}}",
-        )
         agent = make_agent(name="")
-        assert service._used_fallback(var, {}, agent, None) is True
+        value, used_fallback = service._resolve("agent_name", None, {}, agent, None)
+        assert used_fallback is True
 
     @pytest.mark.p2
-    def test_used_fallback_returns_false_for_inline_fallback(self):
+    def test_resolve_returns_used_fallback_false_for_inline_fallback(self):
         service = VariableInjectionService(AsyncMock())
-        var = VariableInfo(
-            name="unknown",
-            fallback="default_val",
-            source_type="custom",
-            raw_match="{{unknown:default_val}}",
+        value, used_fallback = service._resolve(
+            "unknown", "default_val", {}, None, None
         )
-        assert service._used_fallback(var, {}, None, None) is False
+        assert used_fallback is False
+        assert value == "default_val"
 
     @pytest.mark.p2
-    def test_used_fallback_returns_false_for_custom_fallbacks_dict(self):
+    def test_resolve_returns_used_fallback_false_for_custom_fallbacks_dict(self):
         service = VariableInjectionService(AsyncMock())
-        var = VariableInfo(
-            name="region", fallback=None, source_type="custom", raw_match="{{region}}"
+        value, used_fallback = service._resolve(
+            "region", None, {}, None, {"region": "East"}
         )
-        assert service._used_fallback(var, {}, None, {"region": "East"}) is False
+        assert used_fallback is False
+        assert value == "East"
 
     @pytest.mark.p2
-    def test_used_fallback_returns_false_for_custom_field(self):
+    def test_resolve_returns_used_fallback_false_for_custom_field(self):
         service = VariableInjectionService(AsyncMock())
-        var = VariableInfo(
-            name="company_name",
-            fallback=None,
-            source_type="custom",
-            raw_match="{{company_name}}",
-        )
         lead = make_lead_dict(custom_fields={"company_name": "Acme"})
-        assert service._used_fallback(var, lead, None, None) is False
+        value, used_fallback = service._resolve("company_name", None, lead, None, None)
+        assert used_fallback is False
+        assert "Acme" in value
 
     @pytest.mark.p2
-    def test_used_fallback_returns_true_for_null_custom_field(self):
+    def test_resolve_returns_used_fallback_true_for_null_custom_field(self):
         service = VariableInjectionService(AsyncMock())
-        var = VariableInfo(
-            name="company_name",
-            fallback=None,
-            source_type="custom",
-            raw_match="{{company_name}}",
-        )
         lead = make_lead_dict(custom_fields={"company_name": None})
-        assert service._used_fallback(var, lead, None, None) is True
+        value, used_fallback = service._resolve("company_name", None, lead, None, None)
+        assert used_fallback is True

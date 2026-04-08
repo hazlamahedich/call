@@ -112,7 +112,7 @@ class VariableInjectionService:
         for var in variables:
             normalized = var.name.lower()
             if normalized not in resolution_map:
-                value = self.resolve_variable(
+                value, used_fallback = self._resolve(
                     var_name=var.name,
                     fallback=var.fallback,
                     lead=lead,
@@ -122,12 +122,11 @@ class VariableInjectionService:
                 resolution_map[normalized] = value
                 resolved[var.name] = value
 
-                if self._used_fallback(var, lead, agent, custom_fallbacks):
+                if used_fallback:
                     unresolved.append(var.name)
 
         def _replace_cb(m: re.Match) -> str:
             name = m.group(1)
-            fb = m.group(2)
             normalized = name.lower()
             return resolution_map.get(normalized, m.group(0))
 
@@ -171,68 +170,93 @@ class VariableInjectionService:
         agent=None,
         custom_fallbacks: dict[str, str] | None = None,
     ) -> str:
+        value, _ = self._resolve(var_name, fallback, lead, agent, custom_fallbacks)
+        return value
+
+    def _resolve(
+        self,
+        var_name: str,
+        fallback: Optional[str],
+        lead,
+        agent=None,
+        custom_fallbacks: dict[str, str] | None = None,
+    ) -> tuple[str, bool]:
         normalized = var_name.lower().strip()
+        used_fallback = False
 
         # 1. Lead standard fields
         if normalized in LEAD_STANDARD_FIELDS:
             field_attr = LEAD_STANDARD_FIELDS[normalized]
-            value = None
-            if isinstance(lead, dict):
-                value = lead.get(field_attr)
-            elif hasattr(lead, field_attr):
-                value = getattr(lead, field_attr, None)
+            value = self._get_lead_attr(lead, field_attr)
             if value:
-                return self._sanitize_value(str(value))
+                return self._sanitize_value(str(value)), False
 
         # 2. Lead custom fields (JSONB)
-        custom = None
-        if isinstance(lead, dict):
-            custom = lead.get("custom_fields")
-        elif hasattr(lead, "custom_fields"):
-            custom = getattr(lead, "custom_fields", None)
+        custom = self._get_lead_attr(lead, "custom_fields")
         if custom and isinstance(custom, dict):
             key_map = {k.lower(): k for k in custom}
             if normalized in key_map:
                 raw_val = custom[key_map[normalized]]
                 if raw_val is not None:
-                    if isinstance(raw_val, (dict, list)):
-                        return self._sanitize_value(str(raw_val))
-                    return self._sanitize_value(str(raw_val))
+                    return self._sanitize_value(str(raw_val)), False
 
         # 3. System variables
         if normalized in SYSTEM_VARIABLES:
             resolver = SYSTEM_VARIABLES[normalized]
             if callable(resolver):
-                return str(resolver())
+                return self._sanitize_value(str(resolver())), False
             if agent and normalized == "agent_name":
                 name_val = getattr(agent, "name", None)
                 if name_val:
-                    return self._sanitize_value(str(name_val))
+                    return self._sanitize_value(str(name_val)), False
 
         # 4. Inline fallback
         if fallback is not None and fallback != "":
-            return self._sanitize_value(fallback)
+            return self._sanitize_value(fallback), False
 
         # 5. Custom fallbacks dict
         if custom_fallbacks and normalized in custom_fallbacks:
-            return self._sanitize_value(custom_fallbacks[normalized])
+            return self._sanitize_value(custom_fallbacks[normalized]), False
 
         # 6. Type-based fallback
+        used_fallback = True
         var_type = self._infer_variable_type(normalized)
         if var_type in FALLBACK_BY_TYPE:
-            return FALLBACK_BY_TYPE[var_type]
+            return FALLBACK_BY_TYPE[var_type], used_fallback
 
         # 7. Global fallback
-        return settings.VARIABLE_DEFAULT_FALLBACK
+        return settings.VARIABLE_DEFAULT_FALLBACK, used_fallback
+
+    @staticmethod
+    def _get_lead_attr(lead, attr: str) -> Optional[str]:
+        if isinstance(lead, dict):
+            return lead.get(attr)
+        if hasattr(lead, attr):
+            return getattr(lead, attr, None)
+        return None
 
     @staticmethod
     def _sanitize_value(value: str) -> str:
         sanitized = value.strip()
         for pattern in INJECTION_PATTERNS:
             if pattern.search(sanitized):
+                logger.warning(
+                    "Prompt injection pattern detected in variable value, truncating",
+                    extra={
+                        "pattern": pattern.pattern,
+                        "original_length": len(sanitized),
+                    },
+                )
                 sanitized = sanitized[:50] + "... [truncated for safety]"
                 return sanitized
         if len(sanitized) > settings.MAX_VARIABLE_VALUE_LENGTH:
+            logger.info(
+                "Variable value exceeds max length, truncating",
+                extra={
+                    "max_length": settings.MAX_VARIABLE_VALUE_LENGTH,
+                    "original_length": len(sanitized),
+                },
+            )
             sanitized = (
                 sanitized[: settings.MAX_VARIABLE_VALUE_LENGTH] + "... [truncated]"
             )
@@ -244,46 +268,3 @@ class VariableInjectionService:
             if pattern.search(var_name):
                 return var_type
         return "generic"
-
-    def _used_fallback(self, var, lead, agent, custom_fallbacks):
-        normalized = var.name.lower().strip()
-
-        if normalized in LEAD_STANDARD_FIELDS:
-            field_attr = LEAD_STANDARD_FIELDS[normalized]
-            actual = None
-            if isinstance(lead, dict):
-                actual = lead.get(field_attr)
-            elif hasattr(lead, field_attr):
-                actual = getattr(lead, field_attr, None)
-            if actual:
-                return False
-
-        if normalized in SYSTEM_VARIABLES:
-            resolver = SYSTEM_VARIABLES[normalized]
-            if callable(resolver):
-                return False
-            if normalized == "agent_name":
-                if agent:
-                    name_val = getattr(agent, "name", None)
-                    if name_val:
-                        return False
-
-        custom = None
-        if isinstance(lead, dict):
-            custom = lead.get("custom_fields")
-        elif hasattr(lead, "custom_fields"):
-            custom = getattr(lead, "custom_fields", None)
-        if custom and isinstance(custom, dict):
-            key_map = {k.lower(): k for k in custom}
-            if normalized in key_map:
-                raw_val = custom[key_map[normalized]]
-                if raw_val is not None:
-                    return False
-
-        if var.fallback is not None and var.fallback != "":
-            return False
-
-        if custom_fallbacks and normalized in custom_fallbacks:
-            return False
-
-        return True
