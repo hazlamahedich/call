@@ -48,7 +48,7 @@ async function sendMessage() {
   sendBtn.click();
 }
 
-describe("[3.6b][ChatPanel-Correction] — correction indicators integration", () => {
+describe("[3.6b][ChatPanel-Correction] — P1/P2 tests", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetClaimCounter();
@@ -64,65 +64,6 @@ describe("[3.6b][ChatPanel-Correction] — correction indicators integration", (
       dispatchEvent: vi.fn(),
     }));
     mockSendLabChat.mockResolvedValue(createMockResponse());
-  });
-
-  it("[3.6b-INT-001][P0] Given corrected response, when message renders, then CorrectionBadge is visible", async () => {
-    const claims = [
-      createClaimVerification({
-        claimText: "Incorrect claim",
-        isSupported: false,
-      }),
-    ];
-    mockSendLabChat.mockResolvedValue(
-      createMockResponse({
-        wasCorrected: true,
-        correctionCount: 1,
-        verifiedClaims: claims,
-      }),
-    );
-
-    render(<ChatPanel sessionId={1} />);
-    await sendMessage();
-
-    await waitFor(() => {
-      expect(screen.getByText("Corrected")).toBeInTheDocument();
-    });
-  });
-
-  it("[3.6b-INT-002][P0] Given timed-out response, when message renders, then StatusMessage warning is visible", async () => {
-    mockSendLabChat.mockResolvedValue(
-      createMockResponse({ verificationTimedOut: true }),
-    );
-
-    render(<ChatPanel sessionId={1} />);
-    await sendMessage();
-
-    await waitFor(() => {
-      expect(
-        screen.getByText(
-          "Verification timed out — response may contain unverified claims",
-        ),
-      ).toBeInTheDocument();
-    });
-    const statusEl = screen.getByRole("status");
-    expect(statusEl).toBeInTheDocument();
-  });
-
-  it("[3.6b-INT-003][P0] Given normal response, when message renders, then no correction indicators shown", async () => {
-    mockSendLabChat.mockResolvedValue(createMockResponse());
-
-    render(<ChatPanel sessionId={1} />);
-    await sendMessage();
-
-    await waitFor(() => {
-      expect(screen.getByText("AI response text")).toBeInTheDocument();
-    });
-    expect(screen.queryByText("Corrected")).not.toBeInTheDocument();
-    expect(
-      screen.queryByText(
-        "Verification timed out — response may contain unverified claims",
-      ),
-    ).not.toBeInTheDocument();
   });
 
   it("[3.6b-INT-004][P1] Given corrected response, when axe audit runs, then no accessibility violations", async () => {
@@ -146,18 +87,6 @@ describe("[3.6b][ChatPanel-Correction] — correction indicators integration", (
 
     const results = await axe(container);
     expect(results.violations).toHaveLength(0);
-  });
-
-  it("[3.6b-INT-005][P0] Given ChatMessage with no correction fields at all (undefined, not false), when rendered, then no errors and no correction indicators shown — backward compatibility", async () => {
-    mockSendLabChat.mockResolvedValue(createMockResponse());
-
-    render(<ChatPanel sessionId={1} />);
-    await sendMessage();
-
-    await waitFor(() => {
-      expect(screen.getByText("AI response text")).toBeInTheDocument();
-    });
-    expect(screen.queryByText("Corrected")).not.toBeInTheDocument();
   });
 
   it("[3.6b-INT-006][P1] Given response with both wasCorrected=true AND verificationTimedOut=true, when rendered, then both CorrectionBadge and timeout indicator are visible", async () => {
@@ -222,30 +151,6 @@ describe("[3.6b][ChatPanel-Correction] — correction indicators integration", (
     );
     expect(response.data.verifiedClaims![0].claimText).toBe("Claim one");
     expect(response.data.verifiedClaims![1].verificationError).toBe(true);
-  });
-
-  it("[3.6b-INT-008][P0] Given corrected response without source attributions, when message renders, then CorrectionBadge is still visible", async () => {
-    const claims = [
-      createClaimVerification({
-        claimText: "No sources claim",
-        isSupported: false,
-      }),
-    ];
-    mockSendLabChat.mockResolvedValue(
-      createMockResponse({
-        sourceAttributions: [],
-        wasCorrected: true,
-        correctionCount: 1,
-        verifiedClaims: claims,
-      }),
-    );
-
-    render(<ChatPanel sessionId={1} />);
-    await sendMessage();
-
-    await waitFor(() => {
-      expect(screen.getByText("Corrected")).toBeInTheDocument();
-    });
   });
 
   it("[3.6b-INT-009][P1] Given multiple assistant messages with mixed correction states, when rendered, then only corrected messages show badge", async () => {
