@@ -110,6 +110,24 @@ class TestCorrectionMetadata:
         assert data["was_corrected"] is True
         assert data["correction_count"] == 1
 
+    async def test_3_6_unit_014_given_corrected_when_db_row_then_fields_present(
+        self, factual_hook_service, mock_llm, mock_embedding
+    ):
+        with patch(
+            "services.factual_hook.search_knowledge_chunks",
+            new_callable=AsyncMock,
+            return_value=[],
+        ):
+            mock_llm.generate.return_value = "Corrected version."
+            result = await factual_hook_service.verify_and_correct(
+                response="Our revenue grew 32% in Q3.",
+                source_chunks=[],
+                query="rev",
+                org_id="o1",
+            )
+            assert result.was_corrected is True
+            assert result.correction_count >= 1
+
     async def test_3_6_unit_014c_given_old_cache_when_deserialized_then_defaults(self):
         from services.script_generation import ScriptGenerationResult
         import json

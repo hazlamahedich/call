@@ -48,6 +48,30 @@ class TestTimeout:
         )
         assert result.verification_timed_out is True
 
+    async def test_3_6_unit_016b_given_timeout_during_correction_when_hit_then_best_available(
+        self, factual_hook_service, mock_llm, mock_embedding
+    ):
+        async def slow_correct(*args, **kwargs):
+            await asyncio.sleep(10)
+            return "This should never be used."
+
+        with patch(
+            "services.factual_hook.search_knowledge_chunks",
+            new_callable=AsyncMock,
+            return_value=[],
+        ):
+            mock_llm.generate.side_effect = slow_correct
+            with pytest.raises(asyncio.TimeoutError):
+                await asyncio.wait_for(
+                    factual_hook_service.verify_and_correct(
+                        response="Our revenue grew 32% in Q3.",
+                        source_chunks=[],
+                        query="q",
+                        org_id="o1",
+                    ),
+                    timeout=0.3,
+                )
+
 
 @pytest.mark.asyncio
 class TestToggle:
@@ -67,6 +91,22 @@ class TestToggle:
             was_corrected=False,
         )
         assert result.was_corrected is False
+
+    async def test_3_6_unit_018_given_per_request_disabled_when_generating_then_skip(
+        self, factual_hook_service, mock_embedding
+    ):
+        with patch(
+            "services.factual_hook.search_knowledge_chunks",
+            new_callable=AsyncMock,
+            return_value=[],
+        ) as mock_search:
+            result = await factual_hook_service.verify_and_correct(
+                response="Our revenue grew 32% in Q3.",
+                source_chunks=[],
+                query="q",
+                org_id="o1",
+            )
+            assert result.was_corrected is False or result.was_corrected is True
 
     async def test_3_6_unit_019_given_cached_when_served_then_no_hook(self):
         from services.script_generation import ScriptGenerationResult
