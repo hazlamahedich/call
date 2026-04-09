@@ -11,14 +11,18 @@ from tests.conftest_3_6 import make_claim_verification
 
 @pytest.mark.asyncio
 class TestClaimExtraction:
+    @pytest.mark.p0
     async def test_3_6_unit_001_given_numbers_when_extracting_then_claims_found(
         self, factual_hook_service
     ):
-        response = "Our revenue grew 32% in Q3. We have over 5000 active users."
+        response = "Our revenue grew 32% in Q3. We have over 5000 customers."
         claims = factual_hook_service._extract_claims(response)
-        assert len(claims) >= 1
-        assert any("32%" in c or "5000" in c for c in claims)
+        assert len(claims) == 2
+        claim_texts = " ".join(claims)
+        assert "32%" in claim_texts
+        assert "5000" in claim_texts
 
+    @pytest.mark.p1
     async def test_3_6_unit_002_given_superlatives_when_extracting_then_claims_found(
         self, factual_hook_service
     ):
@@ -26,6 +30,7 @@ class TestClaimExtraction:
         claims = factual_hook_service._extract_claims(response)
         assert len(claims) >= 1
 
+    @pytest.mark.p1
     async def test_3_6_unit_003_given_greeting_when_extracting_then_empty(
         self, factual_hook_service
     ):
@@ -33,6 +38,7 @@ class TestClaimExtraction:
         claims = factual_hook_service._extract_claims(response)
         assert claims == []
 
+    @pytest.mark.p1
     async def test_3_6_unit_003b_given_mixed_when_extracting_then_only_claims(
         self, factual_hook_service
     ):
@@ -41,6 +47,7 @@ class TestClaimExtraction:
         assert len(claims) == 1
         assert "32%" in claims[0]
 
+    @pytest.mark.p1
     async def test_3_6_unit_003c_given_filler_when_extracting_then_excluded(
         self, factual_hook_service
     ):
@@ -48,6 +55,7 @@ class TestClaimExtraction:
         claims = factual_hook_service._extract_claims(response)
         assert claims == []
 
+    @pytest.mark.p0
     async def test_3_6_unit_004_given_matching_chunks_when_verifying_then_supported(
         self, factual_hook_service, mock_session
     ):
@@ -66,6 +74,7 @@ class TestClaimExtraction:
             )
             assert result.is_supported is True
 
+    @pytest.mark.p0
     async def test_3_6_unit_005_given_no_chunks_when_verifying_then_unsupported(
         self, factual_hook_service
     ):
@@ -82,6 +91,7 @@ class TestClaimExtraction:
             )
             assert result.is_supported is False
 
+    @pytest.mark.p1
     async def test_3_6_unit_006_given_verification_when_scoped_then_org_id_passed(
         self, factual_hook_service
     ):

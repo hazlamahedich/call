@@ -62,10 +62,6 @@ from conftest_3_6 import (  # noqa: F401 - registers fixtures via import
     mock_embedding,
     mock_session,
     factual_hook_service,
-    sample_claims,
-    sample_knowledge_chunks,
-    flaky_embedding_service,
-    degraded_embedding_service,
 )
 
 

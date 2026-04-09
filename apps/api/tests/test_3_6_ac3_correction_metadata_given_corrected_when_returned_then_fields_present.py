@@ -9,6 +9,7 @@ from services.factual_hook import FactualHookService
 
 @pytest.mark.asyncio
 class TestCorrectionMetadata:
+    @pytest.mark.p0
     async def test_3_6_unit_011_given_corrected_when_inspecting_then_was_corrected_true(
         self, factual_hook_service, mock_llm, mock_embedding
     ):
@@ -26,6 +27,7 @@ class TestCorrectionMetadata:
             )
             assert result.was_corrected is True
 
+    @pytest.mark.p1
     async def test_3_6_unit_012_given_two_corrections_when_inspecting_then_count_2(
         self, factual_hook_service, mock_llm, mock_embedding
     ):
@@ -43,6 +45,7 @@ class TestCorrectionMetadata:
             )
             assert result.correction_count == 2
 
+    @pytest.mark.p0
     async def test_3_6_unit_013_given_script_lab_result_when_serialized_then_camel_case(
         self,
     ):
@@ -69,10 +72,12 @@ class TestCorrectionMetadata:
         assert "correctionCount" in data
         assert "verifiedClaims" in data
 
-    async def test_3_6_unit_014b_given_cached_corrected_when_served_then_has_metadata(
+    @pytest.mark.p2
+    async def test_3_6_unit_014b_given_cached_result_when_serialized_then_correction_fields(
         self,
     ):
         from services.script_generation import ScriptGenerationResult
+        from dataclasses import asdict
 
         result = ScriptGenerationResult(
             response="corrected",
@@ -88,28 +93,12 @@ class TestCorrectionMetadata:
             correction_count=1,
             verification_timed_out=False,
         )
-        import json
-
-        data = json.loads(
-            json.dumps(
-                {
-                    "response": result.response,
-                    "grounding_confidence": result.grounding_confidence,
-                    "is_low_confidence": result.is_low_confidence,
-                    "source_chunks": result.source_chunks,
-                    "model": result.model,
-                    "grounding_mode": result.grounding_mode,
-                    "was_truncated": result.was_truncated,
-                    "cost_estimate": result.cost_estimate,
-                    "was_corrected": result.was_corrected,
-                    "correction_count": result.correction_count,
-                    "verification_timed_out": result.verification_timed_out,
-                }
-            )
-        )
+        data = asdict(result)
         assert data["was_corrected"] is True
         assert data["correction_count"] == 1
+        assert data["verification_timed_out"] is False
 
+    @pytest.mark.p1
     async def test_3_6_unit_014_given_corrected_when_db_row_then_fields_present(
         self, factual_hook_service, mock_llm, mock_embedding
     ):
@@ -128,28 +117,22 @@ class TestCorrectionMetadata:
             assert result.was_corrected is True
             assert result.correction_count >= 1
 
+    @pytest.mark.p2
     async def test_3_6_unit_014c_given_old_cache_when_deserialized_then_defaults(self):
         from services.script_generation import ScriptGenerationResult
-        import json
 
-        old_cache = json.dumps(
-            {
-                "response": "old",
-                "grounding_confidence": 0.5,
-                "is_low_confidence": False,
-                "source_chunks": [],
-                "model": "gpt-4o-mini",
-                "grounding_mode": "strict",
-                "was_truncated": False,
-                "cost_estimate": 0.0,
-            }
-        )
-        cached_data = json.loads(old_cache)
-        cached_data.setdefault("was_corrected", False)
-        cached_data.setdefault("correction_count", 0)
-        cached_data.setdefault("verification_timed_out", False)
-        cached_data["latency_ms"] = 50.0
-        cached_data["cached"] = True
+        cached_data = {
+            "response": "old",
+            "grounding_confidence": 0.5,
+            "is_low_confidence": False,
+            "source_chunks": [],
+            "model": "gpt-4o-mini",
+            "grounding_mode": "strict",
+            "was_truncated": False,
+            "cost_estimate": 0.0,
+            "latency_ms": 50.0,
+            "cached": True,
+        }
         result = ScriptGenerationResult(**cached_data)
         assert result.was_corrected is False
         assert result.correction_count == 0

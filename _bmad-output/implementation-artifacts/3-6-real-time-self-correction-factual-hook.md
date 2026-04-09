@@ -1053,6 +1053,14 @@ zai-coding-plan/glm-5.1
 
 ### Change Log
 
+- 2026-04-09: Test quality review (93/100 A — Good) — addressed all findings:
+  - Added `@pytest.mark.p0/p1/p2` priority markers to all 18 tests (0 → 18)
+  - Tightened test 001 assertion: replaced loose `any("32%" in c or "5000" in c)` with exact `len == 2` + per-field content checks — caught that `"users"` wasn't a recognized unit word; fixed input to `"customers"`
+  - Removed 4 unused fixtures from conftest_3_6: `sample_claims`, `sample_knowledge_chunks`, `flaky_embedding_service`, `degraded_embedding_service`
+  - Refactored test 014b: replaced manual `json.dumps`/`json.loads` dict construction with `dataclasses.asdict()`
+  - Refactored test 014c: replaced `setdefault()` pattern with direct `ScriptGenerationResult(**cached_data)` (defaults come from dataclass fields)
+  - Cleaned stale imports in root conftest.py
+  - Review report: `apps/api/tests/test-review-story-3.6.md`
 - 2026-04-09: Story implementation complete — all tasks done, 28 tests green, pushed to main (332730d)
 - 2026-04-09: Addressed 10 code review findings (3-layer adversarial review — Blind Hunter, Edge Case Hunter, Acceptance Auditor)
   - **P1** Fixed Redis connection leak in `_invalidate_script_gen_cache` — `redis.close()` now in `try/finally`
@@ -1078,8 +1086,9 @@ zai-coding-plan/glm-5.1
 - `apps/api/tests/conftest_3_6.py` — Test fixtures and factories
 - `apps/api/tests/test_3_6_ac1_claim_extraction_given_response_when_processed_then_claims_found.py` — AC1 tests (7)
 - `apps/api/tests/test_3_6_ac2_self_correction_given_unsupported_when_triggered_then_corrected.py` — AC2 tests (4)
-- `apps/api/tests/test_3_6_ac3_correction_metadata_given_corrected_when_returned_then_fields_present.py` — AC3 tests (5)
+- `apps/api/tests/test_3_6_ac3_correction_metadata_given_corrected_when_returned_then_fields_present.py` — AC3 tests (6)
 - `apps/api/tests/test_3_6_ac4_ac5_ac8_ac9_ac10_reliability_tests.py` — AC4/5/8/9/10 tests (12)
+- `apps/api/tests/test-review-story-3.6.md` — Test quality review report (93/100 A)
 
 **Modified:**
 - `apps/api/config/settings.py` — Added 7 FACTUAL_HOOK_* settings

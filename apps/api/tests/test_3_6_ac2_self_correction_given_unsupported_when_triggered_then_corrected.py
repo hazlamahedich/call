@@ -13,6 +13,7 @@ from services.factual_hook import (
 
 @pytest.mark.asyncio
 class TestSelfCorrection:
+    @pytest.mark.p0
     async def test_3_6_unit_007_given_unsupported_when_correcting_then_reprompted(
         self, factual_hook_service, mock_llm
     ):
@@ -33,6 +34,7 @@ class TestSelfCorrection:
             mock_llm.generate.assert_called_once()
             assert result is not None
 
+    @pytest.mark.p1
     async def test_3_6_unit_008_given_corrected_when_passing_then_stops(
         self, factual_hook_service, mock_llm, mock_embedding
     ):
@@ -58,6 +60,7 @@ class TestSelfCorrection:
             assert result.was_corrected is True
             assert result.correction_count >= 1
 
+    @pytest.mark.p1
     async def test_3_6_unit_009_given_max_corrections_when_exhausted_then_fallback(
         self, factual_hook_service, mock_llm, mock_embedding
     ):
@@ -79,6 +82,7 @@ class TestSelfCorrection:
             assert result.correction_count == 2
             assert NO_KNOWLEDGE_FALLBACK in result.final_response
 
+    @pytest.mark.p0
     async def test_3_6_unit_010_given_all_supported_when_verifying_then_no_correction(
         self, factual_hook_service, mock_embedding
     ):
