@@ -88,7 +88,6 @@ export function CorrectionBadge({
           "correction-detail",
           expanded && "correction-detail--visible",
         )}
-        aria-live="polite"
         aria-hidden={!expanded}
         onKeyDown={handlePanelKeyDown}
       >

@@ -45,7 +45,7 @@ async function sendMessage() {
   );
   fireEvent.change(textarea, { target: { value: "Hello" } });
   const sendBtn = screen.getByRole("button", { name: /send/i });
-  sendBtn.click();
+  fireEvent.click(sendBtn);
 }
 
 describe("[3.6b][ChatPanel-Correction] — P1/P2 tests", () => {

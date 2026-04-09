@@ -118,4 +118,21 @@ describe("[3.6b][CorrectionBadge] — P0 critical tests", () => {
       expect(trigger).toHaveAttribute("aria-expanded", "true");
     });
   });
+
+  it("[3.6b-UNIT-021][P0] Given expanded detail panel, when Escape pressed on panel, then panel collapses and focus returns to trigger", async () => {
+    const { container } = render(
+      <CorrectionBadge correctionCount={2} verifiedClaims={defaultClaims} />,
+    );
+    const trigger = screen.getByRole("button");
+    fireEvent.click(trigger);
+    await waitFor(() => {
+      expect(screen.getByText("2 claims corrected")).toBeInTheDocument();
+    });
+    const panel = container.querySelector(".correction-detail");
+    fireEvent.keyDown(panel!, { key: "Escape" });
+    await waitFor(() => {
+      expect(trigger).toHaveAttribute("aria-expanded", "false");
+    });
+    expect(trigger).toHaveFocus();
+  });
 });

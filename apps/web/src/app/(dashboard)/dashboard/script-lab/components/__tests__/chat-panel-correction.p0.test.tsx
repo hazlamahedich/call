@@ -44,7 +44,7 @@ async function sendMessage() {
   );
   fireEvent.change(textarea, { target: { value: "Hello" } });
   const sendBtn = screen.getByRole("button", { name: /send/i });
-  sendBtn.click();
+  fireEvent.click(sendBtn);
 }
 
 describe("[3.6b][ChatPanel-Correction] — P0 critical tests", () => {
@@ -88,12 +88,12 @@ describe("[3.6b][ChatPanel-Correction] — P0 critical tests", () => {
     });
   });
 
-  it("[3.6b-INT-002][P0] Given timed-out response, when message renders, then StatusMessage warning is visible", async () => {
+  it("[3.6b-INT-002][P0] Given timed-out response, when message renders, then GlitchPip and StatusMessage warning are visible", async () => {
     mockSendLabChat.mockResolvedValue(
       createMockResponse({ verificationTimedOut: true }),
     );
 
-    render(<ChatPanel sessionId={1} />);
+    const { container } = render(<ChatPanel sessionId={1} />);
     await sendMessage();
 
     await waitFor(() => {
@@ -105,6 +105,10 @@ describe("[3.6b][ChatPanel-Correction] — P0 critical tests", () => {
     });
     const statusEl = screen.getByRole("status");
     expect(statusEl).toBeInTheDocument();
+    const glitchPip = container.querySelector(
+      ".animate-glitch-pip, .bg-neon-crimson",
+    );
+    expect(glitchPip).toBeInTheDocument();
   });
 
   it("[3.6b-INT-003][P0] Given normal response, when message renders, then no correction indicators shown", async () => {

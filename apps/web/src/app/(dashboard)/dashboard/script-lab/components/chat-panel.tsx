@@ -11,6 +11,7 @@ import { SourceTooltip } from "./source-tooltip";
 import { CorrectionBadge } from "./correction-badge";
 import { GlitchPip } from "@/components/obsidian";
 import { StatusMessage } from "@/components/ui";
+import "./chat-panel.css";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -110,19 +111,25 @@ export function ChatPanel({ sessionId }: ChatPanelProps) {
           <div key={i} className={`chat-message chat-message--${msg.role}`}>
             <div className="chat-message-content">
               {msg.content}
-              {msg.role === "assistant" && msg.sourceAttributions && (
+              {msg.role === "assistant" && (
                 <div className="chat-attribution">
-                  <SourceTooltip sources={msg.sourceAttributions} />
-                  <span className="confidence-badge">
-                    {Math.round((msg.groundingConfidence ?? 0) * 100)}%
-                  </span>
-                  {msg.lowConfidenceWarning && (
-                    <span className="low-confidence-badge">Low Confidence</span>
+                  {msg.sourceAttributions && (
+                    <>
+                      <SourceTooltip sources={msg.sourceAttributions} />
+                      <span className="confidence-badge">
+                        {Math.round((msg.groundingConfidence ?? 0) * 100)}%
+                      </span>
+                      {msg.lowConfidenceWarning && (
+                        <span className="low-confidence-badge">
+                          Low Confidence
+                        </span>
+                      )}
+                    </>
+                  )}
+                  {msg.verificationTimedOut && (
+                    <GlitchPip active reducedMotion={reducedMotion} />
                   )}
                 </div>
-              )}
-              {msg.role === "assistant" && !msg.sourceAttributions && (
-                <div className="chat-attribution" />
               )}
               {msg.role === "assistant" && msg.wasCorrected && (
                 <CorrectionBadge
@@ -130,16 +137,12 @@ export function ChatPanel({ sessionId }: ChatPanelProps) {
                   verifiedClaims={msg.verifiedClaims ?? []}
                 />
               )}
-              {msg.role === "assistant" && msg.verificationTimedOut && (
-                <GlitchPip active reducedMotion={reducedMotion} />
-              )}
-              {msg.role === "assistant" && msg.verificationTimedOut && (
-                <StatusMessage variant="warning">
-                  Verification timed out — response may contain unverified
-                  claims
-                </StatusMessage>
-              )}
             </div>
+            {msg.role === "assistant" && msg.verificationTimedOut && (
+              <StatusMessage variant="warning">
+                Verification timed out — response may contain unverified claims
+              </StatusMessage>
+            )}
           </div>
         ))}
         {loading && (
