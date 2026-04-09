@@ -22,12 +22,23 @@ export interface SourceAttribution {
   similarityScore: number;
 }
 
+export interface ClaimVerification {
+  claimText: string;
+  isSupported: boolean;
+  maxSimilarity: number;
+  verificationError: boolean;
+}
+
 export interface LabChatResponse {
   responseText: string;
   sourceAttributions: SourceAttribution[];
   groundingConfidence: number;
   turnNumber: number;
   lowConfidenceWarning: boolean;
+  wasCorrected: boolean;
+  correctionCount: number;
+  verificationTimedOut: boolean;
+  verifiedClaims: ClaimVerification[];
 }
 
 export interface LabSourceEntry {

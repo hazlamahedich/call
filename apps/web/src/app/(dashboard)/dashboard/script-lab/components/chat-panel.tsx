@@ -5,8 +5,12 @@ import {
   sendLabChat,
   type LabChatResponse,
   type SourceAttribution,
+  type ClaimVerification,
 } from "@/actions/scripts-lab";
 import { SourceTooltip } from "./source-tooltip";
+import { CorrectionBadge } from "./correction-badge";
+import { GlitchPip } from "@/components/obsidian";
+import { StatusMessage } from "@/components/ui";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -14,6 +18,10 @@ interface ChatMessage {
   sourceAttributions?: SourceAttribution[];
   groundingConfidence?: number;
   lowConfidenceWarning?: boolean;
+  wasCorrected?: boolean;
+  correctionCount?: number;
+  verificationTimedOut?: boolean;
+  verifiedClaims?: ClaimVerification[];
 }
 
 interface ChatPanelProps {
@@ -55,6 +63,10 @@ export function ChatPanel({ sessionId }: ChatPanelProps) {
             sourceAttributions: result.data!.sourceAttributions,
             groundingConfidence: result.data!.groundingConfidence,
             lowConfidenceWarning: result.data!.lowConfidenceWarning,
+            wasCorrected: result.data!.wasCorrected ?? false,
+            correctionCount: result.data!.correctionCount ?? 0,
+            verificationTimedOut: result.data!.verificationTimedOut ?? false,
+            verifiedClaims: result.data!.verifiedClaims ?? [],
           },
         ]);
       }
@@ -93,7 +105,20 @@ export function ChatPanel({ sessionId }: ChatPanelProps) {
                   {msg.lowConfidenceWarning && (
                     <span className="low-confidence-badge">Low Confidence</span>
                   )}
+                  {msg.wasCorrected && (
+                    <CorrectionBadge
+                      correctionCount={msg.correctionCount ?? 0}
+                      verifiedClaims={msg.verifiedClaims ?? []}
+                    />
+                  )}
+                  {msg.verificationTimedOut && <GlitchPip active />}
                 </div>
+              )}
+              {msg.role === "assistant" && msg.verificationTimedOut && (
+                <StatusMessage variant="warning">
+                  Verification timed out — response may contain unverified
+                  claims
+                </StatusMessage>
               )}
             </div>
           </div>

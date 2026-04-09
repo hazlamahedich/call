@@ -1,0 +1,111 @@
+.correction-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 11px;
+  padding: 0 0.25rem;
+  border-radius: 2px;
+  border: 1px solid var(--color-neon-emerald);
+  color: var(--color-neon-emerald);
+  cursor: pointer;
+  background: transparent;
+}
+
+.correction-badge:hover {
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.correction-badge__count {
+  font-size: 10px;
+  opacity: 0.85;
+}
+
+.correction-detail {
+  border: 1px solid var(--border-glass, rgba(39, 39, 42, 0.5));
+  background: var(--color-glass, rgba(24, 24, 27, 0.4));
+  backdrop-filter: var(--blur-glass, 12px);
+  border-radius: 4px;
+  padding: 0.5rem;
+  margin-top: 0.25rem;
+  font-size: 13px;
+}
+
+.correction-detail__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.375rem;
+  color: var(--color-neon-emerald);
+  font-weight: 500;
+}
+
+.correction-detail__header-text {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.correction-detail__close {
+  background: none;
+  border: none;
+  color: var(--color-muted-foreground, #71717a);
+  cursor: pointer;
+  padding: 0.125rem;
+  display: flex;
+  align-items: center;
+}
+
+.correction-detail__close:hover {
+  color: var(--color-foreground, #fafafa);
+}
+
+.correction-detail__claim {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0;
+}
+
+.correction-detail__dot--rephrased {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--color-neon-emerald);
+  flex-shrink: 0;
+}
+
+.correction-detail__dot--unverified {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--color-neon-crimson);
+  flex-shrink: 0;
+}
+
+.correction-detail__claim-text {
+  flex: 1;
+  min-width: 0;
+  color: var(--color-foreground, #fafafa);
+  font-size: 12px;
+}
+
+.correction-detail__similarity {
+  font-size: 11px;
+  color: var(--color-muted-foreground, #71717a);
+  flex-shrink: 0;
+}
+
+.chat-attribution {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .correction-badge {
+    transition: none;
+  }
+  .correction-badge:hover {
+    background: transparent;
+  }
+}

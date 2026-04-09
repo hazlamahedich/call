@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-03-17T17:46:51+08:00
-last_updated: 2026-04-08T19:00:00+08:00
+last_updated: 2026-04-09T14:00:00+08:00
 project: call
 project_key: NOKEY
 tracking_system: file-system
@@ -67,6 +67,7 @@ development_status:
   3-4-dynamic-variable-injection-for-hyper-personalization: review
   3-5-the-script-lab-with-source-attribution: done
   3-6-real-time-self-correction-factual-hook: review
+  3-6b-factual-hook-frontend-indicators: review
   epic-3-retrospective: optional
   epic-4: backlog
   4-1-automated-double-hop-dnc-registry-check: backlog
