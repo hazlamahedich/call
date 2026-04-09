@@ -2,7 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { axe } from "vitest-axe";
 import { CorrectionBadge } from "../correction-badge";
-import { createClaimVerification } from "@/test/factories/correction";
+import {
+  createClaimVerification,
+  resetClaimCounter,
+} from "@/test/factories/correction";
 
 describe("[3.6b][CorrectionBadge] — correction badge with expandable detail panel", () => {
   const defaultClaims = [
@@ -20,6 +23,7 @@ describe("[3.6b][CorrectionBadge] — correction badge with expandable detail pa
 
   beforeEach(() => {
     vi.clearAllMocks();
+    resetClaimCounter();
   });
 
   it("[3.6b-UNIT-001][P0] Given correction badge, when rendered, then shows Corrected text with ShieldCheck icon", () => {
@@ -65,14 +69,14 @@ describe("[3.6b][CorrectionBadge] — correction badge with expandable detail pa
   it("[3.6b-UNIT-004][P1] Given expanded detail panel, when clicking outside, then panel collapses", async () => {
     render(
       <div>
-        <CorrectionBadge correctionCount={1} verifiedClaims={defaultClaims} />
+        <CorrectionBadge correctionCount={2} verifiedClaims={defaultClaims} />
         <div data-testid="outside">Outside element</div>
       </div>,
     );
     const trigger = screen.getByRole("button");
     fireEvent.click(trigger);
     await waitFor(() => {
-      expect(screen.getByText("1 claim corrected")).toBeInTheDocument();
+      expect(screen.getByText("2 claims corrected")).toBeInTheDocument();
     });
     fireEvent.mouseDown(screen.getByTestId("outside"));
     await waitFor(() => {
@@ -94,15 +98,20 @@ describe("[3.6b][CorrectionBadge] — correction badge with expandable detail pa
     expect(screen.queryByText(longClaim)).not.toBeInTheDocument();
   });
 
-  it("[3.6b-UNIT-006][P1] Given correction badge, when axe audit runs, then no accessibility violations", async () => {
+  it("[3.6b-UNIT-006][P1] Given correction badge, when axe audit runs on expanded panel, then no accessibility violations", async () => {
     const { container } = render(
-      <CorrectionBadge correctionCount={1} verifiedClaims={defaultClaims} />,
+      <CorrectionBadge correctionCount={2} verifiedClaims={defaultClaims} />,
     );
+    const trigger = screen.getByRole("button");
+    fireEvent.click(trigger);
+    await waitFor(() => {
+      expect(screen.getByText("2 claims corrected")).toBeInTheDocument();
+    });
     const results = await axe(container);
     expect(results.violations).toHaveLength(0);
   });
 
-  it("[3.6b-UNIT-007][P2] Given correction badge with unsupported claims, when rendering, then neon-crimson dot shown for fallback claims", async () => {
+  it("[3.6b-UNIT-007][P2] Given correction badge with unsupported claims, when rendering, then neon-crimson dot and Could not verify label shown", async () => {
     const claims = [
       createClaimVerification({
         claimText: "Fallback claim",
@@ -110,24 +119,19 @@ describe("[3.6b][CorrectionBadge] — correction badge with expandable detail pa
         verificationError: true,
       }),
     ];
-    render(<CorrectionBadge correctionCount={1} verifiedClaims={claims} />);
-    fireEvent.click(screen.getByRole("button"));
-    await waitFor(() => {
-      expect(screen.getByText("Fallback claim")).toBeInTheDocument();
-    });
     const { container } = render(
       <CorrectionBadge correctionCount={1} verifiedClaims={claims} />,
     );
-    fireEvent.click(container.querySelector("[role='button']")!);
+    fireEvent.click(screen.getByRole("button"));
     await waitFor(() => {
-      const dot = container.querySelector(
-        ".correction-detail__dot--unverified",
-      );
-      expect(dot).toBeInTheDocument();
+      expect(screen.getByText("Fallback claim")).toBeInTheDocument();
+      expect(screen.getByText("Could not verify")).toBeInTheDocument();
     });
+    const dot = container.querySelector(".correction-detail__dot--unverified");
+    expect(dot).toBeInTheDocument();
   });
 
-  it("[3.6b-UNIT-008][P2] Given correction badge with supported claims, when rendering, then neon-emerald dot shown for rephrased claims", async () => {
+  it("[3.6b-UNIT-008][P2] Given correction badge with rephrased claims, when rendering, then neon-emerald dot and Rephrased label shown", async () => {
     const claims = [
       createClaimVerification({
         claimText: "Rephrased claim",
@@ -138,11 +142,13 @@ describe("[3.6b][CorrectionBadge] — correction badge with expandable detail pa
     const { container } = render(
       <CorrectionBadge correctionCount={1} verifiedClaims={claims} />,
     );
-    fireEvent.click(container.querySelector("[role='button']")!);
+    fireEvent.click(screen.getByRole("button"));
     await waitFor(() => {
-      const dot = container.querySelector(".correction-detail__dot--rephrased");
-      expect(dot).toBeInTheDocument();
+      expect(screen.getByText("Rephrased claim")).toBeInTheDocument();
+      expect(screen.getByText("Rephrased")).toBeInTheDocument();
     });
+    const dot = container.querySelector(".correction-detail__dot--rephrased");
+    expect(dot).toBeInTheDocument();
   });
 
   it("[3.6b-UNIT-009][P2] Given correction badge, when rapidly toggled open/close 5 times, then final state is consistent (no state race condition)", async () => {
@@ -155,6 +161,31 @@ describe("[3.6b][CorrectionBadge] — correction badge with expandable detail pa
     }
     await waitFor(() => {
       expect(trigger).toHaveAttribute("aria-expanded", "true");
+    });
+  });
+
+  it("[3.6b-UNIT-010][P1] Given all claims supported, when expanded, then header shows 0 claims corrected", async () => {
+    const claims = [
+      createClaimVerification({
+        claimText: "Supported claim",
+        isSupported: true,
+      }),
+    ];
+    render(<CorrectionBadge correctionCount={1} verifiedClaims={claims} />);
+    fireEvent.click(screen.getByRole("button"));
+    await waitFor(() => {
+      expect(screen.getByText("0 claims corrected")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("Supported claim")).not.toBeInTheDocument();
+  });
+
+  it("[3.6b-UNIT-011][P1] Given header uses unsupported count not correctionCount, when correctionCount=5 but only 2 unsupported, then header says 2", async () => {
+    render(
+      <CorrectionBadge correctionCount={5} verifiedClaims={defaultClaims} />,
+    );
+    fireEvent.click(screen.getByRole("button"));
+    await waitFor(() => {
+      expect(screen.getByText("2 claims corrected")).toBeInTheDocument();
     });
   });
 });

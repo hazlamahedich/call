@@ -2,7 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { axe } from "vitest-axe";
 import { ChatPanel } from "../chat-panel";
-import { createClaimVerification } from "@/test/factories/correction";
+import {
+  createClaimVerification,
+  resetClaimCounter,
+} from "@/test/factories/correction";
 import type { LabChatResponse } from "@/actions/scripts-lab";
 
 const mockSendLabChat = vi.fn();
@@ -30,10 +33,6 @@ function createMockResponse(overrides: Partial<LabChatResponse> = {}): {
       groundingConfidence: 0.85,
       turnNumber: 1,
       lowConfidenceWarning: false,
-      wasCorrected: false,
-      correctionCount: 0,
-      verificationTimedOut: false,
-      verifiedClaims: [],
       ...overrides,
     },
     error: null,
@@ -46,13 +45,24 @@ async function sendMessage() {
   );
   fireEvent.change(textarea, { target: { value: "Hello" } });
   const sendBtn = screen.getByRole("button", { name: /send/i });
-  await sendBtn.click();
+  sendBtn.click();
 }
 
 describe("[3.6b][ChatPanel-Correction] — correction indicators integration", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetClaimCounter();
     Element.prototype.scrollIntoView = vi.fn();
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
     mockSendLabChat.mockResolvedValue(createMockResponse());
   });
 
@@ -79,7 +89,7 @@ describe("[3.6b][ChatPanel-Correction] — correction indicators integration", (
     });
   });
 
-  it("[3.6b-INT-002][P0] Given timed-out response, when message renders, then GlitchPip and StatusMessage warning are visible", async () => {
+  it("[3.6b-INT-002][P0] Given timed-out response, when message renders, then StatusMessage warning is visible", async () => {
     mockSendLabChat.mockResolvedValue(
       createMockResponse({ verificationTimedOut: true }),
     );
@@ -204,11 +214,37 @@ describe("[3.6b][ChatPanel-Correction] — correction indicators integration", (
     expect(response.data.correctionCount).toBe(2);
     expect(response.data.verificationTimedOut).toBe(false);
     expect(response.data.verifiedClaims).toHaveLength(2);
-    expect(response.data.verifiedClaims[0]).toHaveProperty("claimText");
-    expect(response.data.verifiedClaims[0]).toHaveProperty("isSupported");
-    expect(response.data.verifiedClaims[0]).toHaveProperty("maxSimilarity");
-    expect(response.data.verifiedClaims[0]).toHaveProperty("verificationError");
-    expect(response.data.verifiedClaims[0].claimText).toBe("Claim one");
-    expect(response.data.verifiedClaims[1].verificationError).toBe(true);
+    expect(response.data.verifiedClaims![0]).toHaveProperty("claimText");
+    expect(response.data.verifiedClaims![0]).toHaveProperty("isSupported");
+    expect(response.data.verifiedClaims![0]).toHaveProperty("maxSimilarity");
+    expect(response.data.verifiedClaims![0]).toHaveProperty(
+      "verificationError",
+    );
+    expect(response.data.verifiedClaims![0].claimText).toBe("Claim one");
+    expect(response.data.verifiedClaims![1].verificationError).toBe(true);
+  });
+
+  it("[3.6b-INT-008][P0] Given corrected response without source attributions, when message renders, then CorrectionBadge is still visible", async () => {
+    const claims = [
+      createClaimVerification({
+        claimText: "No sources claim",
+        isSupported: false,
+      }),
+    ];
+    mockSendLabChat.mockResolvedValue(
+      createMockResponse({
+        sourceAttributions: [],
+        wasCorrected: true,
+        correctionCount: 1,
+        verifiedClaims: claims,
+      }),
+    );
+
+    render(<ChatPanel sessionId={1} />);
+    await sendMessage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Corrected")).toBeInTheDocument();
+    });
   });
 });

@@ -28,12 +28,25 @@ interface ChatPanelProps {
   sessionId: number;
 }
 
+function useReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    const mql = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReduced(mql.matches);
+    const handler = (e: MediaQueryListEvent) => setReduced(e.matches);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, []);
+  return reduced;
+}
+
 export function ChatPanel({ sessionId }: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -55,18 +68,19 @@ export function ChatPanel({ sessionId }: ChatPanelProps) {
         return;
       }
       if (result.data) {
+        const d = result.data;
         setMessages((prev) => [
           ...prev,
           {
             role: "assistant",
-            content: result.data!.responseText,
-            sourceAttributions: result.data!.sourceAttributions,
-            groundingConfidence: result.data!.groundingConfidence,
-            lowConfidenceWarning: result.data!.lowConfidenceWarning,
-            wasCorrected: result.data!.wasCorrected ?? false,
-            correctionCount: result.data!.correctionCount ?? 0,
-            verificationTimedOut: result.data!.verificationTimedOut ?? false,
-            verifiedClaims: result.data!.verifiedClaims ?? [],
+            content: d.responseText,
+            sourceAttributions: d.sourceAttributions,
+            groundingConfidence: d.groundingConfidence,
+            lowConfidenceWarning: d.lowConfidenceWarning,
+            wasCorrected: d.wasCorrected ?? false,
+            correctionCount: d.correctionCount ?? 0,
+            verificationTimedOut: d.verificationTimedOut ?? false,
+            verifiedClaims: d.verifiedClaims ?? [],
           },
         ]);
       }
@@ -105,14 +119,19 @@ export function ChatPanel({ sessionId }: ChatPanelProps) {
                   {msg.lowConfidenceWarning && (
                     <span className="low-confidence-badge">Low Confidence</span>
                   )}
-                  {msg.wasCorrected && (
-                    <CorrectionBadge
-                      correctionCount={msg.correctionCount ?? 0}
-                      verifiedClaims={msg.verifiedClaims ?? []}
-                    />
-                  )}
-                  {msg.verificationTimedOut && <GlitchPip active />}
                 </div>
+              )}
+              {msg.role === "assistant" && !msg.sourceAttributions && (
+                <div className="chat-attribution" />
+              )}
+              {msg.role === "assistant" && msg.wasCorrected && (
+                <CorrectionBadge
+                  correctionCount={msg.correctionCount ?? 0}
+                  verifiedClaims={msg.verifiedClaims ?? []}
+                />
+              )}
+              {msg.role === "assistant" && msg.verificationTimedOut && (
+                <GlitchPip active reducedMotion={reducedMotion} />
               )}
               {msg.role === "assistant" && msg.verificationTimedOut && (
                 <StatusMessage variant="warning">

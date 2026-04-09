@@ -13,6 +13,7 @@ interface CorrectionBadgeProps {
 }
 
 function truncateClaimText(text: string, maxLen: number = 50): string {
+  if (!text) return "";
   if (text.length <= maxLen) return text;
   return text.slice(0, maxLen) + "...";
 }
@@ -25,6 +26,8 @@ export function CorrectionBadge({
   const [expanded, setExpanded] = useState(false);
   const triggerRef = useRef<HTMLSpanElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+
+  const unsupportedClaims = verifiedClaims.filter((c) => !c.isSupported);
 
   useEffect(() => {
     if (!expanded) return;
@@ -60,10 +63,10 @@ export function CorrectionBadge({
     }
   };
 
-  const unsupportedClaims = verifiedClaims.filter((c) => !c.isSupported);
+  const displayCount = unsupportedClaims.length;
 
   return (
-    <span className={clsx("correction-badge-wrapper", className)}>
+    <div className={clsx("correction-badge-wrapper", className)}>
       <span
         ref={triggerRef}
         className="correction-badge"
@@ -79,52 +82,56 @@ export function CorrectionBadge({
         <span className="correction-badge__count">({correctionCount})</span>
       </span>
 
-      {expanded && (
-        <div
-          ref={panelRef}
-          className="correction-detail"
-          aria-live="polite"
-          onKeyDown={handlePanelKeyDown}
-        >
-          <div className="correction-detail__header">
-            <span className="correction-detail__header-text">
-              <ChevronDown
-                size={12}
-                style={{
-                  transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
-                  transition: "transform 0.15s ease",
-                }}
-              />
-              {correctionCount} {correctionCount === 1 ? "claim" : "claims"}{" "}
-              corrected
-            </span>
-            <button
-              className="correction-detail__close"
-              onClick={() => setExpanded(false)}
-              aria-label="Close correction details"
-              type="button"
-            >
-              <X size={12} />
-            </button>
-          </div>
-
-          {unsupportedClaims.map((claim, i) => (
-            <div key={i} className="correction-detail__claim">
-              {claim.verificationError ? (
-                <span className="correction-detail__dot--unverified" />
-              ) : (
-                <span className="correction-detail__dot--rephrased" />
-              )}
-              <span className="correction-detail__claim-text">
-                {truncateClaimText(claim.claimText)}
-              </span>
-              <span className="correction-detail__similarity">
-                {Math.round(claim.maxSimilarity * 100)}% match
-              </span>
-            </div>
-          ))}
+      <div
+        ref={panelRef}
+        className={clsx(
+          "correction-detail",
+          expanded && "correction-detail--visible",
+        )}
+        aria-live="polite"
+        aria-hidden={!expanded}
+        onKeyDown={handlePanelKeyDown}
+      >
+        <div className="correction-detail__header">
+          <span className="correction-detail__header-text">
+            <ChevronDown size={12} className="correction-detail__chevron" />
+            {displayCount} {displayCount === 1 ? "claim" : "claims"} corrected
+          </span>
+          <button
+            className="correction-detail__close"
+            onClick={() => setExpanded(false)}
+            aria-label="Close correction details"
+            type="button"
+          >
+            <X size={12} />
+          </button>
         </div>
-      )}
-    </span>
+
+        {unsupportedClaims.map((claim, i) => (
+          <div key={i} className="correction-detail__claim">
+            {claim.verificationError ? (
+              <span
+                className="correction-detail__dot--unverified"
+                aria-hidden="true"
+              />
+            ) : (
+              <span
+                className="correction-detail__dot--rephrased"
+                aria-hidden="true"
+              />
+            )}
+            <span className="correction-detail__status-label">
+              {claim.verificationError ? "Could not verify" : "Rephrased"}
+            </span>
+            <span className="correction-detail__claim-text">
+              {truncateClaimText(claim.claimText)}
+            </span>
+            <span className="correction-detail__similarity">
+              {Math.round(claim.maxSimilarity * 100)}% match
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

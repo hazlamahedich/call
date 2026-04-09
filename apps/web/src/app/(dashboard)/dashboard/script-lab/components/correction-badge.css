@@ -1,3 +1,9 @@
+.correction-badge-wrapper {
+  display: inline-flex;
+  flex-direction: column;
+  position: relative;
+}
+
 .correction-badge {
   display: inline-flex;
   align-items: center;
@@ -21,6 +27,7 @@
 }
 
 .correction-detail {
+  display: none;
   border: 1px solid var(--border-glass, rgba(39, 39, 42, 0.5));
   background: var(--color-glass, rgba(24, 24, 27, 0.4));
   backdrop-filter: var(--blur-glass, 12px);
@@ -28,6 +35,10 @@
   padding: 0.5rem;
   margin-top: 0.25rem;
   font-size: 13px;
+}
+
+.correction-detail--visible {
+  display: block;
 }
 
 .correction-detail__header {
@@ -43,6 +54,11 @@
   display: flex;
   align-items: center;
   gap: 0.25rem;
+}
+
+.correction-detail__chevron {
+  transition: transform 0.15s ease;
+  transform: rotate(180deg);
 }
 
 .correction-detail__close {
@@ -82,6 +98,20 @@
   flex-shrink: 0;
 }
 
+.correction-detail__status-label {
+  font-size: 10px;
+  flex-shrink: 0;
+  min-width: 5.5rem;
+}
+
+.correction-detail__dot--rephrased + .correction-detail__status-label {
+  color: var(--color-neon-emerald);
+}
+
+.correction-detail__dot--unverified + .correction-detail__status-label {
+  color: var(--color-neon-crimson);
+}
+
 .correction-detail__claim-text {
   flex: 1;
   min-width: 0;
@@ -107,5 +137,8 @@
   }
   .correction-badge:hover {
     background: transparent;
+  }
+  .correction-detail__chevron {
+    transition: none;
   }
 }

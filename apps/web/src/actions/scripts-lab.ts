@@ -35,10 +35,10 @@ export interface LabChatResponse {
   groundingConfidence: number;
   turnNumber: number;
   lowConfidenceWarning: boolean;
-  wasCorrected: boolean;
-  correctionCount: number;
-  verificationTimedOut: boolean;
-  verifiedClaims: ClaimVerification[];
+  wasCorrected?: boolean;
+  correctionCount?: number;
+  verificationTimedOut?: boolean;
+  verifiedClaims?: ClaimVerification[];
 }
 
 export interface LabSourceEntry {
