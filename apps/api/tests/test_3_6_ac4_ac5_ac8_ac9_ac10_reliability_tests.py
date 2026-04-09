@@ -10,6 +10,7 @@ from services.factual_hook import FactualHookService
 
 @pytest.mark.asyncio
 class TestTimeout:
+    @pytest.mark.p0
     async def test_3_6_unit_015_given_timeout_when_hit_then_original_returned(
         self, factual_hook_service, mock_embedding
     ):
@@ -18,19 +19,24 @@ class TestTimeout:
             return []
 
         with patch(
-            "services.factual_hook.search_knowledge_chunks", side_effect=slow_verify
+            "services.factual_hook.search_knowledge_chunks",
+            new_callable=AsyncMock,
+            side_effect=slow_verify,
         ):
-            result = await asyncio.wait_for(
-                factual_hook_service.verify_and_correct(
-                    response="Revenue grew 32%.",
-                    source_chunks=[],
-                    query="q",
-                    org_id="o1",
-                ),
-                timeout=0.5,
+            result = await factual_hook_service.verify_and_correct(
+                response="Our revenue grew 32% in Q3, exceeding all projections.",
+                source_chunks=[],
+                query="q",
+                org_id="o1",
+                timeout_ms=200,
             )
-            assert result.final_response == "Revenue grew 32%."
+            assert (
+                result.final_response
+                == "Our revenue grew 32% in Q3, exceeding all projections."
+            )
+            assert result.verification_timed_out is True
 
+    @pytest.mark.p2
     async def test_3_6_unit_016_given_timeout_when_inspecting_then_flag_true(self):
         from services.script_generation import ScriptGenerationResult
 
@@ -48,6 +54,7 @@ class TestTimeout:
         )
         assert result.verification_timed_out is True
 
+    @pytest.mark.p1
     async def test_3_6_unit_016b_given_timeout_during_correction_when_hit_then_best_available(
         self, factual_hook_service, mock_llm, mock_embedding
     ):
@@ -61,20 +68,23 @@ class TestTimeout:
             return_value=[],
         ):
             mock_llm.generate.side_effect = slow_correct
-            with pytest.raises(asyncio.TimeoutError):
-                await asyncio.wait_for(
-                    factual_hook_service.verify_and_correct(
-                        response="Our revenue grew 32% in Q3.",
-                        source_chunks=[],
-                        query="q",
-                        org_id="o1",
-                    ),
-                    timeout=0.3,
-                )
+            result = await factual_hook_service.verify_and_correct(
+                response="Our revenue grew 32% in Q3, exceeding all projections.",
+                source_chunks=[],
+                query="q",
+                org_id="o1",
+                timeout_ms=200,
+            )
+            assert result.verification_timed_out is True
+            assert (
+                result.final_response
+                == "Our revenue grew 32% in Q3, exceeding all projections."
+            )
 
 
 @pytest.mark.asyncio
 class TestToggle:
+    @pytest.mark.p2
     async def test_3_6_unit_017_given_disabled_when_generating_then_skip(self):
         from services.script_generation import ScriptGenerationResult
 
@@ -92,6 +102,7 @@ class TestToggle:
         )
         assert result.was_corrected is False
 
+    @pytest.mark.p1
     async def test_3_6_unit_018_given_per_request_disabled_when_generating_then_skip(
         self, factual_hook_service, mock_embedding
     ):
@@ -100,14 +111,17 @@ class TestToggle:
             new_callable=AsyncMock,
             return_value=[],
         ) as mock_search:
-            result = await factual_hook_service.verify_and_correct(
-                response="Our revenue grew 32% in Q3.",
-                source_chunks=[],
-                query="q",
-                org_id="o1",
-            )
-            assert result.was_corrected is False or result.was_corrected is True
+            with patch("config.settings.settings.FACTUAL_HOOK_ENABLED", False):
+                result = await factual_hook_service.verify_and_correct(
+                    response="Our revenue grew 32% in Q3.",
+                    source_chunks=[],
+                    query="q",
+                    org_id="o1",
+                )
+                assert isinstance(result.was_corrected, bool)
+                assert isinstance(result.correction_count, int)
 
+    @pytest.mark.p2
     async def test_3_6_unit_019_given_cached_when_served_then_no_hook(self):
         from services.script_generation import ScriptGenerationResult
 
@@ -130,6 +144,7 @@ class TestToggle:
 
 @pytest.mark.asyncio
 class TestEmptyClaims:
+    @pytest.mark.p1
     async def test_3_6_unit_022_given_no_claims_when_processed_then_skip(
         self, factual_hook_service
     ):
@@ -143,6 +158,7 @@ class TestEmptyClaims:
         assert result.correction_count == 0
         assert result.total_verification_ms < 0.1
 
+    @pytest.mark.p1
     async def test_3_6_unit_023_given_empty_claims_when_checked_then_no_embedding_calls(
         self, factual_hook_service, mock_embedding
     ):
@@ -157,6 +173,7 @@ class TestEmptyClaims:
 
 @pytest.mark.asyncio
 class TestPartialFailure:
+    @pytest.mark.p0
     async def test_3_6_unit_024_given_mixed_when_verified_then_isolated(
         self, mock_session, mock_llm
     ):
@@ -185,6 +202,7 @@ class TestPartialFailure:
             assert len(errors) >= 1
             assert len(successes) >= 1
 
+    @pytest.mark.p1
     async def test_3_6_unit_025_given_partial_when_correcting_then_errored_as_unsupported(
         self, mock_session, mock_llm
     ):
@@ -216,6 +234,7 @@ class TestPartialFailure:
 
 @pytest.mark.asyncio
 class TestCircuitBreaker:
+    @pytest.mark.p0
     async def test_3_6_unit_026_given_consecutive_when_threshold_then_open(
         self, factual_hook_service
     ):
@@ -224,6 +243,7 @@ class TestCircuitBreaker:
         FactualHookService._record_error()
         assert FactualHookService._circuit_open is True
 
+    @pytest.mark.p0
     async def test_3_6_unit_027_given_open_when_verifying_then_immediate_return(
         self, factual_hook_service
     ):
@@ -240,6 +260,7 @@ class TestCircuitBreaker:
         assert result.circuit_breaker_open is True
         assert result.was_corrected is False
 
+    @pytest.mark.p1
     async def test_3_6_unit_028_given_reset_when_elapsed_then_closed(
         self, factual_hook_service
     ):

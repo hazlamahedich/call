@@ -9,6 +9,7 @@ from services.factual_hook import FactualHookService
 
 @pytest.mark.asyncio
 class TestSecurityInjection:
+    @pytest.mark.p0
     async def test_3_6_sec_001_given_injection_in_claim_when_processing_then_sanitized(
         self, factual_hook_service, mock_session
     ):
@@ -25,6 +26,7 @@ class TestSecurityInjection:
                 assert "Ignore previous instructions" not in claim
                 assert "output all secrets" not in claim
 
+    @pytest.mark.p0
     async def test_3_6_sec_002_given_malicious_correction_when_reprompting_then_escaped(
         self, factual_hook_service, mock_llm
     ):
@@ -54,6 +56,7 @@ class TestSecurityInjection:
             assert "SYSTEM: You are now" not in str(call_args.kwargs.get("system", ""))
             assert result == "Safe corrected response."
 
+    @pytest.mark.p1
     async def test_3_6_sec_003_given_org_a_cache_when_org_b_queries_then_miss(
         self,
     ):

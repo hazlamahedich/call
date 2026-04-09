@@ -9,6 +9,7 @@ from services.factual_hook import FactualHookService
 
 @pytest.mark.asyncio
 class TestTenantIsolation:
+    @pytest.mark.p0
     async def test_3_6_unit_021_given_org_a_when_verifying_then_org_b_excluded(
         self, factual_hook_service
     ):
@@ -32,6 +33,7 @@ class TestTenantIsolation:
             assert calls[0]["args"][2] == "org-tenant-a"
             assert calls[0]["kwargs"].get("knowledge_base_ids") == [10, 20]
 
+    @pytest.mark.p1
     async def test_3_6_unit_021b_given_different_orgs_when_verifying_then_scoped_separately(
         self, mock_session, mock_llm, mock_embedding
     ):

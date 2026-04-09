@@ -10,6 +10,7 @@ from services.factual_hook import FactualHookService
 
 @pytest.mark.asyncio
 class TestIntegration:
+    @pytest.mark.p0
     async def test_3_6_int_001_given_full_pipeline_when_hook_active_then_end_to_end(
         self, factual_hook_service, mock_llm, mock_embedding
     ):
@@ -36,6 +37,7 @@ class TestIntegration:
             assert result.original_response == "Our revenue grew 99% in Q3."
             assert result.final_response != result.original_response
 
+    @pytest.mark.p1
     async def test_3_6_int_002_given_script_lab_when_corrected_then_metadata_in_response(
         self, factual_hook_service, mock_llm, mock_embedding
     ):
@@ -70,6 +72,7 @@ class TestIntegration:
             assert data["wasCorrected"] is True
             assert data["correctionCount"] >= 1
 
+    @pytest.mark.p2
     async def test_3_6_int_003_given_corrected_when_cached_then_corrected_version(
         self,
     ):
@@ -112,6 +115,7 @@ class TestIntegration:
 
 @pytest.mark.asyncio
 class TestFR9Accuracy:
+    @pytest.mark.p0
     async def test_3_6_int_005_given_verification_when_logged_then_row_exists(
         self, factual_hook_service, mock_llm, mock_embedding, mock_session
     ):
@@ -133,6 +137,7 @@ class TestFR9Accuracy:
             assert log_obj.was_corrected == result.was_corrected
             assert log_obj.claims_total == len(result.verified_claims)
 
+    @pytest.mark.p2
     async def test_3_6_int_006_given_many_verifications_when_queried_then_metrics(
         self,
     ):

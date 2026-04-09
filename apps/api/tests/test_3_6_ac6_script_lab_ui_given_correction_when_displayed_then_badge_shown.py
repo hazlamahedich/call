@@ -8,6 +8,7 @@ from schemas.factual_hook import ClaimVerificationResponse
 
 @pytest.mark.asyncio
 class TestScriptLabUI:
+    @pytest.mark.p0
     async def test_3_6_unit_020_given_corrected_when_serialized_then_camel_case_json(
         self,
     ):
@@ -44,6 +45,7 @@ class TestScriptLabUI:
         assert data["verifiedClaims"][1]["isSupported"] is False
         assert data["verifiedClaims"][1]["verificationError"] is True
 
+    @pytest.mark.p1
     async def test_3_6_unit_020b_given_no_correction_when_serialized_then_defaults(
         self,
     ):

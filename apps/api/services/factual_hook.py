@@ -121,7 +121,7 @@ class FactualHookService:
         self,
         session: AsyncSession,
         llm_service: LLMService,
-        embedding_service=None,
+        embedding_service: object = None,
     ):
         self._session = session
         self._llm = llm_service
@@ -142,6 +142,12 @@ class FactualHookService:
             if max_corrections is not None
             else settings.FACTUAL_HOOK_MAX_CORRECTIONS
         )
+        effective_timeout = (
+            timeout_ms
+            if timeout_ms is not None
+            else settings.FACTUAL_HOOK_VERIFICATION_TIMEOUT_MS
+        )
+        timeout_s = effective_timeout / 1000.0
         start = time.monotonic()
 
         if self._check_circuit_breaker():
@@ -169,53 +175,61 @@ class FactualHookService:
             )
 
         current_response = response
-        best_available_response = response
         correction_count = 0
         verifications: list[ClaimVerification] = []
 
-        for attempt in range(mc + 1):
-            current_claims = (
-                claims if attempt == 0 else self._extract_claims(current_response)
-            )
-            if not current_claims:
-                verifications = []
-                break
-            verifications = await self._verify_all_claims(
-                current_claims,
-                org_id,
-                knowledge_base_ids,
-            )
-            if all(v.is_supported for v in verifications):
-                best_available_response = current_response
-                break
-            if attempt < mc:
-                unsupported = [v for v in verifications if not v.is_supported]
-                current_response = await self._correct_response(
-                    current_response,
-                    unsupported,
-                    source_chunks,
-                    query,
+        async def _core_work():
+            nonlocal current_response, correction_count, verifications
+            for attempt in range(mc + 1):
+                current_claims = (
+                    claims if attempt == 0 else self._extract_claims(current_response)
                 )
-                correction_count += 1
-                best_available_response = current_response
-            else:
-                unsupported = [v for v in verifications if not v.is_supported]
-                current_response = self._replace_unsupported_with_fallback(
-                    current_response,
-                    unsupported,
-                )
-                best_available_response = current_response
-
-        if correction_count > 0:
-            final_claims_candidates = self._extract_claims(current_response)
-            if final_claims_candidates:
+                if not current_claims:
+                    verifications = []
+                    break
                 verifications = await self._verify_all_claims(
-                    final_claims_candidates,
+                    current_claims,
                     org_id,
                     knowledge_base_ids,
                 )
-            else:
-                verifications = []
+                if all(v.is_supported for v in verifications):
+                    break
+                if attempt < mc:
+                    unsupported = [v for v in verifications if not v.is_supported]
+                    current_response = await self._correct_response(
+                        current_response,
+                        unsupported,
+                        source_chunks,
+                        query,
+                    )
+                    correction_count += 1
+                else:
+                    unsupported = [v for v in verifications if not v.is_supported]
+                    current_response = self._replace_unsupported_with_fallback(
+                        current_response,
+                        unsupported,
+                    )
+
+            if correction_count > 0:
+                final_claims = self._extract_claims(current_response)
+                if final_claims:
+                    verifications = await self._verify_all_claims(
+                        final_claims,
+                        org_id,
+                        knowledge_base_ids,
+                    )
+                else:
+                    verifications = []
+
+        timed_out = False
+        try:
+            await asyncio.wait_for(_core_work(), timeout=timeout_s)
+        except asyncio.TimeoutError:
+            timed_out = True
+            logger.warning(
+                "factual_hook_timeout: verification timed out after %.0fms",
+                time.monotonic() - start,
+            )
 
         result = FactualHookResult(
             was_corrected=(current_response != response),
@@ -223,7 +237,7 @@ class FactualHookService:
             final_response=current_response,
             original_response=response,
             verified_claims=verifications,
-            verification_timed_out=False,
+            verification_timed_out=timed_out,
             total_verification_ms=time.monotonic() - start,
         )
 
@@ -331,6 +345,14 @@ class FactualHookService:
         knowledge_base_ids: list[int] | None,
         threshold: float,
     ) -> ClaimVerification:
+        if self._embedding is None:
+            return ClaimVerification(
+                claim_text=claim,
+                is_supported=False,
+                supporting_chunks=[],
+                max_similarity=0.0,
+                verification_error=True,
+            )
         claim_embedding = await self._embedding.generate_embedding(
             claim, task_type="RETRIEVAL_QUERY"
         )
