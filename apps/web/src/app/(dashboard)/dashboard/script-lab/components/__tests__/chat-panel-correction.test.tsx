@@ -247,4 +247,115 @@ describe("[3.6b][ChatPanel-Correction] — correction indicators integration", (
       expect(screen.getByText("Corrected")).toBeInTheDocument();
     });
   });
+
+  it("[3.6b-INT-009][P1] Given multiple assistant messages with mixed correction states, when rendered, then only corrected messages show badge", async () => {
+    const correctedClaims = [
+      createClaimVerification({
+        claimText: "Wrong claim",
+        isSupported: false,
+      }),
+    ];
+    mockSendLabChat
+      .mockResolvedValueOnce(
+        createMockResponse({
+          wasCorrected: true,
+          correctionCount: 1,
+          verifiedClaims: correctedClaims,
+        }),
+      )
+      .mockResolvedValueOnce(createMockResponse());
+
+    render(<ChatPanel sessionId={1} />);
+    await sendMessage();
+    await waitFor(() => {
+      expect(screen.getByText("Corrected")).toBeInTheDocument();
+    });
+
+    await sendMessage();
+    await waitFor(() => {
+      expect(screen.getByText("AI response text")).toBeInTheDocument();
+    });
+    const badges = screen.queryAllByText("Corrected");
+    expect(badges).toHaveLength(1);
+  });
+
+  it("[3.6b-INT-010][P1] Given wasCorrected true with empty verifiedClaims, when rendered, then badge shows with 0 in count", async () => {
+    mockSendLabChat.mockResolvedValue(
+      createMockResponse({
+        wasCorrected: true,
+        correctionCount: 1,
+        verifiedClaims: [],
+      }),
+    );
+
+    render(<ChatPanel sessionId={1} />);
+    await sendMessage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Corrected")).toBeInTheDocument();
+    });
+    expect(screen.getByText("(1)")).toBeInTheDocument();
+  });
+
+  it("[3.6b-INT-011][P1] Given error response, when rendered, then no correction indicators shown", async () => {
+    mockSendLabChat.mockResolvedValue({
+      data: null,
+      error: "Server error",
+    });
+
+    render(<ChatPanel sessionId={1} />);
+    await sendMessage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Server error")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("Corrected")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Verification timed out — response may contain unverified claims",
+      ),
+    ).not.toBeInTheDocument();
+  });
+
+  it("[3.6b-INT-012][P1] Given user message, when rendered, then no correction indicators on user messages", async () => {
+    mockSendLabChat.mockResolvedValue(createMockResponse());
+
+    render(<ChatPanel sessionId={1} />);
+    await sendMessage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Hello")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("Corrected")).not.toBeInTheDocument();
+  });
+
+  it("[3.6b-INT-013][P2] Given corrected and timed-out response without source attributions, when rendered, then both CorrectionBadge and GlitchPip visible", async () => {
+    const claims = [
+      createClaimVerification({
+        claimText: "Partial claim",
+        isSupported: false,
+      }),
+    ];
+    mockSendLabChat.mockResolvedValue(
+      createMockResponse({
+        sourceAttributions: [],
+        wasCorrected: true,
+        correctionCount: 1,
+        verificationTimedOut: true,
+        verifiedClaims: claims,
+      }),
+    );
+
+    render(<ChatPanel sessionId={1} />);
+    await sendMessage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Corrected")).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          "Verification timed out — response may contain unverified claims",
+        ),
+      ).toBeInTheDocument();
+    });
+  });
 });
