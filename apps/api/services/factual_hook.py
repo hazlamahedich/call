@@ -78,6 +78,37 @@ _GREETING_RE = re.compile(
     r"^(?:hello|hi|hey|good morning|good afternoon|glad|pleased|welcome)\b",
     re.IGNORECASE,
 )
+_ABBREVIATIONS = frozenset(
+    {
+        "dr",
+        "mr",
+        "mrs",
+        "ms",
+        "prof",
+        "sr",
+        "jr",
+        "st",
+        "ave",
+        "blvd",
+        "inc",
+        "ltd",
+        "corp",
+        "co",
+        "dept",
+        "est",
+        "govt",
+        "assn",
+        "u.s",
+        "u.k",
+        "e.g",
+        "i.e",
+        "vs",
+        "approx",
+        "dept",
+        "div",
+        "eq",
+    }
+)
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
 
 
@@ -138,6 +169,7 @@ class FactualHookService:
             )
 
         current_response = response
+        best_available_response = response
         correction_count = 0
         verifications: list[ClaimVerification] = []
 
@@ -146,6 +178,7 @@ class FactualHookService:
                 claims if attempt == 0 else self._extract_claims(current_response)
             )
             if not current_claims:
+                verifications = []
                 break
             verifications = await self._verify_all_claims(
                 current_claims,
@@ -153,6 +186,7 @@ class FactualHookService:
                 knowledge_base_ids,
             )
             if all(v.is_supported for v in verifications):
+                best_available_response = current_response
                 break
             if attempt < mc:
                 unsupported = [v for v in verifications if not v.is_supported]
@@ -163,12 +197,14 @@ class FactualHookService:
                     query,
                 )
                 correction_count += 1
+                best_available_response = current_response
             else:
                 unsupported = [v for v in verifications if not v.is_supported]
                 current_response = self._replace_unsupported_with_fallback(
                     current_response,
                     unsupported,
                 )
+                best_available_response = current_response
 
         if correction_count > 0:
             final_claims_candidates = self._extract_claims(current_response)
@@ -178,6 +214,8 @@ class FactualHookService:
                     org_id,
                     knowledge_base_ids,
                 )
+            else:
+                verifications = []
 
         result = FactualHookResult(
             was_corrected=(current_response != response),
@@ -198,7 +236,23 @@ class FactualHookService:
         return result
 
     def _extract_claims(self, response: str) -> list[str]:
-        sentences = _SENTENCE_SPLIT_RE.split(response.strip())
+        raw_sentences = _SENTENCE_SPLIT_RE.split(response.strip())
+        sentences: list[str] = []
+        for s in raw_sentences:
+            stripped = s.strip()
+            if (
+                stripped
+                and stripped[-1] != "."
+                and stripped[-1] != "!"
+                and stripped[-1] != "?"
+            ):
+                if sentences:
+                    word = sentences[-1].strip()
+                    tail = word.rsplit(None, 1)[-1].rstrip(".").lower()
+                    if tail in _ABBREVIATIONS:
+                        sentences[-1] = sentences[-1] + " " + stripped
+                        continue
+            sentences.append(s)
         claims: list[str] = []
         min_len = settings.FACTUAL_HOOK_CLAIM_MIN_LENGTH
 
@@ -350,7 +404,7 @@ class FactualHookService:
         )
 
         last_error = None
-        for attempt in range(settings.LLM_MAX_RETRIES + 1):
+        for attempt in range(settings.LLM_MAX_RETRIES):
             try:
                 return await self._llm.generate(
                     system=correction_prompt,
@@ -360,13 +414,13 @@ class FactualHookService:
                 )
             except Exception as e:
                 last_error = e
-                if attempt < settings.LLM_MAX_RETRIES:
+                if attempt < settings.LLM_MAX_RETRIES - 1:
                     delay = settings.LLM_RETRY_BACKOFF_BASE * (2**attempt)
                     await asyncio.sleep(delay)
                 else:
                     logger.error(
                         "Correction LLM call failed after %d retries: %s",
-                        attempt + 1,
+                        settings.LLM_MAX_RETRIES,
                         str(e)[:200],
                     )
 
@@ -382,10 +436,13 @@ class FactualHookService:
 
         for sentence in sentences:
             replaced = False
+            sent_tokens = set(sentence.lower().split())
             for claim in unsupported_claims:
-                claim_prefix = claim.claim_text[:40].lower()
-                sent_lower = sentence.lower()
-                if claim_prefix and claim_prefix in sent_lower:
+                claim_tokens = set(claim.claim_text.lower().split())
+                if not claim_tokens:
+                    continue
+                overlap = len(sent_tokens & claim_tokens) / len(claim_tokens)
+                if overlap >= 0.5:
                     result_sentences.append(NO_KNOWLEDGE_FALLBACK)
                     replaced = True
                     break

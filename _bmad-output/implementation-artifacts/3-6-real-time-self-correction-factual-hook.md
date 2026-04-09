@@ -65,7 +65,7 @@ Status: review
 - ✅ Use `asyncio.gather(*tasks, return_exceptions=True)` for parallel claim verification — NEVER use bare `asyncio.gather()` (one failure would kill all verifications)
 - ✅ Update `_cache_result()` to serialize new correction fields alongside existing fields
 - ✅ Add backward-compatible defaults when deserializing cached results that pre-date this feature
-- ✅ Log every verification result to `factual_verification_logs` table (MANDATORY for FR9 accuracy tracking)
+- ✅ Log every verification result to `factual_verification_logs` table (best-effort for FR9 accuracy tracking — failures MUST NOT block the generation pipeline)
 - ✅ Implement circuit breaker pattern: track consecutive embedding/search failures, trip open after threshold, auto-reset after cooldown
 
 **Common Pitfalls to Avoid**:
@@ -1054,6 +1054,18 @@ zai-coding-plan/glm-5.1
 ### Change Log
 
 - 2026-04-09: Story implementation complete — all tasks done, 28 tests green, pushed to main (332730d)
+- 2026-04-09: Addressed 10 code review findings (3-layer adversarial review — Blind Hunter, Edge Case Hunter, Acceptance Auditor)
+  - **P1** Fixed Redis connection leak in `_invalidate_script_gen_cache` — `redis.close()` now in `try/finally`
+  - **P2** Fixed `_correct_response` off-by-one — `range(LLM_MAX_RETRIES + 1)` → `range(LLM_MAX_RETRIES)`
+  - **P3** Replaced fragile 40-char prefix matching in `_replace_unsupported_with_fallback` with token-overlap ratio (>=50%)
+  - **P4** Timed-out responses now cached with short TTL (60s) instead of full cache TTL; added `ttl` param to `_cache_result()`
+  - **P5** Added `asyncio.wait_for()` timeout wrapper to manual `/verify` endpoint with 504 response
+  - **P6** Added abbreviation-aware sentence splitting to `_extract_claims` (handles `Dr.`, `U.S.`, etc.)
+  - **P7** Set `verifications = []` when post-correction claim extraction returns empty (was stale)
+  - **P8** Added `best_available_response` tracking inside `verify_and_correct` so partial corrections survive external `asyncio.wait_for()` cancellation
+  - **P9** Added `NO_KNOWLEDGE_FALLBACK in result.final_response` assertion to test 009
+  - **BS1** Amended spec: `_log_verification` changed from "MANDATORY" to "best-effort — failures MUST NOT block the generation pipeline"
+  - All 28 tests still passing, no regressions (1056 existing tests pass)
 
 ### File List
 

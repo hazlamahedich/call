@@ -77,6 +77,7 @@ class TestSelfCorrection:
                 max_corrections=2,
             )
             assert result.correction_count == 2
+            assert NO_KNOWLEDGE_FALLBACK in result.final_response
 
     async def test_3_6_unit_010_given_all_supported_when_verifying_then_no_correction(
         self, factual_hook_service, mock_embedding

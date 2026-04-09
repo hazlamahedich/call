@@ -1,5 +1,6 @@
 """Factual hook verification endpoint for manual testing and Script Lab integration."""
 
+import asyncio
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -69,13 +70,25 @@ async def verify_response(
 
     llm_service, embedding_service = await _build_services(session)
     hook = FactualHookService(session, llm_service, embedding_service)
-    hook_result = await hook.verify_and_correct(
-        response=body.response_text,
-        source_chunks=[],
-        query="manual-verification",
-        org_id=org_id,
-        knowledge_base_ids=kb_ids,
-    )
+    try:
+        hook_result = await asyncio.wait_for(
+            hook.verify_and_correct(
+                response=body.response_text,
+                source_chunks=[],
+                query="manual-verification",
+                org_id=org_id,
+                knowledge_base_ids=kb_ids,
+            ),
+            timeout=settings.FACTUAL_HOOK_VERIFICATION_TIMEOUT_MS / 1000,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail={
+                "code": "factual_hook_timeout",
+                "message": "Factual hook verification timed out",
+            },
+        )
 
     return FactualVerificationResponse(
         was_corrected=hook_result.was_corrected,

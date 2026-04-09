@@ -335,6 +335,7 @@ class ScriptGenerationService:
                     result,
                     lead_id=lead_id,
                     script_id=script_id,
+                    ttl=60,
                 )
                 return result
 
@@ -544,7 +545,7 @@ class ScriptGenerationService:
             return None
 
     async def _cache_result(
-        self, query, org_id, agent_id, result, lead_id=None, script_id=None
+        self, query, org_id, agent_id, result, lead_id=None, script_id=None, ttl=None
     ):
         if not self._redis:
             return
@@ -567,9 +568,10 @@ class ScriptGenerationService:
                     "verification_timed_out": result.verification_timed_out,
                 }
             )
+            cache_ttl = ttl if ttl is not None else settings.SCRIPT_GENERATION_CACHE_TTL
             await self._redis.setex(
                 cache_key,
-                settings.SCRIPT_GENERATION_CACHE_TTL,
+                cache_ttl,
                 data,
             )
         except Exception as e:
