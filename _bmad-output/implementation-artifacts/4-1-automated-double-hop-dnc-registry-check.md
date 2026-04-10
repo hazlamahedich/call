@@ -708,10 +708,11 @@ GLM-5.1 (zai-coding-plan/glm-5.1)
 - Created `MockDncProvider` test double with configurable responses/latency/failure
 - 30/30 tests passing covering ACs 1-15
 - **Post-review fixes**: 21 findings from 3-layer adversarial code review (Blind Hunter + Edge Case Hunter + Acceptance Auditor) — all resolved, 32/32 tests passing
+- **Test automation expansion (2026-04-10)**: 70 additional tests covering DncComProvider (13), blocklist CRUD (5), cache I/O resilience (6), source normalization (4), distributed lock (1), scrub_leads_batch edge cases (8), circuit breaker states (8), provider ABC/dataclass defaults (4), public API exports + error messages + mock features (10). 2 implementation bugs fixed: invalid `message=` kwarg in `ComplianceBlockError`, `summary.skipped` not transferred in `scrub_leads_batch`. Total: **102/102 tests passing**.
 
 ### File List
 
-**New files (13):**
+**New files (14):**
 - `apps/api/models/dnc_check_log.py`
 - `apps/api/models/blocklist_entry.py`
 - `apps/api/services/compliance/__init__.py`
@@ -723,13 +724,16 @@ GLM-5.1 (zai-coding-plan/glm-5.1)
 - `apps/api/services/compliance/exceptions.py`
 - `apps/api/migrations/versions/t6u7v8w9x0y1_create_compliance_tables.py`
 - `apps/api/tests/test_4_1_dnc_check.py`
+- `apps/api/tests/test_4_1_dnc_expanded.py`
 - `apps/api/tests/mocks/mock_dnc_provider.py`
+- `_bmad-output/test-artifacts/story-4-1-automation-summary.md`
 
-**Modified files (7):**
+**Modified files (8):**
 - `apps/api/models/call.py`
 - `apps/api/models/__init__.py`
 - `apps/api/services/vapi.py`
 - `apps/api/routers/calls.py`
 - `apps/api/config/settings.py`
+- `apps/api/services/compliance/dnc.py` (bug fixes: `message=` kwarg removed, `summary.skipped` transferred)
 - `packages/types/call.ts`
 - `packages/compliance/index.ts`

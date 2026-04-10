@@ -207,7 +207,6 @@ async def check_dnc_realtime(
                 phone_number=phone_number,
                 call_id=call_id,
                 source="circuit_breaker",
-                message="Circuit breaker open. Call blocked for safety.",
             )
         return DncCheckResult(
             phone_number=phone_number,
@@ -514,4 +513,5 @@ async def scrub_leads_batch(
 
         await session.flush()
 
+    summary.skipped = skipped
     return summary
