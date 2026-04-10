@@ -7,6 +7,10 @@ export interface TelecomCall {
   duration?: number;
   recordingUrl?: string;
   transcript?: string;
+  complianceStatus?: string | null;
+  stateCode?: string | null;
+  consentCaptured?: boolean;
+  gracefulGoodnightTriggered?: boolean;
   createdAt: string;
   endedAt?: string;
 }
@@ -19,7 +23,11 @@ export type TelecomCallStatus =
   | "completed"
   | "failed"
   | "busy"
-  | "no_answer";
+  | "no_answer"
+  | "blocked_dnc"
+  | "blocked_hours"
+  | "graceful_goodnight"
+  | "escalated";
 
 export interface TriggerCallRequest {
   leadId?: number;
@@ -38,6 +46,7 @@ export interface TriggerCallResponse {
     campaignId: number | null;
     status: string;
     phoneNumber: string;
+    complianceStatus?: string | null;
     createdAt: string | null;
   };
 }

@@ -17,7 +17,7 @@ async def get_providers_health(
     request: Request,
     org_id: str = Depends(get_current_org_id),
 ):
-    orchestrator = get_tts_orchestrator()
+    orchestrator = await get_tts_orchestrator()
     health = await orchestrator.get_providers_health()
     return {"providers": health}
 
@@ -42,15 +42,16 @@ async def get_session_status(
 
     vapi_call_id = row[0]
     if vapi_call_id is None:
+        orchestrator_fallback = await get_tts_orchestrator()
         return {
             "callId": call_id,
-            "activeProvider": get_tts_orchestrator().get_session_provider(""),
+            "activeProvider": orchestrator_fallback.get_session_provider(""),
             "latencyHistory": [],
             "p95LatencyMs": None,
             "requestCount": 0,
         }
 
-    orchestrator = get_tts_orchestrator()
+    orchestrator = await get_tts_orchestrator()
 
     active_provider = orchestrator.get_session_provider(vapi_call_id)
     latency_history = orchestrator.get_session_latency_history(vapi_call_id)

@@ -106,7 +106,7 @@ async def handle_call_events(
             recording_url = (
                 call_data.get("recordingUrl") if isinstance(call_data, dict) else None
             )
-            orchestrator = get_tts_orchestrator()
+            orchestrator = await get_tts_orchestrator()
             orchestrator.reset_session(vapi_call_id)
             await handle_call_ended(
                 session,

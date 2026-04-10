@@ -1,15 +1,17 @@
 import logging
 
-from fastapi import APIRouter, HTTPException, Request, status, Depends
+from fastapi import APIRouter, HTTPException, Request, Response, status, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pydantic import ValidationError as PydanticValidationError
+from redis.asyncio import Redis
 
 from database.session import get_session, set_tenant_context
 from middleware.usage_guard import check_call_cap
 from models.agent import Agent
 from schemas.call import TriggerCallPayload
 from services.base import TenantService
+from services.compliance.exceptions import ComplianceBlockError
 from services.vapi import trigger_outbound_call
 
 router = APIRouter(prefix="/calls", tags=["Calls"])
@@ -28,22 +30,8 @@ async def _resolve_assistant_id(session, org_id, agent_id):
     return agent.voice_id
 
 
-def _compliance_pre_check(phone_number):
-    try:
-        from packages.compliance import check_dnc_eligibility
-
-        logger.warning(
-            "packages/compliance check skipped - not yet implemented for %s",
-            phone_number,
-        )
-    except ImportError:
-        logger.warning(
-            "packages/compliance not yet fully implemented - "
-            "skipping DNC eligibility check for %s",
-            phone_number,
-        )
-    except Exception as exc:
-        logger.warning("Compliance check failed: %s", exc)
+async def _get_redis(request: Request) -> Redis | None:
+    return request.app.state.redis if hasattr(request.app.state, "redis") else None
 
 
 @router.post(
@@ -68,7 +56,7 @@ async def trigger_call(
 
     try:
         assistant_id = await _resolve_assistant_id(session, org_id, payload.agent_id)
-        await _compliance_pre_check(payload.phone_number)
+        redis_client = await _get_redis(request)
 
         call = await trigger_outbound_call(
             session,
@@ -78,9 +66,23 @@ async def trigger_call(
             agent_id=payload.agent_id,
             campaign_id=payload.campaign_id,
             assistant_id=assistant_id,
+            redis_client=redis_client,
         )
 
-        return {"call": call.model_dump(by_alias=True)}
+        response = {"call": call.model_dump(by_alias=True)}
+        return response
+    except ComplianceBlockError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": e.code,
+                "message": str(e),
+                "call": {
+                    "id": e.call_id,
+                    "complianceStatus": "blocked_dnc",
+                },
+            },
+        )
     except PydanticValidationError as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

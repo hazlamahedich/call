@@ -5,12 +5,15 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
+import redis.asyncio as aioredis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.session import set_tenant_context
 from models.call import Call
 from services.base import TenantService
+from services.compliance.dnc import check_dnc_realtime
+from services.compliance.exceptions import ComplianceBlockError
 from services.usage import record_usage
 from services.vapi_client import initiate_call
 
@@ -37,6 +40,10 @@ def _row_to_call(row) -> Call:
         phone_number=m["phone_number"],
         transcript=m["transcript"],
         ended_at=m["ended_at"],
+        compliance_status=m.get("compliance_status"),
+        state_code=m.get("state_code"),
+        consent_captured=m.get("consent_captured", False),
+        graceful_goodnight_triggered=m.get("graceful_goodnight_triggered", False),
         created_at=m["created_at"],
         updated_at=m["updated_at"],
         soft_delete=m["soft_delete"],
@@ -60,6 +67,7 @@ async def trigger_outbound_call(
     agent_id: Optional[int] = None,
     campaign_id: Optional[int] = None,
     assistant_id: Optional[str] = None,
+    redis_client: aioredis.Redis | None = None,
 ) -> Call:
     await set_tenant_context(session, org_id)
 
@@ -79,6 +87,60 @@ async def trigger_outbound_call(
     )
     call = await _call_service.create(session, call)
     await session.flush()
+
+    try:
+        dnc_result = await check_dnc_realtime(
+            session,
+            phone_number,
+            org_id,
+            redis_client,
+            lead_id=lead_id,
+            campaign_id=campaign_id,
+            call_id=call.id,
+        )
+        if dnc_result.is_blocked:
+            await session.execute(
+                text(
+                    "UPDATE calls SET status = 'blocked_dnc', compliance_status = 'blocked_dnc' "
+                    "WHERE id = :cid"
+                ),
+                {"cid": call.id},
+            )
+            call.status = "blocked_dnc"
+            call.compliance_status = "blocked_dnc"
+            await session.flush()
+            raise ComplianceBlockError(
+                code="DNC_BLOCKED",
+                phone_number=phone_number,
+                call_id=call.id,
+                source=dnc_result.source,
+            )
+        await session.execute(
+            text("UPDATE calls SET compliance_status = 'passed' WHERE id = :cid"),
+            {"cid": call.id},
+        )
+        call.compliance_status = "passed"
+    except ComplianceBlockError:
+        raise
+    except Exception as dnc_exc:
+        logger.error("DNC check error: %s", dnc_exc)
+        await session.execute(
+            text(
+                "UPDATE calls SET status = 'blocked_dnc', compliance_status = 'dnc_provider_error' "
+                "WHERE id = :cid"
+            ),
+            {"cid": call.id},
+        )
+        call.status = "blocked_dnc"
+        call.compliance_status = "dnc_provider_error"
+        await session.flush()
+        raise ComplianceBlockError(
+            code="DNC_PROVIDER_UNAVAILABLE",
+            phone_number=phone_number,
+            call_id=call.id,
+            source="dnc_provider_error",
+            retry_after_seconds=60,
+        )
 
     try:
         metadata = {"org_id": org_id}
@@ -140,6 +202,7 @@ async def handle_call_started(
             "ON CONFLICT (vapi_call_id) DO UPDATE SET status = 'in_progress', updated_at = NOW() "
             "RETURNING id, org_id, vapi_call_id, lead_id, agent_id, campaign_id, "
             "status, duration, recording_url, phone_number, transcript, ended_at, "
+            "compliance_status, state_code, consent_captured, graceful_goodnight_triggered, "
             "created_at, updated_at, soft_delete"
         ),
         {
@@ -170,6 +233,7 @@ async def handle_call_ended(
             "WHERE vapi_call_id = :vci AND status != 'completed' "
             "RETURNING id, org_id, vapi_call_id, lead_id, agent_id, campaign_id, "
             "status, duration, recording_url, phone_number, transcript, ended_at, "
+            "compliance_status, state_code, consent_captured, graceful_goodnight_triggered, "
             "created_at, updated_at, soft_delete"
         ),
         {
@@ -246,6 +310,7 @@ async def handle_call_failed(
             "updated_at = NOW() WHERE vapi_call_id = :vci AND status != 'failed' "
             "RETURNING id, org_id, vapi_call_id, lead_id, agent_id, campaign_id, "
             "status, duration, recording_url, phone_number, transcript, ended_at, "
+            "compliance_status, state_code, consent_captured, graceful_goodnight_triggered, "
             "created_at, updated_at, soft_delete"
         ),
         {

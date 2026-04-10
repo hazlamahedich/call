@@ -48,6 +48,17 @@ class Settings(BaseSettings):
     SAMPLE_CACHE_TTL_SECONDS: int = 86400
     REDIS_URL: str = "redis://localhost:6379/0"
 
+    DNC_API_KEY: str = ""
+    DNC_API_BASE_URL: str = "https://api.dnc.com/v1"
+    DNC_CACHE_BLOCKED_TTL_SECONDS: int = 259200
+    DNC_CACHE_CLEAR_TTL_SECONDS: int = 14400
+    DNC_BATCH_SIZE: int = 1000
+    DNC_PRE_DIAL_TIMEOUT_MS: int = 100
+    DNC_PRE_DIAL_SLOW_THRESHOLD_MS: int = 150
+    DNC_CIRCUIT_BREAKER_THRESHOLD: int = 5
+    DNC_CIRCUIT_OPEN_SEC: int = 30
+    DNC_FAIL_CLOSED_ENABLED: bool = True
+
     TELEMETRY_QUEUE_MAX_SIZE: int = 10000
     TELEMETRY_BATCH_SIZE: int = 100
     TELEMETRY_PUSH_TIMEOUT_MS: int = 2

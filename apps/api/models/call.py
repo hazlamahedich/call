@@ -20,3 +20,7 @@ class Call(TenantModel, table=True):
     phone_number: str = Field(default="", max_length=20, index=True)
     transcript: Optional[str] = Field(default=None, nullable=True)
     ended_at: Optional[datetime] = Field(default=None, nullable=True)
+    compliance_status: Optional[str] = Field(default=None, max_length=30, nullable=True)
+    state_code: Optional[str] = Field(default=None, max_length=5, nullable=True)
+    consent_captured: bool = Field(default=False)
+    graceful_goodnight_triggered: bool = Field(default=False)

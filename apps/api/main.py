@@ -53,7 +53,7 @@ async def get_preset_sample_service() -> PresetSampleService | None:
     if not cache_strategy:
         return None
 
-    tts_orchestrator = get_tts_orchestrator()
+    tts_orchestrator = await get_tts_orchestrator()
     return PresetSampleService(cache_strategy, tts_orchestrator)
 
 
@@ -62,7 +62,7 @@ async def lifespan(app: FastAPI):
     global _cache_strategy
 
     # Startup
-    orchestrator = get_tts_orchestrator()
+    orchestrator = await get_tts_orchestrator()
     await orchestrator.start_cleanup_task()
 
     # Initialize cache strategy for preset sample caching (Story 2.6)
