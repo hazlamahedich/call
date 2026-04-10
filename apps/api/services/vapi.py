@@ -123,24 +123,18 @@ async def trigger_outbound_call(
     except ComplianceBlockError:
         raise
     except Exception as dnc_exc:
-        logger.error("DNC check error: %s", dnc_exc)
+        logger.error("DNC check unexpected error: %s", dnc_exc)
         await session.execute(
             text(
-                "UPDATE calls SET status = 'blocked_dnc', compliance_status = 'dnc_provider_error' "
+                "UPDATE calls SET status = 'failed', compliance_status = 'dnc_provider_error' "
                 "WHERE id = :cid"
             ),
             {"cid": call.id},
         )
-        call.status = "blocked_dnc"
+        call.status = "failed"
         call.compliance_status = "dnc_provider_error"
         await session.flush()
-        raise ComplianceBlockError(
-            code="DNC_PROVIDER_UNAVAILABLE",
-            phone_number=phone_number,
-            call_id=call.id,
-            source="dnc_provider_error",
-            retry_after_seconds=60,
-        )
+        raise
 
     try:
         metadata = {"org_id": org_id}

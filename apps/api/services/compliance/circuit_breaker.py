@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-import json
 import logging
 import time
-from typing import Optional
 
-import redis.asyncio as redis
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
+import redis.asyncio as aioredis
 
 from config.settings import settings
 
@@ -28,7 +24,7 @@ class DncCircuitBreaker:
         return f"{base}:state", f"{base}:failures", f"{base}:opened_at"
 
     async def is_available(
-        self, org_id: str, redis_client: redis.Redis | None = None
+        self, org_id: str, redis_client: aioredis.Redis | None = None
     ) -> bool:
         if redis_client is None:
             return True
@@ -50,14 +46,14 @@ class DncCircuitBreaker:
                 return False
         except Exception as e:
             logger.warning(
-                "Circuit breaker state check failed",
-                extra={"code": "CIRCUIT_BREAKER_ERROR", "error": str(e)},
+                "Circuit breaker Redis check failed — treating as unavailable",
+                extra={"code": "CIRCUIT_BREAKER_REDIS_ERROR", "error": str(e)},
             )
-            return True
+            return False
         return True
 
     async def record_success(
-        self, org_id: str, redis_client: redis.Redis | None = None
+        self, org_id: str, redis_client: aioredis.Redis | None = None
     ) -> None:
         if redis_client is None:
             return
@@ -69,14 +65,15 @@ class DncCircuitBreaker:
             pass
 
     async def record_failure(
-        self, org_id: str, redis_client: redis.Redis | None = None
+        self, org_id: str, redis_client: aioredis.Redis | None = None
     ) -> None:
         if redis_client is None:
             return
         try:
             state_key, failures_key, opened_at_key = self._keys(org_id)
             count = await redis_client.incr(failures_key)
-            await redis_client.expire(failures_key, 60)
+            if count == 1:
+                await redis_client.expire(failures_key, 60)
             if count >= self._threshold:
                 await redis_client.set(state_key, "open", ex=60)
                 await redis_client.set(opened_at_key, str(time.time()), ex=60)

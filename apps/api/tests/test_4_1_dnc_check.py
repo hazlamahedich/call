@@ -16,6 +16,7 @@ import pytest
 from services.compliance.dnc_provider import (
     DncCheckResult,
     DncScrubSummary,
+    InvalidPhoneFormatError,
     validate_e164,
 )
 from services.compliance.exceptions import ComplianceBlockError
@@ -36,29 +37,28 @@ def test_4_1_unit_001_valid_e164_passes():
 
 
 def test_4_1_unit_002_missing_plus_rejected():
-    with pytest.raises(ComplianceBlockError) as exc_info:
+    with pytest.raises(InvalidPhoneFormatError):
         validate_e164("12025551234")
-    assert exc_info.value.code == "DNC_INVALID_PHONE_FORMAT"
 
 
 def test_4_1_unit_003_too_short_or_long_rejected():
-    with pytest.raises(ComplianceBlockError):
+    with pytest.raises(InvalidPhoneFormatError):
         validate_e164("+123456")
-    with pytest.raises(ComplianceBlockError):
+    with pytest.raises(InvalidPhoneFormatError):
         validate_e164("+1234567890123456")
 
 
 def test_4_1_unit_004_non_numeric_rejected():
-    with pytest.raises(ComplianceBlockError):
+    with pytest.raises(InvalidPhoneFormatError):
         validate_e164("+1202abc1234")
-    with pytest.raises(ComplianceBlockError):
+    with pytest.raises(InvalidPhoneFormatError):
         validate_e164("+1-202-555-1234")
 
 
 def test_4_1_unit_005_empty_none_rejected():
-    with pytest.raises(ComplianceBlockError):
+    with pytest.raises(InvalidPhoneFormatError):
         validate_e164("")
-    with pytest.raises((ComplianceBlockError, TypeError)):
+    with pytest.raises((InvalidPhoneFormatError, TypeError)):
         validate_e164(None)  # type: ignore
 
 
@@ -225,11 +225,11 @@ async def test_4_1_unit_023_no_redis_returns_available():
 
 
 @pytest.mark.asyncio
-async def test_4_1_unit_024_circuit_breaker_error_returns_available():
+async def test_4_1_unit_024_circuit_breaker_redis_error_returns_unavailable():
     mock_redis = MagicMock()
     mock_redis.get = AsyncMock(side_effect=Exception("connection error"))
     cb = DncCircuitBreaker(threshold=1)
-    assert await cb.is_available("org", mock_redis) is True
+    assert await cb.is_available("org", mock_redis) is False
 
 
 # ============================================================
@@ -265,6 +265,9 @@ async def test_4_1_unit_030_cache_hit_clear():
     mock_session.execute = AsyncMock()
     mock_session.flush = AsyncMock()
     mock_session.add = MagicMock()
+    mock_session.begin_nested = MagicMock(
+        return_value=MagicMock(commit=AsyncMock(), rollback=AsyncMock())
+    )
 
     with (
         patch("services.compliance.dnc._provider", MockDncProvider()),
@@ -311,6 +314,9 @@ async def test_4_1_unit_031_cache_hit_blocked():
     mock_session.execute = AsyncMock()
     mock_session.flush = AsyncMock()
     mock_session.add = MagicMock()
+    mock_session.begin_nested = MagicMock(
+        return_value=MagicMock(commit=AsyncMock(), rollback=AsyncMock())
+    )
 
     with (
         patch("services.compliance.dnc._provider", MockDncProvider()),
@@ -344,6 +350,9 @@ async def test_4_1_unit_035_fail_closed_on_provider_error():
     mock_session.execute = AsyncMock(return_value=mock_result)
     mock_session.flush = AsyncMock()
     mock_session.add = MagicMock()
+    mock_session.begin_nested = MagicMock(
+        return_value=MagicMock(commit=AsyncMock(), rollback=AsyncMock())
+    )
 
     with (
         patch("services.compliance.dnc._provider", MockDncProvider(should_fail=True)),
@@ -373,6 +382,9 @@ async def test_4_1_unit_036_circuit_open_immediate_block():
     mock_session.execute = AsyncMock(return_value=mock_result)
     mock_session.flush = AsyncMock()
     mock_session.add = MagicMock()
+    mock_session.begin_nested = MagicMock(
+        return_value=MagicMock(commit=AsyncMock(), rollback=AsyncMock())
+    )
 
     with (
         patch("services.compliance.dnc._provider", MockDncProvider()),
@@ -389,6 +401,44 @@ async def test_4_1_unit_036_circuit_open_immediate_block():
             None,
         )
     assert result.result == "clear"
+
+
+@pytest.mark.asyncio
+async def test_4_1_unit_037_fail_open_mode_returns_error_not_raises():
+    mock_redis = MagicMock()
+    mock_redis.get = AsyncMock(return_value=None)
+    mock_redis.setex = AsyncMock()
+    mock_redis.set = AsyncMock(return_value=True)
+    mock_redis.delete = AsyncMock()
+
+    mock_session = MagicMock()
+    mock_result = MagicMock()
+    mock_result.first = MagicMock(return_value=None)
+    mock_result.fetchall = MagicMock(return_value=[])
+    mock_session.execute = AsyncMock(return_value=mock_result)
+    mock_session.flush = AsyncMock()
+    mock_session.add = MagicMock()
+    mock_session.begin_nested = MagicMock(
+        return_value=MagicMock(commit=AsyncMock(), rollback=AsyncMock())
+    )
+
+    with (
+        patch("services.compliance.dnc._provider", MockDncProvider(should_fail=True)),
+        patch("services.compliance.dnc._circuit_breaker") as mock_cb,
+    ):
+        mock_cb.is_available = AsyncMock(return_value=True)
+        mock_cb.record_failure = AsyncMock()
+        from services.compliance.dnc import check_dnc_realtime
+
+        result = await check_dnc_realtime(
+            mock_session,
+            "+12025551234",
+            "org1",
+            mock_redis,
+            fail_closed=False,
+        )
+    assert result.result == "error"
+    assert not result.is_blocked
 
 
 # ============================================================
@@ -491,6 +541,9 @@ async def test_4_1_unit_040_all_leads_clear():
     mock_session.execute = AsyncMock(return_value=mock_result)
     mock_session.flush = AsyncMock()
     mock_session.add = MagicMock()
+    mock_session.begin_nested = MagicMock(
+        return_value=MagicMock(commit=AsyncMock(), rollback=AsyncMock())
+    )
 
     with (
         patch("services.compliance.dnc._provider", MockDncProvider()),
@@ -578,3 +631,15 @@ def test_4_1_dnc_scrub_summary_defaults():
     assert "national_dnc" in summary.sources
     assert "state_dnc" in summary.sources
     assert "tenant_blocklist" in summary.sources
+
+
+# ============================================================
+# Phone masking test (AC: 11 — PII)
+# ============================================================
+
+
+def test_4_1_phone_masking():
+    from services.compliance.dnc import _mask_phone
+
+    assert _mask_phone("+12025551234") == "+12***34"
+    assert _mask_phone("+12") == "***"

@@ -87,6 +87,10 @@ async def add_to_blocklist(
     )
     row = result.first()
     await session.flush()
+    if not row:
+        raise RuntimeError(
+            f"blocklist upsert returned no row for {org_id}/{phone_number}"
+        )
     return BlocklistEntry.model_construct(
         id=row[0],
         org_id=row[1],

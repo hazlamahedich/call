@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from typing import Optional
@@ -11,26 +12,57 @@ from .dnc_provider import DncProvider, DncCheckResult
 
 logger = logging.getLogger(__name__)
 
+_mock_mode_warned = False
+
+
+def _warn_mock_mode() -> None:
+    global _mock_mode_warned
+    if not _mock_mode_warned:
+        _mock_mode_warned = True
+        logger.warning(
+            "DNC_API_KEY is empty — all numbers will pass as clear. "
+            "Set DNC_API_KEY to enable real DNC registry checks.",
+            extra={"code": "DNC_MOCK_MODE_ACTIVE"},
+        )
+
+
+def _safe_retry_after(raw: str | None) -> float:
+    if raw is None:
+        return 0.5
+    try:
+        return float(raw)
+    except (ValueError, TypeError):
+        pass
+    try:
+        from email.utils import parsedate_to_datetime
+
+        dt = parsedate_to_datetime(raw)
+        return max(0.0, (dt.timestamp() - time.time()))
+    except Exception:
+        return 0.5
+
 
 class DncComProvider(DncProvider):
     def __init__(self) -> None:
         self._client: Optional[httpx.AsyncClient] = None
+        self._lock = asyncio.Lock()
 
     async def _ensure_client(self) -> httpx.AsyncClient:
-        if self._client is None or self._client.is_closed:
-            self._client = httpx.AsyncClient(
-                base_url=settings.DNC_API_BASE_URL,
-                timeout=httpx.Timeout(
-                    max_connect=2.0,
-                    max_read=settings.DNC_PRE_DIAL_TIMEOUT_MS / 1000.0,
-                    max_write=2.0,
-                    max_pool=2.0,
-                ),
-                headers={
-                    "Authorization": f"Bearer {settings.DNC_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-            )
+        async with self._lock:
+            if self._client is None or self._client.is_closed:
+                self._client = httpx.AsyncClient(
+                    base_url=settings.DNC_API_BASE_URL,
+                    timeout=httpx.Timeout(
+                        max_connect=2.0,
+                        max_read=settings.DNC_PRE_DIAL_TIMEOUT_MS / 1000.0,
+                        max_write=2.0,
+                        max_pool=2.0,
+                    ),
+                    headers={
+                        "Authorization": f"Bearer {settings.DNC_API_KEY}",
+                        "Content-Type": "application/json",
+                    },
+                )
         return self._client
 
     @property
@@ -41,6 +73,7 @@ class DncComProvider(DncProvider):
         start = time.monotonic()
 
         if not settings.DNC_API_KEY:
+            _warn_mock_mode()
             elapsed_ms = int((time.monotonic() - start) * 1000)
             return DncCheckResult(
                 phone_number=phone_number,
@@ -67,9 +100,8 @@ class DncComProvider(DncProvider):
                         extra={"code": "DNC_RATE_LIMITED", "attempt": attempt + 1},
                     )
                     if attempt < 2:
-                        import asyncio
-
-                        await asyncio.sleep(backoff)
+                        wait = _safe_retry_after(resp.headers.get("Retry-After"))
+                        await asyncio.sleep(min(wait, 4.0))
                         backoff *= 2
                         continue
                     return DncCheckResult(
@@ -82,6 +114,10 @@ class DncComProvider(DncProvider):
                     )
 
                 if resp.status_code >= 500:
+                    if attempt < 2:
+                        await asyncio.sleep(backoff)
+                        backoff *= 2
+                        continue
                     return DncCheckResult(
                         phone_number=phone_number,
                         is_blocked=False,
@@ -119,9 +155,14 @@ class DncComProvider(DncProvider):
             except (httpx.TimeoutException, httpx.ConnectError) as exc:
                 elapsed_ms = int((time.monotonic() - start) * 1000)
                 logger.warning(
-                    "DNC provider request failed",
+                    "DNC provider request failed (attempt %d)",
+                    attempt + 1,
                     extra={"code": "DNC_PROVIDER_ERROR", "error": str(exc)},
                 )
+                if attempt < 2:
+                    await asyncio.sleep(backoff)
+                    backoff *= 2
+                    continue
                 return DncCheckResult(
                     phone_number=phone_number,
                     is_blocked=False,

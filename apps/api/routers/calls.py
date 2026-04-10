@@ -69,8 +69,9 @@ async def trigger_call(
             redis_client=redis_client,
         )
 
-        response = {"call": call.model_dump(by_alias=True)}
-        return response
+        call_data = call.model_dump(by_alias=True)
+        call_data["dncCheckMs"] = getattr(call, "_dnc_check_ms", None)
+        return {"call": call_data}
     except ComplianceBlockError as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
