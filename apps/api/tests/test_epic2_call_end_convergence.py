@@ -9,7 +9,7 @@ Tests the convergence of Stories 2.1, 2.2, and 2.3 at call-end:
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from services.tts.factory import get_tts_orchestrator, shutdown_tts, _orchestrator
+from services.tts.factory import get_tts_orchestrator, shutdown_tts, reset_orchestrator
 from services.tts.orchestrator import SessionTTSState
 from services.vapi import handle_call_ended
 from tests.support.mock_helpers import _make_result
@@ -30,11 +30,10 @@ def _make_settings(**overrides):
 
 
 @pytest.fixture(autouse=True)
-def reset_orchestrator():
-    global _orchestrator
-    _orchestrator = None
+def _reset_tts():
+    reset_orchestrator()
     yield
-    _orchestrator = None
+    reset_orchestrator()
 
 
 class TestCallEndConvergence:
@@ -50,7 +49,7 @@ class TestCallEndConvergence:
         then transcript aggregation, TTS reset, and status update all occur in order.
         """
         with patch("services.tts.factory.settings", _make_settings()):
-            orchestrator = get_tts_orchestrator()
+            orchestrator = await get_tts_orchestrator()
 
             vapi_call_id = "vapi-convergence-123"
             org_id = "org-convergence"
@@ -92,7 +91,7 @@ class TestCallEndConvergence:
             # Cleanup
             for provider in orchestrator._providers.values():
                 await provider.aclose()
-            _orchestrator = None
+            reset_orchestrator()
 
     @pytest.mark.asyncio
     async def test_all_three_operations_complete_without_conflicts(self):
@@ -103,7 +102,7 @@ class TestCallEndConvergence:
         complete without conflicts.
         """
         with patch("services.tts.factory.settings", _make_settings()):
-            orchestrator = get_tts_orchestrator()
+            orchestrator = await get_tts_orchestrator()
 
             vapi_call_id = "vapi-no-conflict-456"
             org_id = "org-no-conflict"
@@ -140,7 +139,7 @@ class TestCallEndConvergence:
             # Cleanup
             for provider in orchestrator._providers.values():
                 await provider.aclose()
-            _orchestrator = None
+            reset_orchestrator()
 
     @pytest.mark.asyncio
     async def test_operations_maintain_correct_order(self):
@@ -150,7 +149,7 @@ class TestCallEndConvergence:
         then TTS cleanup happens before call status transitions for each call.
         """
         with patch("services.tts.factory.settings", _make_settings()):
-            orchestrator = get_tts_orchestrator()
+            orchestrator = await get_tts_orchestrator()
 
             # Mock providers for cleanup
             for provider in orchestrator._providers.values():
@@ -191,4 +190,4 @@ class TestCallEndConvergence:
             # Cleanup
             for provider in orchestrator._providers.values():
                 await provider.aclose()
-            _orchestrator = None
+            reset_orchestrator()

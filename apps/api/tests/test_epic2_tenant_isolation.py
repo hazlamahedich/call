@@ -10,7 +10,7 @@ Tests that TTS sessions, transcript entries, and provider switches are isolated 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from services.tts.factory import get_tts_orchestrator, shutdown_tts, _orchestrator
+from services.tts.factory import get_tts_orchestrator, shutdown_tts, reset_orchestrator
 from services.tts.orchestrator import SessionTTSState
 from services.transcription import handle_transcript_event
 from tests.support.mock_helpers import _make_result
@@ -60,17 +60,18 @@ def _mock_db_result(org_id: str, vapi_call_id: str):
 @pytest.fixture
 def mock_resolve_call_id():
     """Mock _resolve_call_id to return a valid call_id."""
-    with patch("services.transcription._resolve_call_id", new_callable=AsyncMock) as mock:
+    with patch(
+        "services.transcription._resolve_call_id", new_callable=AsyncMock
+    ) as mock:
         mock.return_value = 123
         yield mock
 
 
 @pytest.fixture(autouse=True)
-def reset_orchestrator():
-    global _orchestrator
-    _orchestrator = None
+def _reset_tts():
+    reset_orchestrator()
     yield
-    _orchestrator = None
+    reset_orchestrator()
 
 
 class TestTenantIsolation:
@@ -86,7 +87,7 @@ class TestTenantIsolation:
         then TTS session state is fully isolated by org_id.
         """
         with patch("services.tts.factory.settings", _make_settings()):
-            orchestrator = get_tts_orchestrator()
+            orchestrator = await get_tts_orchestrator()
 
             # Mock providers for cleanup
             for provider in orchestrator._providers.values():
@@ -117,7 +118,7 @@ class TestTenantIsolation:
             # Cleanup
             for provider in orchestrator._providers.values():
                 await provider.aclose()
-            _orchestrator = None
+            reset_orchestrator()
 
     @pytest.mark.asyncio
     async def test_transcript_entries_are_org_scoped(self, mock_resolve_call_id):
@@ -127,7 +128,7 @@ class TestTenantIsolation:
         then transcript entries are org-scoped and cross-tenant queries return zero.
         """
         with patch("services.tts.factory.settings", _make_settings()):
-            orchestrator = get_tts_orchestrator()
+            orchestrator = await get_tts_orchestrator()
 
             # Mock providers for cleanup
             for provider in orchestrator._providers.values():
@@ -140,11 +141,15 @@ class TestTenantIsolation:
 
             # Mock DB sessions for each org
             db_session_org1 = AsyncMock()
-            db_session_org1.execute = AsyncMock(return_value=_mock_db_result(org1, org1_vapi))
+            db_session_org1.execute = AsyncMock(
+                return_value=_mock_db_result(org1, org1_vapi)
+            )
             db_session_org1.flush = AsyncMock()
 
             db_session_org2 = AsyncMock()
-            db_session_org2.execute = AsyncMock(return_value=_mock_db_result(org2, org2_vapi))
+            db_session_org2.execute = AsyncMock(
+                return_value=_mock_db_result(org2, org2_vapi)
+            )
             db_session_org2.flush = AsyncMock()
 
             # Handle transcript events for each org
@@ -177,7 +182,7 @@ class TestTenantIsolation:
             # Cleanup
             for provider in orchestrator._providers.values():
                 await provider.aclose()
-            _orchestrator = None
+            reset_orchestrator()
 
     @pytest.mark.asyncio
     async def test_provider_switches_are_org_scoped(self):
@@ -187,7 +192,7 @@ class TestTenantIsolation:
         then the switch does not affect the other org's TTS sessions.
         """
         with patch("services.tts.factory.settings", _make_settings()):
-            orchestrator = get_tts_orchestrator()
+            orchestrator = await get_tts_orchestrator()
 
             # Mock providers for cleanup
             for provider in orchestrator._providers.values():
@@ -219,4 +224,4 @@ class TestTenantIsolation:
             # Cleanup
             for provider in orchestrator._providers.values():
                 await provider.aclose()
-            _orchestrator = None
+            reset_orchestrator()

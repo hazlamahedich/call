@@ -11,7 +11,7 @@ Tests the call-end webhook integration with TTS session cleanup:
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from services.tts.factory import get_tts_orchestrator, shutdown_tts, _orchestrator
+from services.tts.factory import get_tts_orchestrator, shutdown_tts, reset_orchestrator
 from services.tts.orchestrator import TTSOrchestrator
 from services.tts.base import TTSProviderBase
 
@@ -50,12 +50,10 @@ def _mock_provider(name: str):
 
 
 @pytest.fixture(autouse=True)
-def reset_orchestrator():
-    """Reset orchestrator singleton before each test."""
-    global _orchestrator
-    _orchestrator = None
+def _reset_tts():
+    reset_orchestrator()
     yield
-    _orchestrator = None
+    reset_orchestrator()
 
 
 class TestCallEndResetsTTSSession:
@@ -71,7 +69,7 @@ class TestCallEndResetsTTSSession:
         then reset_session(vapi_call_id) is called BEFORE call status update.
         """
         with patch("services.tts.factory.settings", _make_settings()):
-            orchestrator = get_tts_orchestrator()
+            orchestrator = await get_tts_orchestrator()
 
             # Create an active TTS session
             orchestrator._session_state["vapi-call-123"] = MagicMock()
@@ -97,10 +95,11 @@ class TestCallEndResetsTTSSession:
         then the session is fully evicted from _session_state.
         """
         with patch("services.tts.factory.settings", _make_settings()):
-            orchestrator = get_tts_orchestrator()
+            orchestrator = await get_tts_orchestrator()
 
             # Create an active TTS session with state
             from services.tts.orchestrator import SessionTTSState
+
             state = SessionTTSState(active_provider="elevenlabs")
             orchestrator._session_state["vapi-call-456"] = state
 
@@ -133,7 +132,7 @@ class TestResetSafety:
         then no error is raised (safe no-op).
         """
         with patch("services.tts.factory.settings", _make_settings()):
-            orchestrator = get_tts_orchestrator()
+            orchestrator = await get_tts_orchestrator()
 
             # No session exists for this call
             assert "vapi-call-999" not in orchestrator._session_state
@@ -155,7 +154,7 @@ class TestResetSafety:
         then no error is raised.
         """
         with patch("services.tts.factory.settings", _make_settings()):
-            orchestrator = get_tts_orchestrator()
+            orchestrator = await get_tts_orchestrator()
 
             # Verify empty state
             assert len(orchestrator._session_state) == 0
@@ -184,10 +183,11 @@ class TestCallFailedAlsoResetsSession:
         NOTE: This is defensive programming - ensures cleanup on all call terminations.
         """
         with patch("services.tts.factory.settings", _make_settings()):
-            orchestrator = get_tts_orchestrator()
+            orchestrator = await get_tts_orchestrator()
 
             # Create an active TTS session
             from services.tts.orchestrator import SessionTTSState
+
             state = SessionTTSState(active_provider="cartesia")
             orchestrator._session_state["vapi-call-failed-789"] = state
 
@@ -214,13 +214,20 @@ class TestCallFailedAlsoResetsSession:
         then all sessions are evicted correctly.
         """
         with patch("services.tts.factory.settings", _make_settings()):
-            orchestrator = get_tts_orchestrator()
+            orchestrator = await get_tts_orchestrator()
 
             # Create multiple active TTS sessions
             from services.tts.orchestrator import SessionTTSState
-            orchestrator._session_state["call-1"] = SessionTTSState(active_provider="elevenlabs")
-            orchestrator._session_state["call-2"] = SessionTTSState(active_provider="cartesia")
-            orchestrator._session_state["call-3"] = SessionTTSState(active_provider="elevenlabs")
+
+            orchestrator._session_state["call-1"] = SessionTTSState(
+                active_provider="elevenlabs"
+            )
+            orchestrator._session_state["call-2"] = SessionTTSState(
+                active_provider="cartesia"
+            )
+            orchestrator._session_state["call-3"] = SessionTTSState(
+                active_provider="elevenlabs"
+            )
 
             # Reset all sessions
             orchestrator.reset_session("call-1")

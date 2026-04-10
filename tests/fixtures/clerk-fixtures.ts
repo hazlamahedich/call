@@ -1,21 +1,6 @@
-/**
- * Clerk Test Fixtures for Playwright E2E Tests
- *
- * Provides authenticated test users and organizations for E2E testing.
- * Uses @clerk/testing package for test authentication.
- *
- * Test ID Format: [X.X-E2E-XXX]
- */
+import { test as base, expect } from "@playwright/test";
+import { clerk } from "@clerk/testing/playwright";
 
-import { test as base } from "@playwright/test";
-
-/**
- * Clerk test user fixture
- *
- * Provides pre-configured test users with different roles:
- * - admin: Full permissions, can create orgs/clients
- * - member: Limited permissions, assigned to specific clients
- */
 interface ClerkTestUser {
   email: string;
   password: string;
@@ -24,15 +9,11 @@ interface ClerkTestUser {
   orgId: string;
 }
 
-/**
- * Extended test fixture with Clerk test users
- */
 export const clerkTest = base.extend<{
   adminUser: ClerkTestUser;
   memberUser: ClerkTestUser;
 }>({
-  adminUser: async ({ page }, use) => {
-    // Admin user with full permissions
+  adminUser: async ({ page, context }, use) => {
     const admin: ClerkTestUser = {
       email: process.env.E2E_CLERK_ADMIN_EMAIL || "admin@test.example",
       password: process.env.E2E_CLERK_ADMIN_PASSWORD || "TestAdmin123!",
@@ -41,20 +22,18 @@ export const clerkTest = base.extend<{
       orgId: process.env.E2E_CLERK_ADMIN_ORG_ID || "test_admin_org_id",
     };
 
-    // Sign in as admin
-    await page.goto("/sign-in");
-    await page.fill('input[name="email"]', admin.email);
-    await page.fill('input[name="password"]', admin.password);
-    await page.click('button[type="submit"]');
-    
-    // Wait for redirect to dashboard (successful sign-in)
+    await clerk.signIn({
+      page,
+      signInUrl: "/sign-in",
+      email: admin.email,
+      password: admin.password,
+    });
     await page.waitForURL("**/dashboard**", { timeout: 10000 });
 
     await use(admin);
   },
 
-  memberUser: async ({ page }, use) => {
-    // Member user with limited permissions
+  memberUser: async ({ page, context }, use) => {
     const member: ClerkTestUser = {
       email: process.env.E2E_CLERK_MEMBER_EMAIL || "member@test.example",
       password: process.env.E2E_CLERK_MEMBER_PASSWORD || "TestMember123!",
@@ -63,25 +42,18 @@ export const clerkTest = base.extend<{
       orgId: process.env.E2E_CLERK_MEMBER_ORG_ID || "test_member_org_id",
     };
 
-    // Sign in as member
-    await page.goto("/sign-in");
-    await page.fill('input[name="email"]', member.email);
-    await page.fill('input[name="password"]', member.password);
-    await page.click('button[type="submit"]');
-    
-    // Wait for redirect to dashboard (successful sign-in)
+    await clerk.signIn({
+      page,
+      signInUrl: "/sign-in",
+      email: member.email,
+      password: member.password,
+    });
     await page.waitForURL("**/dashboard**", { timeout: 10000 });
 
     await use(member);
   },
 });
 
-/**
- * Authenticated page fixture
- * 
- * Automatically signs in as admin before each test.
- * Useful for tests that don't need specific user roles.
- */
 export const authenticatedTest = base.extend<{
   authenticatedPage: typeof page;
 }>({
@@ -89,18 +61,71 @@ export const authenticatedTest = base.extend<{
     const email = process.env.E2E_CLERK_ADMIN_EMAIL || "admin@test.example";
     const password = process.env.E2E_CLERK_ADMIN_PASSWORD || "TestAdmin123!";
 
-    await page.goto("/sign-in");
-    await page.fill('input[name="email"]', email);
-    await page.fill('input[name="password"]', password);
-    await page.click('button[type="submit"]');
+    await clerk.signIn({
+      page,
+      signInUrl: "/sign-in",
+      email,
+      password,
+    });
     await page.waitForURL("**/dashboard**", { timeout: 10000 });
 
     await use(page);
   },
 });
 
-/**
- * Re-export default test for backward compatibility
- */
+export function createTestUser(
+  overrides: Partial<ClerkTestUser> = {},
+): ClerkTestUser {
+  return {
+    email:
+      overrides.email ||
+      process.env.E2E_CLERK_ADMIN_EMAIL ||
+      "admin@test.example",
+    password:
+      overrides.password ||
+      process.env.E2E_CLERK_ADMIN_PASSWORD ||
+      "TestAdmin123!",
+    orgRole: overrides.orgRole || "org:admin",
+    userId:
+      overrides.userId ||
+      process.env.E2E_CLERK_ADMIN_USER_ID ||
+      "test_admin_user_id",
+    orgId:
+      overrides.orgId ||
+      process.env.E2E_CLERK_ADMIN_ORG_ID ||
+      "test_admin_org_id",
+  };
+}
+
+export async function signInAs(
+  page: import("@playwright/test").Page,
+  user: ClerkTestUser,
+) {
+  await clerk.signIn({
+    page,
+    signInUrl: "/sign-in",
+    email: user.email,
+    password: user.password,
+  });
+  await page.waitForURL("**/dashboard**", { timeout: 10000 });
+}
+
+export async function createAndSignIn(
+  page: import("@playwright/test").Page,
+  overrides: Partial<ClerkTestUser> = {},
+): Promise<ClerkTestUser> {
+  const user = createTestUser(overrides);
+  await signInAs(page, user);
+  return user;
+}
+
+export function getOrgHeaders(orgId: string) {
+  return {
+    "x-org-id": orgId,
+    authorization: "Bearer test-token",
+  };
+}
+
+export { clerk };
 export const test = clerkTest;
-export { expect } from "@playwright/test";
+export { expect };

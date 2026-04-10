@@ -11,7 +11,12 @@ Tests the FastAPI lifespan context manager integration with TTS orchestrator:
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from services.tts.factory import get_tts_orchestrator, shutdown_tts, _orchestrator
+from services.tts.factory import (
+    get_tts_orchestrator,
+    shutdown_tts,
+    reset_orchestrator,
+    _orchestrator,
+)
 from services.tts.orchestrator import TTSOrchestrator
 from services.tts.base import TTSProviderBase
 
@@ -50,12 +55,10 @@ def _mock_provider(name: str):
 
 
 @pytest.fixture(autouse=True)
-def reset_orchestrator():
-    """Reset orchestrator singleton before each test."""
-    global _orchestrator
-    _orchestrator = None
+def _reset_tts():
+    reset_orchestrator()
     yield
-    _orchestrator = None
+    reset_orchestrator()
 
 
 class TestLifespanStartupIntegration:
@@ -71,7 +74,7 @@ class TestLifespanStartupIntegration:
         then an orchestrator instance is created with providers.
         """
         with patch("services.tts.factory.settings", _make_settings()):
-            orchestrator = get_tts_orchestrator()
+            orchestrator = await get_tts_orchestrator()
 
             assert orchestrator is not None
             assert isinstance(orchestrator, TTSOrchestrator)
@@ -87,7 +90,7 @@ class TestLifespanStartupIntegration:
         then the cleanup task is created and running.
         """
         with patch("services.tts.factory.settings", _make_settings()):
-            orchestrator = get_tts_orchestrator()
+            orchestrator = await get_tts_orchestrator()
 
             # Cleanup task not started yet
             assert orchestrator._cleanup_task is None
@@ -112,7 +115,7 @@ class TestLifespanShutdownIntegration:
         then all provider HTTP clients are closed.
         """
         with patch("services.tts.factory.settings", _make_settings()):
-            orchestrator = get_tts_orchestrator()
+            orchestrator = await get_tts_orchestrator()
 
             # Mock aclose on providers
             for provider in orchestrator._providers.values():
@@ -132,7 +135,7 @@ class TestLifespanShutdownIntegration:
         then the cleanup task is stopped.
         """
         with patch("services.tts.factory.settings", _make_settings()):
-            orchestrator = get_tts_orchestrator()
+            orchestrator = await get_tts_orchestrator()
 
             # Start cleanup task
             await orchestrator.start_cleanup_task()
@@ -162,11 +165,8 @@ class TestLifespanErrorHandling:
         when shutdown_tts() is called without prior startup,
         then no error is raised (safe no-op).
         """
-        # Ensure orchestrator is None
-        global _orchestrator
-        _orchestrator = None
+        reset_orchestrator()
 
-        # Should not raise
         await shutdown_tts()
         assert _orchestrator is None
 
@@ -180,7 +180,7 @@ class TestLifespanErrorHandling:
         This test documents actual behavior.
         """
         with patch("services.tts.factory.settings", _make_settings()):
-            orchestrator = get_tts_orchestrator()
+            orchestrator = await get_tts_orchestrator()
 
             # Make one provider fail on close
             orchestrator._providers["elevenlabs"].aclose = AsyncMock(
@@ -210,9 +210,9 @@ class TestFactorySingletonBehavior:
         then the same instance is returned (singleton pattern).
         """
         with patch("services.tts.factory.settings", _make_settings()):
-            orchestrator1 = get_tts_orchestrator()
-            orchestrator2 = get_tts_orchestrator()
-            orchestrator3 = get_tts_orchestrator()
+            orchestrator1 = await get_tts_orchestrator()
+            orchestrator2 = await get_tts_orchestrator()
+            orchestrator3 = await get_tts_orchestrator()
 
             assert orchestrator1 is orchestrator2
             assert orchestrator2 is orchestrator3
@@ -226,7 +226,7 @@ class TestFactorySingletonBehavior:
         then a new instance is created.
         """
         with patch("services.tts.factory.settings", _make_settings()):
-            orchestrator1 = get_tts_orchestrator()
+            orchestrator1 = await get_tts_orchestrator()
 
             # Mock provider close to avoid actual HTTP calls
             for provider in orchestrator1._providers.values():
@@ -234,7 +234,7 @@ class TestFactorySingletonBehavior:
 
             await shutdown_tts()
 
-            orchestrator2 = get_tts_orchestrator()
+            orchestrator2 = await get_tts_orchestrator()
 
             # Different instances after shutdown
             assert orchestrator1 is not orchestrator2

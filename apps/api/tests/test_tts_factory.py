@@ -30,9 +30,9 @@ def _make_settings(elevenlabs_key="test-key", cartesia_key="test-key"):
 
 @pytest.fixture(autouse=True)
 def _reset_factory():
-    factory_module._orchestrator = None
+    factory_module.reset_orchestrator()
     yield
-    factory_module._orchestrator = None
+    factory_module.reset_orchestrator()
 
 
 class TestGetTTSOrchestrator:
@@ -55,7 +55,7 @@ class TestGetTTSOrchestrator:
                 mock_ca_instance = MagicMock()
                 mock_ca.return_value = mock_ca_instance
 
-                orch = factory_module.get_tts_orchestrator()
+                orch = await factory_module.get_tts_orchestrator()
 
                 assert isinstance(orch, TTSOrchestrator)
                 assert "elevenlabs" in orch._providers
@@ -68,8 +68,8 @@ class TestGetTTSOrchestrator:
                 patch("services.tts.factory.ElevenLabsProvider"),
                 patch("services.tts.factory.CartesiaProvider"),
             ):
-                orch1 = factory_module.get_tts_orchestrator()
-                orch2 = factory_module.get_tts_orchestrator()
+                orch1 = await factory_module.get_tts_orchestrator()
+                orch2 = await factory_module.get_tts_orchestrator()
 
                 assert orch1 is orch2
 
@@ -81,7 +81,7 @@ class TestGetTTSOrchestrator:
         ):
             with patch("services.tts.factory.ElevenLabsProvider") as mock_el:
                 mock_el.return_value = MagicMock()
-                orch = factory_module.get_tts_orchestrator()
+                orch = await factory_module.get_tts_orchestrator()
 
                 assert "elevenlabs" in orch._providers
                 assert "cartesia" not in orch._providers
@@ -94,7 +94,7 @@ class TestGetTTSOrchestrator:
         ):
             with patch("services.tts.factory.CartesiaProvider") as mock_ca:
                 mock_ca.return_value = MagicMock()
-                orch = factory_module.get_tts_orchestrator()
+                orch = await factory_module.get_tts_orchestrator()
 
                 assert "cartesia" in orch._providers
                 assert "elevenlabs" not in orch._providers
@@ -105,7 +105,7 @@ class TestGetTTSOrchestrator:
             "services.tts.factory.settings",
             _make_settings(elevenlabs_key="", cartesia_key=""),
         ):
-            orch = factory_module.get_tts_orchestrator()
+            orch = await factory_module.get_tts_orchestrator()
 
             assert isinstance(orch, TTSOrchestrator)
             assert len(orch._providers) == 0

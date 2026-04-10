@@ -75,6 +75,7 @@ class KnowledgeBaseService(TenantService[KnowledgeBase]):
         stmt = text(
             f"SELECT {self._select_cols} FROM {self.table_name} "
             "WHERE status = :status "
+            "AND org_id = current_setting('app.current_org_id', true) "
             "AND soft_delete = false "
             "ORDER BY "
             "CASE status WHEN 'ready' THEN 1 WHEN 'processing' THEN 2 ELSE 3 END, "
@@ -109,6 +110,7 @@ class KnowledgeBaseService(TenantService[KnowledgeBase]):
             "error_message = :error_message, "
             "updated_at = NOW() "
             "WHERE id = :record_id "
+            "AND org_id = current_setting('app.current_org_id', true) "
             "AND (soft_delete = false OR soft_delete IS NULL)"
         )
         result = await session.execute(
@@ -138,6 +140,7 @@ class KnowledgeBaseService(TenantService[KnowledgeBase]):
             "SET chunk_count = :chunk_count, "
             "updated_at = NOW() "
             "WHERE id = :record_id "
+            "AND org_id = current_setting('app.current_org_id', true) "
             "AND (soft_delete = false OR soft_delete IS NULL)"
         )
         result = await session.execute(

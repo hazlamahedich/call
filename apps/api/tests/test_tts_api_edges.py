@@ -46,7 +46,11 @@ class TestSessionStatusP95Single:
         mock_orch = MagicMock()
         mock_orch.get_session_provider = MagicMock(return_value="elevenlabs")
         mock_orch.get_session_latency_history = MagicMock(return_value=[250.0])
-        with patch("routers.tts.get_tts_orchestrator", return_value=mock_orch):
+        with patch(
+            "routers.tts.get_tts_orchestrator",
+            new_callable=AsyncMock,
+            return_value=mock_orch,
+        ):
             response = client.get("/tts/session/1/status")
         assert response.status_code == 200
         data = response.json()
@@ -77,7 +81,11 @@ class TestSessionStatusP95Single:
             1000.0,
         ]
         mock_orch.get_session_latency_history = MagicMock(return_value=latencies)
-        with patch("routers.tts.get_tts_orchestrator", return_value=mock_orch):
+        with patch(
+            "routers.tts.get_tts_orchestrator",
+            new_callable=AsyncMock,
+            return_value=mock_orch,
+        ):
             response = client.get("/tts/session/2/status")
         assert response.status_code == 200
         data = response.json()

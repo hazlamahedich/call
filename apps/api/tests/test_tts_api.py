@@ -38,7 +38,11 @@ class TestProvidersHealthEndpoint:
         mock_orch.get_providers_health = AsyncMock(
             return_value={"elevenlabs": True, "cartesia": False}
         )
-        with patch("routers.tts.get_tts_orchestrator", return_value=mock_orch):
+        with patch(
+            "routers.tts.get_tts_orchestrator",
+            new_callable=AsyncMock,
+            return_value=mock_orch,
+        ):
             response = client.get("/tts/providers/health")
         assert response.status_code == 200
         data = response.json()
@@ -61,7 +65,11 @@ class TestSessionStatusEndpoint:
         mock_orch.get_session_latency_history = MagicMock(
             return_value=[100.0, 200.0, 150.0]
         )
-        with patch("routers.tts.get_tts_orchestrator", return_value=mock_orch):
+        with patch(
+            "routers.tts.get_tts_orchestrator",
+            new_callable=AsyncMock,
+            return_value=mock_orch,
+        ):
             response = client.get("/tts/session/1/status")
         assert response.status_code == 200
         data = response.json()
@@ -89,7 +97,11 @@ class TestSessionStatusEndpoint:
         client = TestClient(app, raise_server_exceptions=False)
         mock_orch = MagicMock()
         mock_orch.get_session_provider = MagicMock(return_value="elevenlabs")
-        with patch("routers.tts.get_tts_orchestrator", return_value=mock_orch):
+        with patch(
+            "routers.tts.get_tts_orchestrator",
+            new_callable=AsyncMock,
+            return_value=mock_orch,
+        ):
             response = client.get("/tts/session/5/status")
         assert response.status_code == 200
         data = response.json()

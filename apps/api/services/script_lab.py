@@ -613,14 +613,16 @@ class ScriptLabService:
             )
 
         await self._session.execute(
-            text("UPDATE script_lab_sessions SET soft_delete = true WHERE id = :sid"),
-            {"sid": session_id},
+            text(
+                "UPDATE script_lab_sessions SET soft_delete = true WHERE id = :sid AND org_id = :org_id"
+            ),
+            {"sid": session_id, "org_id": org_id},
         )
         await self._session.execute(
             text(
-                "UPDATE script_lab_turns SET soft_delete = true WHERE session_id = :sid"
+                "UPDATE script_lab_turns SET soft_delete = true WHERE session_id = :sid AND org_id = :org_id"
             ),
-            {"sid": session_id},
+            {"sid": session_id, "org_id": org_id},
         )
         await self._session.flush()
 
@@ -642,9 +644,9 @@ class ScriptLabService:
         if now >= expires_at:
             await self._session.execute(
                 text(
-                    "UPDATE script_lab_sessions SET status = 'expired' WHERE id = :sid"
+                    "UPDATE script_lab_sessions SET status = 'expired' WHERE id = :sid AND org_id = :org_id"
                 ),
-                {"sid": session_row[0]},
+                {"sid": session_row[0], "org_id": session_row[1]},
             )
             await self._session.flush()
             raise HTTPException(

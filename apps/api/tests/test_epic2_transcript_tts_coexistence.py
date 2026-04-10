@@ -9,7 +9,7 @@ Tests the coexistence of transcript handling and TTS synthesis during active cal
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from services.tts.factory import get_tts_orchestrator, shutdown_tts, _orchestrator
+from services.tts.factory import get_tts_orchestrator, shutdown_tts, reset_orchestrator
 from services.tts.orchestrator import SessionTTSState
 from services.tts.base import TTSProviderBase
 from services.transcription import handle_transcript_event
@@ -67,18 +67,18 @@ def _mock_db_result(org_id: str, vapi_call_id: str):
 @pytest.fixture
 def mock_resolve_call_id():
     """Mock _resolve_call_id to return a valid call_id."""
-    with patch("services.transcription._resolve_call_id", new_callable=AsyncMock) as mock:
+    with patch(
+        "services.transcription._resolve_call_id", new_callable=AsyncMock
+    ) as mock:
         mock.return_value = 123  # Valid call_id
         yield mock
 
 
 @pytest.fixture(autouse=True)
-def reset_orchestrator():
-    """Reset orchestrator singleton before each test."""
-    global _orchestrator
-    _orchestrator = None
+def _reset_tts():
+    reset_orchestrator()
     yield
-    _orchestrator = None
+    reset_orchestrator()
 
 
 class TestTranscriptTTSCoexistence:
@@ -95,7 +95,7 @@ class TestTranscriptTTSCoexistence:
         without interfering with each other.
         """
         with patch("services.tts.factory.settings", _make_settings()):
-            orchestrator = get_tts_orchestrator()
+            orchestrator = await get_tts_orchestrator()
 
             # Create an active TTS session
             vapi_call_id = "vapi-coexist-123"
@@ -112,7 +112,9 @@ class TestTranscriptTTSCoexistence:
 
             # Mock DB session for transcript handling
             db_session = AsyncMock()
-            db_session.execute = AsyncMock(return_value=_mock_db_result(org_id, vapi_call_id))
+            db_session.execute = AsyncMock(
+                return_value=_mock_db_result(org_id, vapi_call_id)
+            )
             db_session.flush = AsyncMock()
 
             # Handle a transcript event mid-call
@@ -140,7 +142,7 @@ class TestTranscriptTTSCoexistence:
             # Cleanup
             for provider in orchestrator._providers.values():
                 await provider.aclose()
-            _orchestrator = None
+            reset_orchestrator()
 
     @pytest.mark.asyncio
     async def test_both_services_share_correlation_ids(self, mock_resolve_call_id):
@@ -150,7 +152,7 @@ class TestTranscriptTTSCoexistence:
         then both services share the same vapi_call_id and org_id for correlation.
         """
         with patch("services.tts.factory.settings", _make_settings()):
-            orchestrator = get_tts_orchestrator()
+            orchestrator = await get_tts_orchestrator()
 
             vapi_call_id = "vapi-correlation-456"
             org_id = "org-correlation"
@@ -166,7 +168,9 @@ class TestTranscriptTTSCoexistence:
 
             # Mock DB session
             db_session = AsyncMock()
-            db_session.execute = AsyncMock(return_value=_mock_db_result(org_id, vapi_call_id))
+            db_session.execute = AsyncMock(
+                return_value=_mock_db_result(org_id, vapi_call_id)
+            )
             db_session.flush = AsyncMock()
 
             # Handle transcript event
@@ -192,17 +196,19 @@ class TestTranscriptTTSCoexistence:
             # Cleanup
             for provider in orchestrator._providers.values():
                 await provider.aclose()
-            _orchestrator = None
+            reset_orchestrator()
 
     @pytest.mark.asyncio
-    async def test_multiple_transcripts_dont_disrupt_tts_session(self, mock_resolve_call_id):
+    async def test_multiple_transcripts_dont_disrupt_tts_session(
+        self, mock_resolve_call_id
+    ):
         """
         [2.4-INT-005_P0_S3] Given an active call with TTS running,
         when multiple transcript webhooks arrive mid-call,
         then the TTS session state remains untouched across all transcripts.
         """
         with patch("services.tts.factory.settings", _make_settings()):
-            orchestrator = get_tts_orchestrator()
+            orchestrator = await get_tts_orchestrator()
 
             vapi_call_id = "vapi-multiple-789"
             org_id = "org-multiple"
@@ -217,7 +223,9 @@ class TestTranscriptTTSCoexistence:
 
             # Mock DB session
             db_session = AsyncMock()
-            db_session.execute = AsyncMock(return_value=_mock_db_result(org_id, vapi_call_id))
+            db_session.execute = AsyncMock(
+                return_value=_mock_db_result(org_id, vapi_call_id)
+            )
             db_session.flush = AsyncMock()
 
             # Handle multiple transcript events
@@ -243,4 +251,4 @@ class TestTranscriptTTSCoexistence:
             # Cleanup
             for provider in orchestrator._providers.values():
                 await provider.aclose()
-            _orchestrator = None
+            reset_orchestrator()
