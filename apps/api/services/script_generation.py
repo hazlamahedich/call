@@ -16,6 +16,8 @@ from sqlalchemy import text
 from services.knowledge_search import search_knowledge_chunks
 from services.grounding import GroundingService, GroundingResult
 from services.llm.service import LLMService
+from services.prompt_sanitizer import sanitize_template, sanitize_kb_content
+from services.token_counting import count_tokens, will_exceed_budget
 
 from config.settings import settings
 
@@ -154,7 +156,7 @@ class ScriptGenerationService:
                 injection_svc.render_template(script.content, lead),
                 timeout=settings.VARIABLE_RESOLUTION_TIMEOUT_MS / 1000,
             )
-            query = render_result.rendered_text
+            query = sanitize_template(render_result.rendered_text)
 
         cache_key = f"script_gen:{org_id}:{agent_id or 'default'}:{hashlib.sha256(query.encode()).hexdigest()[:16]}"
         if lead_id is not None and script_id is not None:
@@ -183,8 +185,15 @@ class ScriptGenerationService:
 
         if render_result and render_result.was_rendered:
             budget = settings.AI_LLM_MAX_TOKENS - settings.TOKEN_RESERVATION
-            query_tokens = self._estimate_token_count(query)
-            if query_tokens > (budget * 0.5):
+            query_tokens = self._count_tokens(query)
+            if query_tokens > budget:
+                logger.error(
+                    "Rendered template exceeds entire token budget, truncating",
+                    extra={"query_tokens": query_tokens, "budget": budget},
+                )
+                max_chars = int(budget * 3.5)
+                query = query[:max_chars] + "... [truncated for token budget]"
+            elif query_tokens > (budget * 0.5):
                 logger.warning(
                     "Rendered template consumes >50%% of context budget",
                     extra={"query_tokens": query_tokens, "budget": budget},
@@ -453,7 +462,7 @@ class ScriptGenerationService:
         grounding_mode,
         system_prompt_template=None,
     ):
-        base_system = system_prompt_template or DEFAULT_SYSTEM_PROMPT
+        base_system = sanitize_template(system_prompt_template or DEFAULT_SYSTEM_PROMPT)
         grounding_instruction = GROUNDING_INSTRUCTIONS.get(
             grounding_mode, GROUNDING_INSTRUCTIONS[settings.GROUNDING_DEFAULT_MODE]
         )
@@ -464,12 +473,11 @@ class ScriptGenerationService:
         context_parts = []
         was_truncated = False
         for i, c in enumerate(sorted_chunks):
-            part = (
-                f"[Source {i + 1}] (similarity: {c['similarity']:.2f}):\n{c['content']}"
-            )
+            content = sanitize_kb_content(c["content"])
+            part = f"[Source {i + 1}] (similarity: {c['similarity']:.2f}):\n{content}"
             context_text = "\n\n".join(context_parts + [part])
             user_message = f"Context:\n{context_text}\n\nQuestion: {query}"
-            estimated_tokens = self._estimate_token_count(system_prompt + user_message)
+            estimated_tokens = self._count_tokens(system_prompt + user_message)
             if estimated_tokens > budget:
                 was_truncated = True
                 break
@@ -485,6 +493,11 @@ class ScriptGenerationService:
         final_context = "\n\n".join(context_parts)
         user_message = f"Context:\n{final_context}\n\nQuestion: {query}"
         return system_prompt, user_message, was_truncated, bool(context_parts)
+
+    def _count_tokens(self, text: str) -> int:
+        return count_tokens(
+            text, model=settings.AI_LLM_MODEL, provider=settings.AI_PROVIDER
+        )
 
     @staticmethod
     def _estimate_token_count(text):
@@ -593,14 +606,11 @@ class ScriptGenerationService:
     def _estimate_cost(self, system_prompt, user_message, llm_response):
         if not settings.COST_TRACKING_ENABLED:
             return 0.0
-        input_chars = len(system_prompt) + len(user_message)
-        input_tokens = input_chars // 4
-        output_tokens = len(llm_response) // 4
-        cost_per_1k_input = 0.00001
-        cost_per_1k_output = 0.00003
-        input_cost = (input_tokens / 1000) * cost_per_1k_input
-        output_cost = (output_tokens / 1000) * cost_per_1k_output
-        return round(input_cost + output_cost, 6)
+        from services.model_catalog import compute_cost
+
+        input_tokens = self._count_tokens(system_prompt + user_message)
+        output_tokens = self._count_tokens(llm_response)
+        return compute_cost(settings.AI_LLM_MODEL, input_tokens, output_tokens)
 
     def _log_audit(
         self,

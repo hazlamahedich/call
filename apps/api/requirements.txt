@@ -19,3 +19,4 @@ dnspython>=2.0
 openai
 google-genai
 pgvector
+tiktoken

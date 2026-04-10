@@ -14,20 +14,11 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import settings
+from services.prompt_sanitizer import sanitize_value
 
 logger = logging.getLogger(__name__)
 
 VARIABLE_PATTERN = re.compile(r"(?<!\$)\{\{([a-zA-Z_][a-zA-Z0-9_]*)(?::([^}]+))?\}\}")
-# Note: The capture group [a-zA-Z_][a-zA-Z0-9_]* inherently rejects whitespace,
-# so {{ lead_name }} (with spaces inside braces) is NOT matched — left as literal text.
-# The negative lookbehind (?<!\$) prevents matching ${{price}} (only {{...}} syntax).
-
-INJECTION_PATTERNS = [
-    re.compile(r"(?i)(ignore\s+(all\s+)?previous\s+instructions)"),
-    re.compile(r"(?i)(system\s*prompt|system\s*message)"),
-    re.compile(r"(?i)(you\s+are\s+now|act\s+as\s+if)"),
-    re.compile(r"(?i)(\<\/?system\>|\<\/?instruction\>)"),
-]
 
 SYSTEM_VARIABLES = {
     "current_date": lambda: date.today().isoformat(),
@@ -237,30 +228,7 @@ class VariableInjectionService:
 
     @staticmethod
     def _sanitize_value(value: str) -> str:
-        sanitized = value.strip()
-        for pattern in INJECTION_PATTERNS:
-            if pattern.search(sanitized):
-                logger.warning(
-                    "Prompt injection pattern detected in variable value, truncating",
-                    extra={
-                        "pattern": pattern.pattern,
-                        "original_length": len(sanitized),
-                    },
-                )
-                sanitized = sanitized[:50] + "... [truncated for safety]"
-                return sanitized
-        if len(sanitized) > settings.MAX_VARIABLE_VALUE_LENGTH:
-            logger.info(
-                "Variable value exceeds max length, truncating",
-                extra={
-                    "max_length": settings.MAX_VARIABLE_VALUE_LENGTH,
-                    "original_length": len(sanitized),
-                },
-            )
-            sanitized = (
-                sanitized[: settings.MAX_VARIABLE_VALUE_LENGTH] + "... [truncated]"
-            )
-        return sanitized
+        return sanitize_value(value, max_length=settings.MAX_VARIABLE_VALUE_LENGTH)
 
     @staticmethod
     def _infer_variable_type(var_name: str) -> str:

@@ -18,6 +18,7 @@ from config.settings import settings
 from models.factual_verification_log import FactualVerificationLog
 from services.knowledge_search import search_knowledge_chunks
 from services.llm.service import LLMService
+from services.prompt_sanitizer import sanitize_kb_content
 
 logger = logging.getLogger(__name__)
 
@@ -180,29 +181,68 @@ class FactualHookService:
 
         async def _core_work():
             nonlocal current_response, correction_count, verifications
+            per_claim_budget = settings.FACTUAL_HOOK_PER_CLAIM_TIMEOUT_MS / 1000.0
+            per_correction_budget = (
+                settings.FACTUAL_HOOK_PER_CORRECTION_TIMEOUT_MS / 1000.0
+            )
+            min_remaining = settings.FACTUAL_HOOK_MIN_REMAINING_BUDGET_MS / 1000.0
             for attempt in range(mc + 1):
+                elapsed = time.monotonic() - start
+                remaining = timeout_s - elapsed
+                if remaining < min_remaining and attempt > 0:
+                    logger.info(
+                        "factual_hook_budget_exhausted: skipping correction round, %.0fms remaining",
+                        remaining * 1000,
+                    )
+                    break
+
                 current_claims = (
                     claims if attempt == 0 else self._extract_claims(current_response)
                 )
                 if not current_claims:
                     verifications = []
                     break
-                verifications = await self._verify_all_claims(
-                    current_claims,
-                    org_id,
-                    knowledge_base_ids,
-                )
+
+                try:
+                    verifications = await asyncio.wait_for(
+                        self._verify_all_claims(
+                            current_claims,
+                            org_id,
+                            knowledge_base_ids,
+                        ),
+                        timeout=min(
+                            per_claim_budget * max(1, len(current_claims)), remaining
+                        ),
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning(
+                        "factual_hook_claim_verification_timeout: %.0fms budget for %d claims",
+                        per_claim_budget * 1000,
+                        len(current_claims),
+                    )
+                    break
+
                 if all(v.is_supported for v in verifications):
                     break
                 if attempt < mc:
                     unsupported = [v for v in verifications if not v.is_supported]
-                    current_response = await self._correct_response(
-                        current_response,
-                        unsupported,
-                        source_chunks,
-                        query,
-                    )
-                    correction_count += 1
+                    try:
+                        current_response = await asyncio.wait_for(
+                            self._correct_response(
+                                current_response,
+                                unsupported,
+                                source_chunks,
+                                query,
+                            ),
+                            timeout=min(per_correction_budget, remaining),
+                        )
+                        correction_count += 1
+                    except asyncio.TimeoutError:
+                        logger.warning(
+                            "factual_hook_correction_timeout: correction LLM call exceeded %.0fms",
+                            per_correction_budget * 1000,
+                        )
+                        break
                 else:
                     unsupported = [v for v in verifications if not v.is_supported]
                     current_response = self._replace_unsupported_with_fallback(
@@ -409,7 +449,7 @@ class FactualHookService:
             f"- {c.claim_text[:200]}" for c in unsupported_claims
         )
         context_text = "\n\n".join(
-            c.get("content", "")[:500] for c in source_chunks[:5]
+            sanitize_kb_content(c.get("content", ""))[:500] for c in source_chunks[:5]
         )
 
         correction_prompt = (

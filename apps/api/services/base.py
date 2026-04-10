@@ -104,24 +104,50 @@ class TenantService(Generic[T]):
         await session.flush()
         return record
 
-    async def get_by_id(self, session: AsyncSession, record_id: int) -> Optional[T]:
-        stmt = text(
-            f"SELECT {self._select_cols} FROM {self.table_name} WHERE id = :record_id"
-        )
-        result = await session.execute(stmt.bindparams(record_id=record_id))
+    async def get_by_id(
+        self, session: AsyncSession, record_id: int, *, org_id: str | None = None
+    ) -> Optional[T]:
+        if org_id is not None:
+            stmt = text(
+                f"SELECT {self._select_cols} FROM {self.table_name} "
+                f"WHERE id = :record_id AND org_id = :org_id"
+            )
+            result = await session.execute(
+                stmt.bindparams(record_id=record_id, org_id=org_id)
+            )
+        else:
+            await self._ensure_tenant_context(session)
+            stmt = text(
+                f"SELECT {self._select_cols} FROM {self.table_name} WHERE id = :record_id"
+            )
+            result = await session.execute(stmt.bindparams(record_id=record_id))
         row = result.first()
         if row is None:
             return None
         return self._row_to_instance(row)
 
     async def list_all(
-        self, session: AsyncSession, *, limit: int = 100, offset: int = 0
+        self,
+        session: AsyncSession,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+        org_id: str | None = None,
     ) -> List[T]:
         await self._ensure_tenant_context(session)
-        stmt = text(
-            f"SELECT {self._select_cols} FROM {self.table_name} LIMIT :lim OFFSET :off"
-        )
-        result = await session.execute(stmt.bindparams(lim=limit, off=offset))
+        if org_id is not None:
+            stmt = text(
+                f"SELECT {self._select_cols} FROM {self.table_name} "
+                f"WHERE org_id = :org_id LIMIT :lim OFFSET :off"
+            )
+            result = await session.execute(
+                stmt.bindparams(org_id=org_id, lim=limit, off=offset)
+            )
+        else:
+            stmt = text(
+                f"SELECT {self._select_cols} FROM {self.table_name} LIMIT :lim OFFSET :off"
+            )
+            result = await session.execute(stmt.bindparams(lim=limit, off=offset))
         rows = result.fetchall()
         return [self._row_to_instance(row) for row in rows]
 
@@ -157,17 +183,41 @@ class TenantService(Generic[T]):
         await session.flush()
         return record
 
-    async def hard_delete(self, session: AsyncSession, record_id: int) -> bool:
-        stmt = text(f"DELETE FROM {self.table_name} WHERE id = :record_id")
-        result = await session.execute(stmt.bindparams(record_id=record_id))
+    async def hard_delete(
+        self, session: AsyncSession, record_id: int, *, org_id: str | None = None
+    ) -> bool:
+        if org_id is not None:
+            stmt = text(
+                f"DELETE FROM {self.table_name} WHERE id = :record_id AND org_id = :org_id"
+            )
+            result = await session.execute(
+                stmt.bindparams(record_id=record_id, org_id=org_id)
+            )
+        else:
+            await self._ensure_tenant_context(session)
+            stmt = text(f"DELETE FROM {self.table_name} WHERE id = :record_id")
+            result = await session.execute(stmt.bindparams(record_id=record_id))
         await session.flush()
         return result.rowcount > 0  # type: ignore[union-attr]
 
-    async def mark_soft_deleted(self, session: AsyncSession, record_id: int) -> bool:
-        stmt = text(
-            f"UPDATE {self.table_name} SET soft_delete = true, updated_at = NOW() "
-            f"WHERE id = :record_id AND (soft_delete = false OR soft_delete IS NULL)"
-        )
-        result = await session.execute(stmt.bindparams(record_id=record_id))
+    async def mark_soft_deleted(
+        self, session: AsyncSession, record_id: int, *, org_id: str | None = None
+    ) -> bool:
+        if org_id is not None:
+            stmt = text(
+                f"UPDATE {self.table_name} SET soft_delete = true, updated_at = NOW() "
+                f"WHERE id = :record_id AND org_id = :org_id "
+                f"AND (soft_delete = false OR soft_delete IS NULL)"
+            )
+            result = await session.execute(
+                stmt.bindparams(record_id=record_id, org_id=org_id)
+            )
+        else:
+            await self._ensure_tenant_context(session)
+            stmt = text(
+                f"UPDATE {self.table_name} SET soft_delete = true, updated_at = NOW() "
+                f"WHERE id = :record_id AND (soft_delete = false OR soft_delete IS NULL)"
+            )
+            result = await session.execute(stmt.bindparams(record_id=record_id))
         await session.flush()
         return result.rowcount > 0  # type: ignore[union-attr]

@@ -118,22 +118,24 @@ async def update_ai_provider_config(
         config.set_api_key(payload.api_key)
     config.connection_status = "untested"
 
-    if payload.embedding_model:
-        config.embedding_model = payload.embedding_model
-    else:
-        if payload.provider == "gemini":
-            config.embedding_model = "gemini-embedding-001"
-            config.embedding_dimensions = 3072
-        else:
-            config.embedding_model = "text-embedding-3-small"
-            config.embedding_dimensions = 1536
-
     if payload.llm_model:
         config.llm_model = payload.llm_model
     else:
         config.llm_model = (
             "gemini-2.0-flash" if payload.provider == "gemini" else "gpt-4o-mini"
         )
+
+    if payload.embedding_model:
+        config.embedding_model = payload.embedding_model
+    else:
+        from services.embedding_pairing import resolve_pairing
+
+        pairing = resolve_pairing(
+            llm_provider=payload.provider,
+            llm_model=config.llm_model,
+        )
+        config.embedding_model = pairing.embedding_model
+        config.embedding_dimensions = pairing.embedding_dimensions
 
     session.add(config)
     await session.commit()
@@ -153,7 +155,53 @@ async def update_ai_provider_config(
 async def get_available_models(
     org_id: str = Depends(get_current_org_id),
 ):
-    return PROVIDER_MODELS
+    from services.model_catalog import get_catalog, _builtin_catalog
+
+    try:
+        catalog = await get_catalog(
+            api_key=settings.OPENROUTER_API_KEY or None,
+            cache_ttl=settings.OPENROUTER_CATALOG_CACHE_TTL,
+        )
+    except Exception:
+        catalog = _builtin_catalog()
+
+    openai_llm = [
+        m.model_id for m in catalog.list_models(provider="openai", capability="chat")
+    ]
+    gemini_llm = [
+        m.model_id for m in catalog.list_models(provider="google", capability="chat")
+    ]
+    openai_emb = [
+        m.model_id
+        for m in catalog.list_models(provider="openai", capability="embedding")
+    ]
+    gemini_emb = [
+        m.model_id
+        for m in catalog.list_models(provider="google", capability="embedding")
+    ]
+
+    merged = {}
+    if PROVIDER_MODELS.get("openai", {}).get("llm"):
+        merged["openai"] = {
+            "llm": list(dict.fromkeys(PROVIDER_MODELS["openai"]["llm"] + openai_llm)),
+            "embedding": list(
+                dict.fromkeys(PROVIDER_MODELS["openai"]["embedding"] + openai_emb)
+            ),
+        }
+    else:
+        merged["openai"] = {"llm": openai_llm, "embedding": openai_emb}
+
+    if PROVIDER_MODELS.get("gemini", {}).get("llm"):
+        merged["gemini"] = {
+            "llm": list(dict.fromkeys(PROVIDER_MODELS["gemini"]["llm"] + gemini_llm)),
+            "embedding": list(
+                dict.fromkeys(PROVIDER_MODELS["gemini"]["embedding"] + gemini_emb)
+            ),
+        }
+    else:
+        merged["gemini"] = {"llm": gemini_llm, "embedding": gemini_emb}
+
+    return merged
 
 
 @router.post("/settings/ai-provider/test", response_model=ConnectionTestResponse)

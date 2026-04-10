@@ -170,7 +170,12 @@ async def create_agent(
     preset_name = None
     if agent.preset_id:
         preset_result = await session.execute(
-            select(VoicePreset.name).where(VoicePreset.id == agent.preset_id)
+            select(VoicePreset.name).where(
+                and_(
+                    VoicePreset.id == agent.preset_id,
+                    VoicePreset.org_id == org_id,
+                )
+            )
         )
         preset_name = preset_result.scalar_one_or_none()
 
@@ -282,7 +287,12 @@ async def update_agent(
     preset_name = None
     if agent.preset_id:
         preset_result = await session.execute(
-            select(VoicePreset.name).where(VoicePreset.id == agent.preset_id)
+            select(VoicePreset.name).where(
+                and_(
+                    VoicePreset.id == agent.preset_id,
+                    VoicePreset.org_id == org_id,
+                )
+            )
         )
         preset_name = preset_result.scalar_one_or_none()
 

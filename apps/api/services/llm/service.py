@@ -2,6 +2,7 @@ import logging
 from typing import AsyncIterator
 
 from services.llm.providers.base import LLMMessage, LLMProvider, LLMResponse
+from services.prompt_sanitizer import scrub_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +21,8 @@ class LLMService:
         **kwargs,
     ) -> str:
         messages = [
-            LLMMessage(role="system", content=system),
-            LLMMessage(role="user", content=user),
+            LLMMessage(role="system", content=scrub_prompt(system)),
+            LLMMessage(role="user", content=scrub_prompt(user)),
         ]
         response = await self.provider.complete(
             messages, temperature=temperature, max_tokens=max_tokens, **kwargs
@@ -38,8 +39,8 @@ class LLMService:
         **kwargs,
     ) -> AsyncIterator[str]:
         messages = [
-            LLMMessage(role="system", content=system),
-            LLMMessage(role="user", content=user),
+            LLMMessage(role="system", content=scrub_prompt(system)),
+            LLMMessage(role="user", content=scrub_prompt(user)),
         ]
         async for chunk in self.provider.stream(
             messages, temperature=temperature, max_tokens=max_tokens, **kwargs

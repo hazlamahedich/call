@@ -61,6 +61,8 @@ class Settings(BaseSettings):
     AI_LLM_MAX_TOKENS: int = 2048
     OPENAI_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
+    OPENROUTER_API_KEY: str = ""
+    OPENROUTER_CATALOG_CACHE_TTL: int = 3600
 
     COST_TRACKING_ENABLED: bool = True
     LLM_MAX_RETRIES: int = 2
@@ -113,6 +115,9 @@ class Settings(BaseSettings):
     FACTUAL_HOOK_SIMILARITY_THRESHOLD: float = 0.75
     FACTUAL_HOOK_CLAIM_MIN_LENGTH: int = 20
     FACTUAL_HOOK_VERIFICATION_TIMEOUT_MS: int = 5000
+    FACTUAL_HOOK_PER_CLAIM_TIMEOUT_MS: int = 500
+    FACTUAL_HOOK_PER_CORRECTION_TIMEOUT_MS: int = 2000
+    FACTUAL_HOOK_MIN_REMAINING_BUDGET_MS: int = 200
     FACTUAL_HOOK_CIRCUIT_BREAKER_THRESHOLD: int = 3
     FACTUAL_HOOK_CIRCUIT_BREAKER_RESET_SECONDS: int = 60
 
@@ -153,12 +158,26 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def auto_set_ai_provider_defaults(self) -> "Settings":
         if self.AI_PROVIDER == "gemini":
-            if self.AI_EMBEDDING_MODEL == "text-embedding-3-small":
-                self.AI_EMBEDDING_MODEL = "gemini-embedding-001"
-            if self.AI_EMBEDDING_DIMENSIONS == 1536:
-                self.AI_EMBEDDING_DIMENSIONS = 3072
             if self.AI_LLM_MODEL == "gpt-4o-mini":
                 self.AI_LLM_MODEL = "gemini-2.0-flash"
+
+        from services.embedding_pairing import resolve_pairing
+
+        pairing = resolve_pairing(
+            llm_provider=self.AI_PROVIDER,
+            llm_model=self.AI_LLM_MODEL,
+        )
+        if (
+            self.AI_EMBEDDING_MODEL == "text-embedding-3-small"
+            and pairing.embedding_model != "text-embedding-3-small"
+        ):
+            self.AI_EMBEDDING_MODEL = pairing.embedding_model
+        if (
+            self.AI_EMBEDDING_DIMENSIONS == 1536
+            and pairing.embedding_dimensions != 1536
+        ):
+            self.AI_EMBEDDING_DIMENSIONS = pairing.embedding_dimensions
+
         return self
 
 
