@@ -710,10 +710,20 @@ GLM-5.1 (zai-coding-plan/glm-5.1)
 - **Post-review fixes**: 21 findings from 3-layer adversarial code review (Blind Hunter + Edge Case Hunter + Acceptance Auditor) — all resolved, 32/32 tests passing
 - **Test automation expansion (2026-04-10)**: 70 additional tests covering DncComProvider (13), blocklist CRUD (5), cache I/O resilience (6), source normalization (4), distributed lock (1), scrub_leads_batch edge cases (8), circuit breaker states (8), provider ABC/dataclass defaults (4), public API exports + error messages + mock features (10). 2 implementation bugs fixed: invalid `message=` kwarg in `ComplianceBlockError`, `summary.skipped` not transferred in `scrub_leads_batch`. Total: **102/102 tests passing**.
 - **Test quality review & restructuring (2026-04-10)**: Score 78/100 (B). Split 2 oversized test files (645 + 1372 lines) into 9 focused files all under 300 lines. Extracted shared `make_mock_redis()`/`make_mock_session()` helpers to `tests/helpers/dnc_helpers.py`. Added `@pytest.mark.p0/p1/p2/p3` priority markers to all 102 tests. Patched 10-second sleep in `MockDncProvider.fail_with_timeout` with `asyncio.sleep` mock. Fixed timing-dependent assertion in circuit breaker test. Added BDD Given/When/Then comments to key tests. **102/102 tests passing** in split structure.
+- **Hardening pass (2026-04-10)**: Multi-agent party mode implementation review with Winston (Architect), Amelia (Developer), Murat (Test Architect), Mary (Analyst), Bob (SM). Identified and resolved 9 gaps. **126/126 tests passing**.
+  1. **Lock TTL fixed**: Was 5s but retry loop takes ~7.5s (3 retries with exponential backoff). Now `_RETRY_BACKOFF_TOTAL_SECS + 5` = 12s. Prevents lock expiry during concurrent checks.
+  2. **Provider lifecycle management**: Module-level `_provider` singleton was never closed. Added `close_provider()` async function + shutdown hook in `main.py` lifespan. httpx client pool now properly cleaned up on app shutdown.
+  3. **Audit log severity upgraded**: `_log_check()` logged failures at `WARNING` — regulatory risk for compliance systems. Changed to `logger.error()`.
+  4. **Batch scrub concurrency**: `scrub_leads_batch()` was purely sequential (~100s for 1000 leads on cache miss). Added `asyncio.Semaphore(10)` + `asyncio.gather()` for 10 concurrent lookups per batch.
+  5. **Pre-dial SLA enforcement**: `DNC_PRE_DIAL_TIMEOUT_MS = 100` was only set on the httpx client timeout, not the full retry loop. Added `asyncio.wait_for(provider.lookup(), timeout=sla_timeout)` wrapping the provider call in `check_dnc_realtime()` when `check_type="pre_dial"`. On SLA breach: records failure to circuit breaker, logs with `source="provider_timeout"`, and either raises `ComplianceBlockError` (fail-closed) or returns error result (fail-open).
+  6. **`DncCheckLog.checked_at` fix**: Replaced `__import__("datetime")` inside lambda default factory with proper module-level `_utcnow()` function.
+  7. **`BlocklistEntry.soft_delete` field**: `blocklist.py` queried `soft_delete` in raw SQL but the model didn't declare it. Added `soft_delete: bool = Field(default=False)`.
+  8. **Integration tests**: 10 new tests covering SLA timeout fail-closed/fail-open, cache short-circuit, circuit breaker recording, provider lifecycle, and DNC block/clear wiring.
+  9. **`_normalize_source` edge cases**: 17 new tests covering empty string, unknown sources (`"federal_dnc"`, `"dnc_com"`), case insensitivity, numeric strings, and internal sources (`"cache"`, `"circuit_breaker"`).
 
 ### File List
 
-**New files (23):**
+**New files (25):**
 - `apps/api/models/dnc_check_log.py`
 - `apps/api/models/blocklist_entry.py`
 - `apps/api/services/compliance/__init__.py`
@@ -735,6 +745,8 @@ GLM-5.1 (zai-coding-plan/glm-5.1)
 - `apps/api/tests/test_4_1_exp_realtime.py`
 - `apps/api/tests/test_4_1_exp_scrub_blocklist.py`
 - `apps/api/tests/test_4_1_exp_circuit_breaker_misc.py`
+- `apps/api/tests/test_4_1_exp_normalize_source.py`
+- `apps/api/tests/test_4_1_integration.py`
 - `apps/api/tests/mocks/mock_dnc_provider.py`
 - `_bmad-output/test-artifacts/story-4-1-automation-summary.md`
 - `apps/api/tests/test-review-story-4.1.md`
@@ -743,12 +755,16 @@ GLM-5.1 (zai-coding-plan/glm-5.1)
 - `apps/api/tests/test_4_1_dnc_check.py` (replaced by 4 focused files)
 - `apps/api/tests/test_4_1_dnc_expanded.py` (replaced by 5 focused files)
 
-**Modified files (8):**
+**Modified files (10):**
 - `apps/api/models/call.py`
 - `apps/api/models/__init__.py`
 - `apps/api/services/vapi.py`
 - `apps/api/routers/calls.py`
 - `apps/api/config/settings.py`
-- `apps/api/services/compliance/dnc.py` (bug fixes: `message=` kwarg removed, `summary.skipped` transferred)
+- `apps/api/services/compliance/dnc.py` (bug fixes, lock TTL, SLA enforcement, batch concurrency, close_provider, log severity)
+- `apps/api/services/compliance/__init__.py` (export close_provider)
+- `apps/api/models/dnc_check_log.py` (fix __import__ in default factory)
+- `apps/api/models/blocklist_entry.py` (add soft_delete field)
+- `apps/api/main.py` (shutdown hook for provider lifecycle)
 - `packages/types/call.ts`
 - `packages/compliance/index.ts`

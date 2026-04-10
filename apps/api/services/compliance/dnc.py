@@ -26,6 +26,11 @@ logger = logging.getLogger(__name__)
 
 _circuit_breaker = DncCircuitBreaker()
 _provider: Optional[DncComProvider] = None
+_provider_lock = asyncio.Lock()
+
+_SCRUB_CONCURRENCY = 10
+
+_RETRY_BACKOFF_TOTAL_SECS = 7.5
 
 _RELEASE_LOCK_SCRIPT = """
 if redis.call("get", KEYS[1]) == ARGV[1] then
@@ -41,6 +46,14 @@ def _get_provider() -> DncComProvider:
     if _provider is None:
         _provider = DncComProvider()
     return _provider
+
+
+async def close_provider() -> None:
+    global _provider
+    async with _provider_lock:
+        if _provider is not None:
+            await _provider.close()
+            _provider = None
 
 
 def _mask_phone(phone: str) -> str:
@@ -122,7 +135,7 @@ async def _log_check(
         session.add(log)
         await nested.commit()
     except Exception as e:
-        logger.warning(
+        logger.error(
             "Failed to log DNC check",
             extra={"code": "DNC_LOG_ERROR", "error": str(e)},
         )
@@ -217,7 +230,7 @@ async def check_dnc_realtime(
         )
 
     lock_owner = str(uuid.uuid4())
-    lock_ttl = max(5, int(settings.DNC_PRE_DIAL_TIMEOUT_MS / 1000) + 2)
+    lock_ttl = int(_RETRY_BACKOFF_TOTAL_SECS) + 5
     lock_acquired = False
     lk = _lock_key(org_id, phone_number)
 
@@ -288,7 +301,53 @@ async def check_dnc_realtime(
             )
 
         provider = _get_provider()
-        provider_result = await provider.lookup(phone_number)
+        sla_timeout = (
+            settings.DNC_PRE_DIAL_TIMEOUT_MS / 1000.0
+            if check_type == "pre_dial"
+            else None
+        )
+        if sla_timeout is not None:
+            try:
+                provider_result = await asyncio.wait_for(
+                    provider.lookup(phone_number),
+                    timeout=sla_timeout,
+                )
+            except asyncio.TimeoutError:
+                elapsed_ms = int((time.monotonic() - start) * 1000)
+                await _circuit_breaker.record_failure(org_id, redis_client)
+                await _log_check(
+                    session,
+                    phone_number,
+                    check_type,
+                    "provider_timeout",
+                    "error",
+                    org_id,
+                    elapsed_ms,
+                    lead_id=lead_id,
+                    campaign_id=campaign_id,
+                    call_id=call_id,
+                    raw_response={
+                        "error": "sla_timeout",
+                        "sla_ms": settings.DNC_PRE_DIAL_TIMEOUT_MS,
+                    },
+                )
+                if fail_closed:
+                    raise ComplianceBlockError(
+                        code="DNC_PROVIDER_UNAVAILABLE",
+                        phone_number=phone_number,
+                        call_id=call_id,
+                        source="provider_timeout",
+                        retry_after_seconds=60,
+                    )
+                return DncCheckResult(
+                    phone_number=phone_number,
+                    is_blocked=False,
+                    source="provider_timeout",
+                    result="error",
+                    response_time_ms=elapsed_ms,
+                )
+        else:
+            provider_result = await provider.lookup(phone_number)
         elapsed_ms = provider_result.response_time_ms or int(
             (time.monotonic() - start) * 1000
         )
@@ -417,34 +476,10 @@ async def scrub_leads_batch(
     summary = DncScrubSummary(total=len(lead_ids))
     seen_phones: set[str] = set()
     skipped = 0
+    semaphore = asyncio.Semaphore(_SCRUB_CONCURRENCY)
 
-    for i in range(0, len(lead_ids), settings.DNC_BATCH_SIZE):
-        batch_ids = lead_ids[i : i + settings.DNC_BATCH_SIZE]
-        placeholders = ",".join(f":lid{j}" for j in range(len(batch_ids)))
-        params: dict = {f"lid{j}": bid for j, bid in enumerate(batch_ids)}
-        params["org_id"] = org_id
-
-        await set_tenant_context(session, org_id)
-        result = await session.execute(
-            text(
-                f"SELECT id, phone FROM leads "
-                f"WHERE id IN ({placeholders}) AND org_id = :org_id AND phone IS NOT NULL"
-            ),
-            params,
-        )
-        rows = result.fetchall()
-
-        for row in rows:
-            lead_id = row[0]
-            phone = row[1]
-            if not phone:
-                skipped += 1
-                continue
-            if phone in seen_phones:
-                skipped += 1
-                continue
-            seen_phones.add(phone)
-
+    async def _scrub_one(lead_id: int, phone: str) -> None:
+        async with semaphore:
             try:
                 check_result = await check_dnc_realtime(
                     session,
@@ -486,7 +521,7 @@ async def scrub_leads_batch(
                         {"lid": lead_id, "oid": org_id},
                     )
 
-            except ComplianceBlockError as cbe:
+            except ComplianceBlockError:
                 summary.unchecked += 1
                 await session.execute(
                     text(
@@ -511,6 +546,37 @@ async def scrub_leads_batch(
                     {"lid": lead_id, "oid": org_id},
                 )
 
+    for i in range(0, len(lead_ids), settings.DNC_BATCH_SIZE):
+        batch_ids = lead_ids[i : i + settings.DNC_BATCH_SIZE]
+        placeholders = ",".join(f":lid{j}" for j in range(len(batch_ids)))
+        params: dict = {f"lid{j}": bid for j, bid in enumerate(batch_ids)}
+        params["org_id"] = org_id
+
+        await set_tenant_context(session, org_id)
+        result = await session.execute(
+            text(
+                f"SELECT id, phone FROM leads "
+                f"WHERE id IN ({placeholders}) AND org_id = :org_id AND phone IS NOT NULL"
+            ),
+            params,
+        )
+        rows = result.fetchall()
+
+        tasks: list[asyncio.Task] = []
+        for row in rows:
+            lead_id = row[0]
+            phone = row[1]
+            if not phone:
+                skipped += 1
+                continue
+            if phone in seen_phones:
+                skipped += 1
+                continue
+            seen_phones.add(phone)
+            tasks.append(asyncio.create_task(_scrub_one(lead_id, phone)))
+
+        if tasks:
+            await asyncio.gather(*tasks)
         await session.flush()
 
     summary.skipped = skipped

@@ -120,6 +120,13 @@ async def lifespan(app: FastAPI):
 
     await shutdown_tts()
 
+    from services.compliance.dnc import close_provider
+
+    try:
+        await close_provider()
+    except Exception:
+        pass
+
     # Close cache strategy
     if _cache_strategy:
         await _cache_strategy.close()

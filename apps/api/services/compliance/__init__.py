@@ -6,7 +6,7 @@ from .dnc_provider import (
     InvalidPhoneFormatError,
     validate_e164,
 )
-from .dnc import check_dnc_realtime, scrub_leads_batch
+from .dnc import check_dnc_realtime, scrub_leads_batch, close_provider
 from .blocklist import check_tenant_blocklist, add_to_blocklist, remove_from_blocklist
 from .circuit_breaker import DncCircuitBreaker
 
@@ -19,6 +19,7 @@ __all__ = [
     "validate_e164",
     "check_dnc_realtime",
     "scrub_leads_batch",
+    "close_provider",
     "check_tenant_blocklist",
     "add_to_blocklist",
     "remove_from_blocklist",

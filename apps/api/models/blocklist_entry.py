@@ -14,6 +14,7 @@ class BlocklistEntry(TenantModel, table=True):
     lead_id: Optional[int] = Field(default=None, nullable=True, foreign_key="leads.id")
     auto_blocked_at: Optional[datetime] = Field(default=None, nullable=True)
     expires_at: Optional[datetime] = Field(default=None, nullable=True)
+    soft_delete: bool = Field(default=False)
 
     __table_args__ = (
         UniqueConstraint(
