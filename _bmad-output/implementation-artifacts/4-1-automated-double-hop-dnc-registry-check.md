@@ -709,10 +709,11 @@ GLM-5.1 (zai-coding-plan/glm-5.1)
 - 30/30 tests passing covering ACs 1-15
 - **Post-review fixes**: 21 findings from 3-layer adversarial code review (Blind Hunter + Edge Case Hunter + Acceptance Auditor) — all resolved, 32/32 tests passing
 - **Test automation expansion (2026-04-10)**: 70 additional tests covering DncComProvider (13), blocklist CRUD (5), cache I/O resilience (6), source normalization (4), distributed lock (1), scrub_leads_batch edge cases (8), circuit breaker states (8), provider ABC/dataclass defaults (4), public API exports + error messages + mock features (10). 2 implementation bugs fixed: invalid `message=` kwarg in `ComplianceBlockError`, `summary.skipped` not transferred in `scrub_leads_batch`. Total: **102/102 tests passing**.
+- **Test quality review & restructuring (2026-04-10)**: Score 78/100 (B). Split 2 oversized test files (645 + 1372 lines) into 9 focused files all under 300 lines. Extracted shared `make_mock_redis()`/`make_mock_session()` helpers to `tests/helpers/dnc_helpers.py`. Added `@pytest.mark.p0/p1/p2/p3` priority markers to all 102 tests. Patched 10-second sleep in `MockDncProvider.fail_with_timeout` with `asyncio.sleep` mock. Fixed timing-dependent assertion in circuit breaker test. Added BDD Given/When/Then comments to key tests. **102/102 tests passing** in split structure.
 
 ### File List
 
-**New files (14):**
+**New files (23):**
 - `apps/api/models/dnc_check_log.py`
 - `apps/api/models/blocklist_entry.py`
 - `apps/api/services/compliance/__init__.py`
@@ -723,10 +724,24 @@ GLM-5.1 (zai-coding-plan/glm-5.1)
 - `apps/api/services/compliance/circuit_breaker.py`
 - `apps/api/services/compliance/exceptions.py`
 - `apps/api/migrations/versions/t6u7v8w9x0y1_create_compliance_tables.py`
-- `apps/api/tests/test_4_1_dnc_check.py`
-- `apps/api/tests/test_4_1_dnc_expanded.py`
+- `apps/api/tests/helpers/__init__.py`
+- `apps/api/tests/helpers/dnc_helpers.py`
+- `apps/api/tests/test_4_1_e164_provider.py`
+- `apps/api/tests/test_4_1_circuit_breaker.py`
+- `apps/api/tests/test_4_1_dnc_realtime.py`
+- `apps/api/tests/test_4_1_models_settings.py`
+- `apps/api/tests/test_4_1_exp_helpers_cache.py`
+- `apps/api/tests/test_4_1_exp_com_provider.py`
+- `apps/api/tests/test_4_1_exp_realtime.py`
+- `apps/api/tests/test_4_1_exp_scrub_blocklist.py`
+- `apps/api/tests/test_4_1_exp_circuit_breaker_misc.py`
 - `apps/api/tests/mocks/mock_dnc_provider.py`
 - `_bmad-output/test-artifacts/story-4-1-automation-summary.md`
+- `apps/api/tests/test-review-story-4.1.md`
+
+**Deleted files (2):**
+- `apps/api/tests/test_4_1_dnc_check.py` (replaced by 4 focused files)
+- `apps/api/tests/test_4_1_dnc_expanded.py` (replaced by 5 focused files)
 
 **Modified files (8):**
 - `apps/api/models/call.py`
